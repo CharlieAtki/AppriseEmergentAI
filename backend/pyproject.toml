@@ -1,0 +1,2 @@
+# Backend packages are managed via the workspace root pyproject.toml at the project root.
+# See: ../pyproject.toml
