@@ -4,21 +4,75 @@
 
 ```
 Apprise/
-  pyproject.toml          ← uv workspace root (PyCharm uses this)
+  pyproject.toml            ← uv workspace root (PyCharm uses this)
+  uv.lock                   ← committed — pins exact dependency versions
   backend/
     core/
-      pyproject.toml      ← package: apprise-core (shared library)
+      alembic.ini           ← alembic config
+      pyproject.toml        ← package: apprise-core (shared library)
       core/
         __init__.py
+        migrations/         ← alembic migration scripts
+          env.py
+          versions/
     api/
-      pyproject.toml      ← package: apprise-api (depends on apprise-core)
+      pyproject.toml        ← package: apprise-api (depends on apprise-core)
+      api/
+        __init__.py
       Dockerfile
     worker/
-      pyproject.toml      ← package: apprise-worker (depends on apprise-core)
+      pyproject.toml        ← package: apprise-worker (depends on apprise-core)
+      worker/
+        __init__.py
       Dockerfile
   frontend/
     Dockerfile
 ```
+
+---
+
+## Prerequisites
+
+| Tool | Purpose | Install |
+|---|---|---|
+| Python 3.14+ | Runtime | https://www.python.org/downloads/ |
+| uv | Package manager & virtual environments | https://docs.astral.sh/uv/getting-started/installation/ |
+| Docker | Running services in containers | https://docs.docker.com/get-docker/ |
+
+---
+
+## Getting Started (First-Time Setup)
+
+### 1. Clone the repo
+
+```bash
+git clone <repo-url>
+cd Apprise
+```
+
+### 2. Install all Python packages
+
+```bash
+uv sync --all-packages
+```
+
+This creates a `.venv` at the project root and installs `apprise-core`, `apprise-api`, and `apprise-worker` into it.
+
+### 3. Activate the virtual environment
+
+```bash
+# Windows (PowerShell)
+.venv\Scripts\Activate.ps1
+
+# macOS / Linux
+source .venv/bin/activate
+```
+
+Your prompt will show `(apprise)` when the venv is active. Alternatively, skip activation entirely and prefix all commands with `uv run`.
+
+### 4. PyCharm / IDE setup
+
+PyCharm detects the root `pyproject.toml` automatically and prompts to configure the uv interpreter. Accept it — no manual setup needed.
 
 ---
 
@@ -28,80 +82,101 @@ The backend is split into three Python packages:
 
 | Package | Description |
 |---|---|
-| `apprise-core` | Shared library — models, database, utilities. Not a runnable service. |
+| `apprise-core` | Shared library — models, database, migrations. Not a runnable service. |
 | `apprise-api` | FastAPI HTTP service. Depends on `apprise-core`. |
-| `apprise-worker` | Background worker/task runner. Depends on `apprise-core`. |
+| `apprise-worker` | Background worker. Depends on `apprise-core`. |
 
 ### Why this structure?
 
-`core` is an **installable Python package**, not just a folder. This means `api` and `worker` can import from it cleanly (`from core import ...`) without any `sys.path` hacks. Any shared code (database models, schemas, config) lives in `core` and is available to both services.
+`core` is an **installable Python package**, not just a folder. `api` and `worker` import from it cleanly (`from core import ...`) with no `sys.path` hacks. Any shared code — database models, schemas, config — lives in `core`.
+
+### Adding dependencies
+
+```bash
+# Shared (available to api and worker)
+uv add sqlalchemy --package apprise-core
+
+# API only
+uv add fastapi --package apprise-api
+
+# Worker only
+uv add celery --package apprise-worker
+```
 
 ---
 
-## Local Development — uv Workspace
+## Database Migrations (Alembic)
 
-The backend uses a [uv workspace](https://docs.astral.sh/uv/concepts/workspaces/) so all three packages share a single virtual environment and uv resolves them together.
+Migrations live in `backend/core/core/migrations/` and are managed from `backend/core/`.
 
-### First-time setup
-
-1. Install uv: https://docs.astral.sh/uv/getting-started/installation/
-2. From the **project root**, install all packages:
+### Run migrations
 
 ```bash
-uv sync --all-packages
+cd backend/core
+
+# Apply all pending migrations
+alembic upgrade head
+
+# Roll back one migration
+alembic downgrade -1
 ```
 
-This creates a `.venv` at the project root and installs `apprise-core`, `apprise-api`, and `apprise-worker` (plus all their dependencies) into it.
+### Create a new migration
 
-### How the workspace resolves `apprise-core`
+```bash
+cd backend/core
 
-The root `pyproject.toml` declares:
+# Auto-generate from model changes
+alembic revision --autogenerate -m "description of change"
+
+# Or create a blank migration
+alembic revision -m "description of change"
+```
+
+### Check current state
+
+```bash
+cd backend/core
+alembic current    # show applied revision
+alembic history    # show all revisions
+```
+
+> **Note:** Always review auto-generated migrations before applying. Alembic can miss some changes (e.g. check constraints, custom types).
+
+---
+
+## uv Workspace
+
+The project uses a [uv workspace](https://docs.astral.sh/uv/concepts/workspaces/) so all packages share one virtual environment. The root `pyproject.toml` declares:
 
 ```toml
+[tool.uv.workspace]
+members = ["backend/core", "backend/api", "backend/worker"]
+
 [tool.uv.sources]
 apprise-core = { workspace = true }
 ```
 
-This tells uv that when `api` or `worker` list `apprise-core` as a dependency, use the **local `backend/core/` directory** instead of looking on PyPI. No path manipulation needed.
+`workspace = true` tells uv to resolve `apprise-core` from the local `backend/core/` directory rather than PyPI — no path hacks needed.
 
-### PyCharm / IDE setup
-
-PyCharm detects the root `pyproject.toml` automatically and configures the uv interpreter from there. No extra setup needed.
-
-### Adding dependencies
-
-To add a dependency to a specific package:
-
-```bash
-# Add to api
-uv add fastapi --package apprise-api
-
-# Add to worker
-uv add celery --package apprise-worker
-
-# Add to core (shared — available to all)
-uv add sqlalchemy --package apprise-core
-```
+The `uv.lock` file is **committed to git** to ensure every developer and CI environment installs identical dependency versions.
 
 ---
 
 ## Docker — Building Services
 
-`core` is a **library, not a service** — it has no Dockerfile and is never run directly. Only `api` and `worker` have Dockerfiles.
+`core` is a library, not a service — only `api` and `worker` have Dockerfiles.
 
-### Build context
-
-Both Dockerfiles live inside `backend/api/` and `backend/worker/`, but they need access to `core/` at build time. The build context must therefore be set to the `backend/` directory:
+Both Dockerfiles need access to `core/` at build time, so the build context must be the `backend/` directory:
 
 ```bash
 # From the backend/ directory:
+cd backend
 docker build -f api/Dockerfile .
 docker build -f worker/Dockerfile .
 ```
 
-### How the Dockerfiles install core
-
-Each Dockerfile copies and installs `core` first, then the service:
+Each Dockerfile installs `core` first, then the service:
 
 ```dockerfile
 COPY core/ ./core/
@@ -111,16 +186,19 @@ COPY api/ ./api/
 RUN pip install --no-cache-dir ./api
 ```
 
-This mirrors the local uv workspace setup — `core` is installed as a real package, so imports work identically in Docker and locally.
-
 ---
 
 ## Quick Reference
 
 | Task | Command |
 |---|---|
-| Install all packages locally | `uv sync --all-packages` (from project root) |
-| Build api image | `cd backend && docker build -f api/Dockerfile .` |
-| Build worker image | `cd backend && docker build -f worker/Dockerfile .` |
+| Install all packages | `uv sync --all-packages` (project root) |
+| Activate venv (PowerShell) | `.venv\Scripts\Activate.ps1` |
+| Run a command without activating | `uv run <command>` |
 | Add a shared dependency | `uv add <pkg> --package apprise-core` |
 | Add an api-only dependency | `uv add <pkg> --package apprise-api` |
+| Add a worker-only dependency | `uv add <pkg> --package apprise-worker` |
+| Apply migrations | `cd backend/core && alembic upgrade head` |
+| Create a migration | `cd backend/core && alembic revision --autogenerate -m "msg"` |
+| Build api Docker image | `cd backend && docker build -f api/Dockerfile .` |
+| Build worker Docker image | `cd backend && docker build -f worker/Dockerfile .` |
