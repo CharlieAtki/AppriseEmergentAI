@@ -11,6 +11,7 @@ from core.models.observability import (
     SkillSnapshot,
     WorkspaceMetricsSnapshot,
 )
+from core.models.intelligence import Model, WorkspaceModelRouting
 
 __all__ = [
     "Base",
@@ -39,4 +40,7 @@ __all__ = [
     "ProceduralKnowledgeLog",
     "SkillSnapshot",
     "WorkspaceMetricsSnapshot",
+    # Intelligence
+    "Model",
+    "WorkspaceModelRouting",
 ]
