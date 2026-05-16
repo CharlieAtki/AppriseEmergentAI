@@ -30,6 +30,11 @@ class Task(Base, TimestampMixin):
         sa.ForeignKey("workspaces.id", ondelete="CASCADE"),
         nullable=False,
     )
+    parent_task_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        sa.ForeignKey("tasks.id", ondelete="SET NULL"),
+        nullable=True,
+    )
     title: Mapped[str] = mapped_column(sa.Text, nullable=False)
     description: Mapped[str | None] = mapped_column(sa.Text, nullable=True)
     status: Mapped[str] = mapped_column(sa.Text, nullable=False, server_default=sa.text("'pending'"))
@@ -44,6 +49,7 @@ class Task(Base, TimestampMixin):
 
     __table_args__ = (
         sa.Index("ix_tasks_workspace_id_status_created_at", "workspace_id", "status", "created_at"),
+        sa.Index("ix_tasks_parent_task_id", "parent_task_id"),
         # Partial unique index: only enforced when idempotency_key is set
         sa.Index(
             "uq_tasks_workspace_idempotency_key",
@@ -56,6 +62,17 @@ class Task(Base, TimestampMixin):
 
     organisation: Mapped[Organisation] = relationship()
     workspace: Mapped[Workspace] = relationship(back_populates="tasks")
+    parent_task: Mapped[Task | None] = relationship(
+        "Task",
+        remote_side="Task.id",
+        foreign_keys="Task.parent_task_id",
+        back_populates="subtasks",
+    )
+    subtasks: Mapped[list[Task]] = relationship(
+        "Task",
+        foreign_keys="Task.parent_task_id",
+        back_populates="parent_task",
+    )
     executions: Mapped[list[TaskExecution]] = relationship(
         back_populates="task",
         cascade="all, delete-orphan",

@@ -1,30 +1,32 @@
 from __future__ import annotations
 
 import os
-from collections.abc import Generator
-from contextlib import contextmanager
+from collections.abc import AsyncGenerator
+from contextlib import asynccontextmanager
 
 import sqlalchemy as sa
-from sqlalchemy.orm import Session, sessionmaker
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
-DATABASE_URL = os.environ.get("DATABASE_URL", "postgresql://localhost/apprise")
+_raw_url = os.environ.get("DATABASE_URL", "postgresql://localhost/apprise")
+# Ensure the asyncpg driver is used regardless of how the env var is set.
+DATABASE_URL = _raw_url.replace("postgresql://", "postgresql+asyncpg://", 1)
 
-engine = sa.create_engine(
+engine = create_async_engine(
     DATABASE_URL,
-    pool_pre_ping=True,  # Drops and reconnects stale connections before use
+    pool_pre_ping=True,
 )
 
-SessionLocal = sessionmaker(bind=engine, autocommit=False, autoflush=False)
+SessionLocal = async_sessionmaker(bind=engine, expire_on_commit=False)
 
 
-@contextmanager
-def get_session() -> Generator[Session, None, None]:
+@asynccontextmanager
+async def get_session() -> AsyncGenerator[AsyncSession, None]:
     session = SessionLocal()
     try:
         yield session
-        session.commit()
+        await session.commit()
     except Exception:
-        session.rollback()
+        await session.rollback()
         raise
     finally:
-        session.close()
+        await session.close()

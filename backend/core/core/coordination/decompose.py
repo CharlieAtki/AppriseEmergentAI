@@ -5,7 +5,7 @@ from typing import TYPE_CHECKING, TypedDict
 from core.bus import BusProtocol
 
 if TYPE_CHECKING:
-    from sqlalchemy.orm import Session
+    from sqlalchemy.ext.asyncio import AsyncSession
 
     from core.models.agents import Agent
     from core.models.tasks import Task
@@ -24,7 +24,7 @@ async def decompose_and_publish(
     agent: Agent,
     parent_task: Task,
     subtask_specs: list[SubtaskSpec],
-    session: Session,
+    session: AsyncSession,
     bus: BusProtocol,
 ) -> list[Task]:
     """Persist subtasks to Postgres and publish each onto the task bus.
@@ -62,7 +62,7 @@ async def decompose_and_publish(
         created.append(subtask)
 
     # Flush to assign server-generated UUIDs without committing.
-    session.flush()
+    await session.flush()
 
     for subtask in created:
         await bus.publish(
