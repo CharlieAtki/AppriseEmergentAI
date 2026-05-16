@@ -8,7 +8,7 @@ from redis.asyncio import Redis
 from core.config import settings
 
 if TYPE_CHECKING:
-    from core.coordination.decompose import BusProtocol
+    from core.bus import BusProtocol
     from core.models.agents import Agent
     from core.models.tasks import Task
 

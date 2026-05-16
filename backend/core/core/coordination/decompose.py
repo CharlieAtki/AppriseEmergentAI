@@ -1,18 +1,14 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Protocol, TypedDict
+from typing import TYPE_CHECKING, TypedDict
+
+from core.bus import BusProtocol
 
 if TYPE_CHECKING:
     from sqlalchemy.orm import Session
 
     from core.models.agents import Agent
     from core.models.tasks import Task
-
-
-class BusProtocol(Protocol):
-    """Minimal interface that core/bus/RedisBus and InMemoryBus will satisfy."""
-
-    async def publish(self, stream: str, payload: dict) -> None: ...
 
 
 class SubtaskSpec(TypedDict, total=False):
