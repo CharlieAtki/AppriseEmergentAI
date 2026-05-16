@@ -15,7 +15,7 @@ class ModelRegistry:
     def __init__(self) -> None:
         self._models: dict[str, ModelEntry] = {}
 
-    def add_moddel(
+    def add_model(
         self,
         model_id: str,
         *,
