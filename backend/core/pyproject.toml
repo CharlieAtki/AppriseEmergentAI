@@ -9,6 +9,7 @@ description = "Shared core library for Apprise"
 requires-python = ">=3.14"
 dependencies = [
     "alembic>=1.18.4",
+    "sqlalchemy>=2.0",
 ]
 
 [tool.hatch.build.targets.wheel]
