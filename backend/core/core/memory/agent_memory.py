@@ -161,6 +161,45 @@ class AgentMemory:
             social=[_to_item("social", h) for h in so_hits],
         )
 
+    async def scroll_all_procedures(
+        self,
+        agent_id: str,
+        workspace_id: str,
+        *,
+        limit: int = 100,
+    ) -> list[MemoryItem]:
+        """Return all non-archived procedural rules for an agent across all domains.
+
+        Used by curation jobs that need to review the full procedural tier rather
+        than a single domain. Callers receive point IDs in the payload so they can
+        pass them to archive_procedures().
+        """
+        points, _ = await self._client.scroll(
+            collection_name="mem_procedural",
+            scroll_filter=Filter(
+                must=[
+                    FieldCondition(key="workspace_id", match=MatchValue(value=workspace_id)),
+                    FieldCondition(key="agent_id",     match=MatchValue(value=agent_id)),
+                    FieldCondition(key="archived",      match=MatchValue(value=False)),
+                ]
+            ),
+            limit=limit,
+            with_payload=True,
+        )
+        return [_to_item("procedural", p) for p in points]
+
+    async def archive_procedures(self, point_ids: list[str]) -> None:
+        """Mark procedural rules as archived by their vector store IDs.
+
+        Archived entries are excluded from all future retrievals via _base_filter().
+        """
+        for pid in point_ids:
+            await self._client.set_payload(
+                collection_name="mem_procedural",
+                payload={"archived": True},
+                points=[pid],
+            )
+
     async def retrieve_procedures_for_domain(
         self,
         agent_id: str,

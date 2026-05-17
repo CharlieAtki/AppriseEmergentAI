@@ -6,14 +6,12 @@ from langchain_core.messages import AIMessage, ToolMessage
 from langgraph.graph import END, StateGraph
 
 from core.agents.graphs.state import GraphState
+from core.config import settings
 
 if TYPE_CHECKING:
     from langchain_core.language_models import BaseChatModel
     from langchain_core.tools import BaseTool
     from langgraph.graph.state import CompiledStateGraph
-
-# Guards against runaway graphs. Promote to IntelligenceConfig when tuning is needed.
-_MAX_STEPS = 10 # ToDo: switch to env config?
 
 
 def build_graph(
@@ -45,7 +43,7 @@ def build_graph(
         }
 
     def _route(state: GraphState) -> str:
-        if state["step_count"] >= _MAX_STEPS:
+        if state["step_count"] >= settings.intelligence.max_graph_steps:
             return END
         last = state["messages"][-1]
         if getattr(last, "tool_calls", None):

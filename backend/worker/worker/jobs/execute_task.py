@@ -34,11 +34,19 @@ async def execute_task(
     task_id: str,
     workspace_id: str,
 ) -> None:
-    """Main execution job. Three-phase transaction structure.
+    """Main execution job.
 
-    Phase 1 (read) — load Agent + Task; session closes before graph runs.
-    Phase 2 (write execution row) — create TaskExecution with status "executing".
-    Phase 3 (write results) — single atomic commit for execution, agent, snapshots, task.
+    Phase 1 (read)            — load Agent + Task; session closes before any mutation.
+    Phase 2 (write exec row)  — create TaskExecution("executing"), task → "executing".
+    Phase 3 (LLM evaluate)    — decide: decompose / cfp / self-execute.
+    Phase 4 (act)             — branch on decision.
+    Phase 5 (self-execute)    — LangGraph graph; no open DB session.
+    Phase 6 (write results)   — single atomic commit for execution, agent, snapshots, task.
+    Phase 7 (events)          — memory write, bus events, reflect job enqueue.
+
+    On any exception after Phase 2 commits: the except block writes task → "failed" and
+    execution → "failed" so the row is not left dangling. Re-raises for ARQ to record.
+    On retry: the terminal-state guard in Phase 1 returns early — retries are idempotent.
     """
     async with JobSpan(
         uuid.UUID(agent_id), uuid.UUID(task_id), uuid.UUID(workspace_id)
@@ -61,154 +69,237 @@ async def execute_task(
                 )
                 return
 
+        # Guard: if this is a retry and the previous attempt already wrote a terminal
+        # status, do not re-execute. The state machine would reject the transition anyway.
+        if TaskStateMachine.is_terminal(task.status):
+            logger.info(
+                "execute_task: task=%s already terminal (%s) — skipping retry",
+                task_id, task.status,
+            )
+            return
+
         wctx = get_worker_context()
+        execution: TaskExecution | None = None
+        # Tracks the task status as last committed to DB. In-memory task.status
+        # can diverge from the DB if a session raises after the ORM mutation but
+        # before commit. The failure path uses this to avoid skipping cleanup when
+        # the DB row is still at "executing" but task.status in-memory shows a later value.
+        committed_task_status = task.status
 
-        # ── Phase 2: WRITE EXECUTION ROW ───────────────────────────────────────
-        execution = TaskExecution(
-            task_id=task.id,
-            agent_id=agent.id,
-            organisation_id=agent.organisation_id,
-            workspace_id=task.workspace_id,
-            status="executing",
-            started_at=datetime.now(timezone.utc),
-        )
-        async with span.session() as session:
-            session.add(execution)
-            TaskStateMachine.transition(task, "executing")
-            session.add(task)
+        try:
+            # ── Phase 2: WRITE EXECUTION ROW ───────────────────────────────────
+            execution = TaskExecution(
+                task_id=task.id,
+                agent_id=agent.id,
+                organisation_id=agent.organisation_id,
+                workspace_id=task.workspace_id,
+                status="executing",
+                started_at=datetime.now(timezone.utc),
+            )
+            async with span.session() as session:
+                session.add(execution)
+                TaskStateMachine.transition(task, "executing")
+                session.add(task)
+            committed_task_status = task.status  # "executing"
 
-        await span.emit("job.started", {"task_type": task.task_type})
+            await span.emit("job.started", {"task_type": task.task_type})
 
-        # ── Phase 3: LLM EVALUATE ──────────────────────────────────────────────
-        await span.emit("agent.evaluating", {})
-        agent_ctx = {
-            "name":      agent.name,
-            "skills":    agent.skills or {},
-            "influence": agent.influence or 0.0,
-        }
-        task_ctx = {
-            "title":           task.title,
-            "description":     task.description,
-            "required_skills": task.required_skills or {},
-            "difficulty":      task.difficulty,
-            "domain_tags":     task.domain_tags or {},
-            "task_type":       task.task_type,
-        }
+            # ── Phase 3: LLM EVALUATE ────────────────────────────────────────────
+            await span.emit("agent.evaluating", {})
+            agent_ctx = {
+                "name":      agent.name,
+                "skills":    agent.skills or {},
+                "influence": agent.influence or 0.0,
+            }
+            task_ctx = {
+                "title":           task.title,
+                "description":     task.description,
+                "required_skills": task.required_skills or {},
+                "difficulty":      task.difficulty,
+                "domain_tags":     task.domain_tags or {},
+                "task_type":       task.task_type,
+            }
 
-        raw = await wctx.llm_router.complete(
-            evaluate.build_prompt(agent_ctx, task_ctx),
-            CallType.EVALUATE,
-            json_mode=True,
-        )
-        decision = evaluate.parse(raw)
-
-        # ── Phase 4: ACT ON DECISION ───────────────────────────────────────────
-        if decision.decision == "decompose":
-            await span.emit("agent.decomposing", {"reasoning": decision.reasoning})
-            raw_decompose = await wctx.llm_router.complete(
-                decompose_prompt.build_prompt(agent_ctx, task_ctx),
-                CallType.DECOMPOSE,
+            raw = await wctx.llm_router.complete(
+                evaluate.build_prompt(agent_ctx, task_ctx),
+                CallType.EVALUATE,
                 json_mode=True,
             )
-            decompose_resp = decompose_prompt.parse(raw_decompose)
-            specs = [s.model_dump() for s in decompose_resp.subtasks]
+            decision = evaluate.parse(raw)
 
+            # ── Phase 4: ACT ON DECISION ─────────────────────────────────────────
+            if decision.decision == "decompose":
+                await span.emit("agent.decomposing", {"reasoning": decision.reasoning})
+                raw_decompose = await wctx.llm_router.complete(
+                    decompose_prompt.build_prompt(agent_ctx, task_ctx),
+                    CallType.DECOMPOSE,
+                    json_mode=True,
+                )
+                decompose_resp = decompose_prompt.parse(raw_decompose)
+                specs = [s.model_dump() for s in decompose_resp.subtasks]
+
+                async with span.session() as session:
+                    await decompose_and_publish(agent, task, specs, session, wctx.bus)
+
+                await _finalise_execution(span, execution, task, "completed")
+                return
+
+            if decision.decision == "cfp":
+                await span.emit("agent.issuing_cfp", {"reasoning": decision.reasoning})
+                await issue_cfp(task, agent, wctx.bus)
+                await _release_to_pool(span, execution, task, task_id, workspace_id, wctx)
+                return
+
+            # ── Phase 5: SELF-EXECUTE via LangGraph ──────────────────────────────
+            # No open DB session during graph execution — connections are a scarce resource.
+            await span.emit("agent.executing", {})
+            initial_state = build_initial_state(agent, task)
+            final_state: GraphState = await wctx.graphs[task.task_type or "general"].ainvoke(
+                initial_state
+            )
+
+            quality = score_outcome(task, final_state)
+            await span.emit("agent.scored", {"quality_score": quality})
+
+            # ── Phase 6: WRITE RESULTS (single atomic commit) ────────────────────
             async with span.session() as session:
-                await decompose_and_publish(agent, task, specs, session, wctx.bus)
+                execution.status        = "completed"
+                execution.quality_score = quality
+                execution.artifact_uri  = final_state.get("artifact")
+                execution.tool_trace    = final_state["tool_trace"]   # structured {tool,args,result} records
+                execution.completed_at  = datetime.now(timezone.utc)
+                session.add(execution)
 
-            await _finalise_execution(span, execution, task, "completed")
-            return
+                new_skills    = _merge_skills(agent.skills, final_state)
+                new_influence = _update_influence(agent.influence, quality)
+                agent.skills     = new_skills
+                agent.influence  = new_influence
+                agent.updated_at = datetime.now(timezone.utc)
+                session.add(agent)
 
-        if decision.decision == "cfp":
-            await span.emit("agent.issuing_cfp", {"reasoning": decision.reasoning})
-            await issue_cfp(task, agent, wctx.bus)
-            await _finalise_execution(span, execution, task, "completed")
-            return
+                session.add(SkillSnapshot(
+                    agent_id=agent.id,
+                    organisation_id=agent.organisation_id,
+                    workspace_id=agent.workspace_id,
+                    skills=new_skills,
+                ))
+                session.add(InfluenceSnapshot(
+                    agent_id=agent.id,
+                    organisation_id=agent.organisation_id,
+                    workspace_id=agent.workspace_id,
+                    influence=new_influence,
+                ))
 
-        # ── Phase 5: SELF-EXECUTE via LangGraph ────────────────────────────────
-        # No open DB session during graph execution — connections are a scarce resource.
-        await span.emit("agent.executing", {})
-        initial_state = build_initial_state(agent, task)
-        final_state: GraphState = await wctx.graphs[task.task_type or "general"].ainvoke(
-            initial_state
-        )
+                TaskStateMachine.transition(task, "completed")
+                session.add(task)
 
-        quality = score_outcome(task, final_state)
-        await span.emit("agent.scored", {"quality_score": quality})
+            # ── Phase 7: MEMORY + DOWNSTREAM EVENTS ──────────────────────────────
+            await wctx.memory.store_episode(
+                agent_id,
+                workspace_id,
+                {
+                    "text":          f"Completed task: {task.title}. Quality: {quality:.2f}.",
+                    "task_id":       task_id,
+                    "task_type":     task.task_type,
+                    "quality_score": quality,
+                    "artifact":      final_state.get("artifact"),
+                },
+            )
 
-        # ── Phase 6: WRITE RESULTS (single atomic commit) ──────────────────────
-        async with span.session() as session:
-            execution.status        = "completed"
-            execution.quality_score = quality
-            execution.artifact_uri  = final_state.get("artifact")
-            execution.tool_trace    = span.events
-            execution.completed_at  = datetime.now(timezone.utc)
-            session.add(execution)
+            await wctx.bus.publish(
+                "stream:task",
+                {
+                    "event_type":          "task.completed",
+                    "task_id":             task_id,
+                    "workspace_id":        workspace_id,
+                    "completing_agent_id": agent_id,
+                    "quality_score":       quality,
+                    "task_type":           task.task_type,
+                },
+            )
 
-            new_skills    = _merge_skills(agent.skills, final_state)
-            new_influence = _update_influence(agent.influence, quality)
-            agent.skills     = new_skills
-            agent.influence  = new_influence
-            agent.updated_at = datetime.now(timezone.utc)
-            session.add(agent)
+            await span.emit("job.completed", {"quality_score": quality})
 
-            session.add(SkillSnapshot(
-                agent_id=agent.id,
-                organisation_id=agent.organisation_id,
-                workspace_id=agent.workspace_id,
-                skills=new_skills,
-            ))
-            session.add(InfluenceSnapshot(
-                agent_id=agent.id,
-                organisation_id=agent.organisation_id,
-                workspace_id=agent.workspace_id,
-                influence=new_influence,
-            ))
+            await wctx.arq_queue.enqueue_job(
+                "reflect",
+                agent_id=agent_id,
+                task_id=task_id,
+                workspace_id=workspace_id,
+                execution_id=str(execution.id),
+                quality_score=quality,
+                step_count=final_state["step_count"],
+            )
 
-            TaskStateMachine.transition(task, "completed")
-            session.add(task)
+            logger.info(
+                "execute_task: agent=%s task=%s quality=%.3f",
+                agent_id, task_id, quality,
+            )
 
-        # ── Phase 7: MEMORY + DOWNSTREAM EVENTS ───────────────────────────────
-        await wctx.memory.store_episode(
-            agent_id,
-            workspace_id,
-            {
-                "text":         f"Completed task: {task.title}. Quality: {quality:.2f}.",
-                "task_id":      task_id,
-                "task_type":    task.task_type,
-                "quality_score": quality,
-                "artifact":     final_state.get("artifact"),
-            },
-        )
+        except BaseException as exc:
+            # Write failure state so the task and execution rows are not left dangling.
+            # The session that failed has already rolled back; open a fresh one.
+            # execution may be None if Phase 2 never committed (its session rolled back,
+            # leaving the task at "reserved" — safe to skip the execution update in that case).
+            logger.exception(
+                "execute_task failed: agent=%s task=%s", agent_id, task_id
+            )
+            try:
+                async with span.session() as session:
+                    if execution is not None:
+                        execution.status       = "failed"
+                        execution.completed_at = datetime.now(timezone.utc)
+                        execution.error        = {
+                            "type":    type(exc).__name__,
+                            "message": str(exc),
+                        }
+                        session.add(execution)
+                    if not TaskStateMachine.is_terminal(committed_task_status):
+                        task.status = committed_task_status  # reset in-memory to last committed value
+                        TaskStateMachine.transition(task, "failed")
+                        session.add(task)
+            except Exception:
+                logger.exception(
+                    "execute_task: could not write failure state for task=%s", task_id
+                )
+            raise
 
-        await wctx.bus.publish(
-            "stream:task",
-            {
-                "event_type":          "task.completed",
-                "task_id":             task_id,
-                "workspace_id":        workspace_id,
-                "completing_agent_id": agent_id,
-                "quality_score":       quality,
-                "task_type":           task.task_type,
-            },
-        )
 
-        await span.emit("job.completed", {"quality_score": quality})
+async def _release_to_pool(
+    span: JobSpan,
+    execution: TaskExecution,
+    task: Task,
+    task_id: str,
+    workspace_id: str,
+    wctx,
+) -> None:
+    """CFP path: agent decided to delegate — mark execution done, release task back to pool.
 
-        await wctx.arq_queue.enqueue_job(
-            "reflect",
-            agent_id=agent_id,
-            task_id=task_id,
-            workspace_id=workspace_id,
-            execution_id=str(execution.id),
-            quality_score=quality,
-            step_count=final_state["step_count"],
-        )
+    The executing agent's decision job is complete (execution → "completed"), but the
+    task itself was never worked on, so it returns to "open" for re-bidding. The Redis
+    reservation key is deleted immediately so the next winner isn't blocked by TTL.
+    """
+    async with span.session() as session:
+        execution.status       = "completed"
+        execution.completed_at = datetime.now(timezone.utc)
+        execution.tool_trace   = span.events
+        session.add(execution)
+        TaskStateMachine.transition(task, "open")
+        session.add(task)
 
-        logger.info(
-            "execute_task: agent=%s task=%s quality=%.3f",
-            agent_id, task_id, quality,
-        )
+    await wctx.redis.delete(f"reservation:{workspace_id}:{task_id}")
+
+    await wctx.bus.publish(
+        "stream:task",
+        {
+            "event_type":      "task.created",
+            "task_id":         task_id,
+            "workspace_id":    workspace_id,
+            "required_skills": task.required_skills or {},
+            "domain_tags":     task.domain_tags or {},
+        },
+    )
+
+    await span.emit("job.completed", {"path": "cfp_released"})
 
 
 async def _finalise_execution(

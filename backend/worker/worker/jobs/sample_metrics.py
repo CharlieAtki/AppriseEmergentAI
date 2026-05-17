@@ -9,11 +9,11 @@ from core.database import get_session
 from core.models.observability import EmergenceEvent, WorkspaceMetricsSnapshot
 from core.models.agents import Agent
 from core.models.tenant import Workspace
+from core.config import settings
 from worker.context import get_worker_context
 
 logger = logging.getLogger(__name__)
 
-_HUB_INFLUENCE_THRESHOLD = 0.7  # TODO: promote to per-workspace config
 
 
 async def sample_metrics(ctx: dict) -> None:
@@ -51,7 +51,7 @@ async def sample_metrics(ctx: dict) -> None:
             gini       = _gini(influences)
             spec_index = _specialisation_index(skills_list)
             hub_agent  = next(
-                (a for a in agents if (a.influence or 0.0) >= _HUB_INFLUENCE_THRESHOLD),
+                (a for a in agents if (a.influence or 0.0) >= settings.intelligence.hub_influence_threshold),
                 None,
             )
 

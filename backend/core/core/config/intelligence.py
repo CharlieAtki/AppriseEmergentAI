@@ -12,6 +12,8 @@ class IntelligenceConfig(BaseSettings):
     llm_backend: Literal["anthropic", "azure", "aws", "local"] = "anthropic"
     max_concurrent_llm_calls: int = 5
     force_heuristic_fallback: bool = False
+    max_graph_steps: int = 10
+    hub_influence_threshold: float = 0.7
     routing: dict[str, str] = Field(
         default_factory=lambda: {
             "evaluate":       "anthropic/claude-haiku-4-5-20251001",

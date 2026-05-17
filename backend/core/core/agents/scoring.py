@@ -3,12 +3,10 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from core.agents.graphs.state import GraphState
+from core.config import settings
 
 if TYPE_CHECKING:
     from core.models.tasks import Task
-
-# Matches factory._MAX_STEPS. Promote both to IntelligenceConfig together when tuning is needed.
-_EXPECTED_MAX_STEPS = 10
 
 _W_ARTIFACT = 0.60
 _W_STEPS = 0.25
@@ -35,7 +33,7 @@ def score_outcome(task: "Task", state: GraphState) -> float:
     artifact_score = 1.0 if state.get("artifact") else 0.1
 
     # Step efficiency: penalise runs that pushed near the limit.
-    ratio = state["step_count"] / _EXPECTED_MAX_STEPS
+    ratio = state["step_count"] / settings.intelligence.max_graph_steps
     step_score = _clamp01(1.0 - ratio * 0.6)
 
     # Tool engagement: 0.5 is neutral (simple tasks may not need tools).

@@ -1,6 +1,7 @@
 from __future__ import annotations
-import logging
 
+import asyncio
+import logging
 import os
 import uuid
 
@@ -129,7 +130,21 @@ async def _handle_task_completed(payload: dict, wctx: WorkerContext) -> None:
             )
         )).scalars().all()
 
-    for peer in peers:
+    await asyncio.gather(*(
+        _write_social(peer, completing_agent_id, workspace_id, quality, task_type, wctx)
+        for peer in peers
+    ))
+
+
+async def _write_social(
+    peer: Agent,
+    completing_agent_id: str,
+    workspace_id: str,
+    quality: float,
+    task_type: str,
+    wctx: WorkerContext,
+) -> None:
+    try:
         await wctx.memory.store_social(
             str(peer.id),
             workspace_id,
@@ -143,3 +158,5 @@ async def _handle_task_completed(payload: dict, wctx: WorkerContext) -> None:
                 "quality_score": quality,
             },
         )
+    except Exception:
+        logger.exception("social memory write failed for peer %s", peer.id)

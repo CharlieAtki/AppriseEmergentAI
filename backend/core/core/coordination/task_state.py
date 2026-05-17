@@ -19,7 +19,7 @@ class TaskStateMachine:
         "enriching": {"open"},
         "open": {"reserved", "expired"},
         "reserved": {"executing", "open"},
-        "executing": {"completed", "failed", "expired"},
+        "executing": {"completed", "failed", "expired", "open"},
     }
 
     @classmethod

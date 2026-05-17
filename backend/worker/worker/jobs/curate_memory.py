@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import logging
 
-from qdrant_client.models import FieldCondition, Filter, MatchValue
 from sqlalchemy import select
 
 from core.database import get_session
@@ -37,31 +36,19 @@ async def curate_memory(ctx: dict) -> None:
         workspace_id = str(agent.workspace_id)
         agent_id     = str(agent.id)
 
-        # Retrieve all non-archived procedural rules for this agent regardless of domain.
-        # AgentMemory.retrieve_procedures_for_domain() filters by domain; we need all domains
-        # here so we access the Qdrant client directly.
-        all_rules, _ = await wctx.memory._client.scroll(
-            collection_name="mem_procedural",
-            scroll_filter=Filter(must=[
-                FieldCondition(key="workspace_id", match=MatchValue(value=workspace_id)),
-                FieldCondition(key="agent_id",     match=MatchValue(value=agent_id)),
-                FieldCondition(key="archived",      match=MatchValue(value=False)),
-            ]),
-            limit=100,
-            with_payload=True,
-        )
+        all_rules = await wctx.memory.scroll_all_procedures(agent_id, workspace_id)
 
         if not all_rules:
             continue
 
         rule_dicts = [
             {
-                "id":               str(p.id),
-                "domain":           (p.payload or {}).get("domain", ""),
-                "text":             (p.payload or {}).get("text", ""),
-                "last_accessed_at": (p.payload or {}).get("last_accessed_at", "unknown"),
+                "id":               item.id,
+                "domain":           (item.payload or {}).get("domain", ""),
+                "text":             item.text,
+                "last_accessed_at": (item.payload or {}).get("last_accessed_at", "unknown"),
             }
-            for p in all_rules
+            for item in all_rules
         ]
 
         raw = await wctx.llm_router.complete(
@@ -75,12 +62,7 @@ async def curate_memory(ctx: dict) -> None:
             continue
 
         flagged_ids = [f.id for f in response.flagged]
-        for fid in flagged_ids:
-            await wctx.memory._client.set_payload(
-                collection_name="mem_procedural",
-                payload={"archived": True},
-                points=[fid],
-            )
+        await wctx.memory.archive_procedures(flagged_ids)
         archived_total += len(flagged_ids)
         logger.info(
             "curate_memory: archived %d rules for agent %s",
