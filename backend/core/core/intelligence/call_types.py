@@ -10,3 +10,4 @@ class CallType(str, Enum):
     ENRICH = "enrich"
     CURATE_MEMORY = "curate_memory"
     SCORE_DOCUMENT = "score_document"
+    EXECUTE = "execute"

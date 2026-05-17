@@ -20,5 +20,6 @@ class IntelligenceConfig(BaseSettings):
             "enrich":         "anthropic/claude-haiku-4-5-20251001",
             "curate_memory":  "anthropic/claude-haiku-4-5-20251001",
             "score_document": "anthropic/claude-haiku-4-5-20251001",
+            "execute":        "anthropic/claude-sonnet-4-5",
         }
     )
