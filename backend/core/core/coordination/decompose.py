@@ -50,6 +50,7 @@ async def decompose_and_publish(
         subtask = TaskModel(
             workspace_id=parent_task.workspace_id,
             organisation_id=parent_task.organisation_id,
+            parent_task_id=parent_task.id,
             title=title,
             description=spec.get("description"),
             status="pending",
@@ -66,8 +67,9 @@ async def decompose_and_publish(
 
     for subtask in created:
         await bus.publish(
-            f"task.{subtask.workspace_id}.created",
+            "stream:task",
             {
+                "event_type": "task.created",
                 "task_id": str(subtask.id),
                 "workspace_id": str(subtask.workspace_id),
                 "organisation_id": str(subtask.organisation_id),

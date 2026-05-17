@@ -28,6 +28,7 @@ class Settings(BaseSettings):
     BID_ADD_JITTER: bool = True
     SKILL_DECAY_RATE: float = 0.02
     INFLUENCE_EMA_ALPHA: float = 0.15
+    BID_SCORE_THRESHOLD: float = 0.3
 
     # ------------------------------------------------------------------ #
     # Domain sub-configs — each reads its own env_prefix independently.   #

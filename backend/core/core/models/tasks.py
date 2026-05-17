@@ -113,7 +113,7 @@ class TaskExecution(Base):
     status: Mapped[str] = mapped_column(sa.Text, nullable=False)
     quality_score: Mapped[float | None] = mapped_column(sa.Float, nullable=True)
     artifact_uri: Mapped[str | None] = mapped_column(sa.Text, nullable=True)
-    tool_trace: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+    tool_trace: Mapped[list | None] = mapped_column(JSONB, nullable=True)
     error: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
     started_at: Mapped[datetime | None] = mapped_column(sa.DateTime(timezone=True), nullable=True)
     completed_at: Mapped[datetime | None] = mapped_column(sa.DateTime(timezone=True), nullable=True)
