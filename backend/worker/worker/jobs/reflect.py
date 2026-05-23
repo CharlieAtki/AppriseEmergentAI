@@ -21,9 +21,8 @@ async def reflect(
     workspace_id: str,
     execution_id: str,
     quality_score: float,
-    step_count: int,
 ) -> None:
-    """Post-execution reflection — enqueued by execute_task after a self-execute path.
+    """Post-execution reflection — enqueued by ReflectJobHandler after a self-execute path.
 
     Extracts skill deltas and a generalised procedural rule from the completed execution.
     Full reflection (rule extraction + supersession check) only runs when the task was
@@ -45,6 +44,7 @@ async def reflect(
             return
 
         wctx = get_worker_context()
+        step_count = len(execution.tool_trace) if execution.tool_trace else 0
         full_reflect = (task.difficulty or 1.0) >= 3.0 or step_count > 3
 
         await span.emit("agent.reflecting", {"full_reflect": full_reflect})

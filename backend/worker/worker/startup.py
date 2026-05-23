@@ -1,11 +1,9 @@
 from __future__ import annotations
 
-import asyncio
-import contextlib
 import logging
+import os
 
 from worker.context import WorkerContext, get_worker_context, init_worker_context
-from worker.subscriber import run_task_subscriber
 
 logger = logging.getLogger(__name__)
 
@@ -13,8 +11,26 @@ logger = logging.getLogger(__name__)
 async def startup(ctx: dict) -> None:
     """ARQ startup hook — runs once when the worker process starts.
 
-    Builds WorkerContext (registers vendors/tools, syncs DB, compiles graphs,
-    opens Redis connections), then starts the bus subscriber as a background task.
+    Builds :class:`~worker.context.WorkerContext` (registers vendors/tools,
+    syncs DB, compiles graphs, opens Redis connections), registers all event
+    handlers on the in-process :class:`~core.eventing.bus.in_process_bus.EventBus`,
+    then starts the :class:`~worker.subscriber.TaskStreamSubscriber` which bridges
+    Redis Streams into the in-process bus.
+
+    Handler registration order:
+
+    1. In-process handlers — respond to domain events fired by jobs in this process
+       (e.g. :class:`~worker.handlers.rollup.RollupSubtaskHandler` on
+       ``TaskUpdatedEvent``).
+    2. Stream handlers — respond to cross-process events arriving via Redis Streams,
+       deserialized by :class:`~worker.subscriber.TaskStreamSubscriber` into typed
+       stream events.
+    3. Subscriber registration and start — must come after handlers are bound so the
+       first deserialized event always finds its handlers registered.
+
+    Local imports are kept inside this function to avoid circular import risk at
+    module load time. The handler modules import from ``core.models``, ``core.database``,
+    and other packages that must not be imported before the event loop is running.
     """
     arq_queue = ctx["redis"]  # ARQ provides its ArqRedis pool here
     logger.info("worker startup: building context...")
@@ -22,26 +38,54 @@ async def startup(ctx: dict) -> None:
     init_worker_context(wctx)
     logger.info("worker startup: context ready, graphs compiled for 4 task types")
 
+    from core.eventing.events.stream_events import TaskCompletedStreamEvent, TaskCreatedStreamEvent
     from core.eventing.events.task_events import TaskUpdatedEvent
+    from worker.handlers.bidding import TaskBiddingHandler
+    from worker.handlers.episodic_memory import EpisodicMemoryHandler
+    from worker.handlers.influence import InfluenceUpdateHandler
+    from worker.handlers.reflect_job import ReflectJobHandler
     from worker.handlers.rollup import RollupSubtaskHandler
+    from worker.handlers.social_memory import SocialMemoryHandler
+    from worker.subscriber import TaskStreamSubscriber
 
+    # In-process handlers: same-process side effects triggered by domain events
     wctx.event_bus.bind(TaskUpdatedEvent, RollupSubtaskHandler(arq_queue=wctx.arq_queue))
+    wctx.event_bus.bind(TaskUpdatedEvent, EpisodicMemoryHandler(memory=wctx.memory))
+    wctx.event_bus.bind(TaskUpdatedEvent, InfluenceUpdateHandler())
+    wctx.event_bus.bind(TaskUpdatedEvent, ReflectJobHandler(arq_queue=wctx.arq_queue))
+
+    # Stream handlers: cross-process events deserialized from Redis Streams
+    wctx.event_bus.bind(TaskCreatedStreamEvent, TaskBiddingHandler(redis=wctx.redis, arq_queue=wctx.arq_queue))
+    wctx.event_bus.bind(TaskCompletedStreamEvent, SocialMemoryHandler(memory=wctx.memory))
+
     logger.info("worker startup: event bus handlers registered")
 
-    task = asyncio.create_task(run_task_subscriber())
-    ctx["_subscriber_task"] = task
+    # Bridge: Redis Streams → in-process EventBus
+    wctx.event_bus.subscribe(TaskStreamSubscriber(
+        bus=wctx.bus,
+        event_bus=wctx.event_bus,
+        consumer=f"worker-{os.getpid()}",
+    ))
+    await wctx.event_bus.start_subscribers()
     logger.info("worker startup: task subscriber started")
 
 
 async def shutdown(ctx: dict) -> None:
-    """ARQ shutdown hook — runs when the worker process stops."""
-    subscriber_task = ctx.get("_subscriber_task")
-    if subscriber_task:
-        subscriber_task.cancel()
-        with contextlib.suppress(asyncio.CancelledError):
-            await subscriber_task
+    """ARQ shutdown hook — runs when the worker process stops.
 
+    Shutdown order matters:
+
+    1. ``stop_subscribers`` — cancels :class:`~worker.subscriber.TaskStreamSubscriber`
+       cleanly. No new stream events will be published onto the in-process bus after this.
+    2. ``drain_pending`` — awaits all in-flight fire-and-forget handler tasks (e.g. a
+       :class:`~worker.handlers.rollup.RollupSubtaskHandler` mid-DB-write). Must run
+       before Redis connections close because in-flight handlers may be querying the DB
+       or enqueuing ARQ jobs.
+    3. ``bus.close`` / ``redis.aclose`` — release Redis connections only after all
+       in-flight work is done.
+    """
     wctx = get_worker_context()
+    await wctx.event_bus.stop_subscribers()
     await wctx.event_bus.drain_pending()
     await wctx.bus.close()
     await wctx.redis.aclose()

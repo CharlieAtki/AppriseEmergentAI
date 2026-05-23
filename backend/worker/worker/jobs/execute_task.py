@@ -21,7 +21,7 @@ from core.intelligence.prompts import decompose as decompose_prompt
 from core.intelligence.prompts import evaluate
 from core.intelligence.prompts.evaluate import EvaluateResponse
 from core.models.agents import Agent
-from core.models.observability import InfluenceSnapshot, SkillSnapshot
+from core.models.observability import SkillSnapshot
 from core.models.tasks import Task, TaskExecution
 from worker.context import get_worker_context
 from worker.span import JobSpan
@@ -106,7 +106,7 @@ async def execute_task(
                 status="executing",
                 started_at=datetime.now(timezone.utc),
             )
-            before_executing = TaskSnapshot.from_domain(task)
+            before_executing = TaskSnapshot.from_domain(task, executing_agent_id=agent.id)
             async with span.session() as session:
                 session.add(execution)
                 TaskStateMachine.transition(task, "executing")
@@ -187,7 +187,7 @@ async def execute_task(
             await span.emit("agent.scored", {"quality_score": quality})
 
             # ── Phase 6: WRITE RESULTS (single atomic commit) ────────────────────
-            before_completed = TaskSnapshot.from_domain(task)
+            before_completed = TaskSnapshot.from_domain(task, executing_agent_id=agent.id)
             async with span.session() as session:
                 execution.status        = "completed"
                 execution.quality_score = quality
@@ -196,10 +196,8 @@ async def execute_task(
                 execution.completed_at  = datetime.now(timezone.utc)
                 session.add(execution)
 
-                new_skills    = _merge_skills(agent.skills, final_state)
-                new_influence = _update_influence(agent.influence, quality)
+                new_skills       = _merge_skills(agent.skills, final_state)
                 agent.skills     = new_skills
-                agent.influence  = new_influence
                 agent.updated_at = datetime.now(timezone.utc)
                 session.add(agent)
 
@@ -209,31 +207,15 @@ async def execute_task(
                     workspace_id=agent.workspace_id,
                     skills=new_skills,
                 ))
-                session.add(InfluenceSnapshot(
-                    agent_id=agent.id,
-                    organisation_id=agent.organisation_id,
-                    workspace_id=agent.workspace_id,
-                    influence=new_influence,
-                ))
 
                 TaskStateMachine.transition(task, "completed")
                 session.add(task)
 
             await task_logger.updated(before_completed, task)   # triggers RollupSubtaskHandler
 
-            # ── Phase 7: MEMORY + DOWNSTREAM EVENTS ──────────────────────────────
-            await wctx.memory.store_episode(
-                agent_id,
-                workspace_id,
-                {
-                    "text":          f"Completed task: {task.title}. Quality: {quality:.2f}.",
-                    "task_id":       task_id,
-                    "task_type":     task.task_type,
-                    "quality_score": quality,
-                    "artifact":      final_state.get("artifact"),
-                },
-            )
-
+            # ── Phase 7: DOWNSTREAM EVENTS ───────────────────────────────────────
+            # EpisodicMemoryHandler, InfluenceUpdateHandler, ReflectJobHandler all
+            # fire fire-and-forget from the task_logger.updated() call above.
             await wctx.bus.publish(
                 "stream:task",
                 {
@@ -247,16 +229,6 @@ async def execute_task(
             )
 
             await span.emit("job.completed", {"quality_score": quality})
-
-            await wctx.arq_queue.enqueue_job(
-                "reflect",
-                agent_id=agent_id,
-                task_id=task_id,
-                workspace_id=workspace_id,
-                execution_id=str(execution.id),
-                quality_score=quality,
-                step_count=final_state["step_count"],
-            )
 
             logger.info(
                 "execute_task: agent=%s task=%s quality=%.3f",
@@ -311,7 +283,7 @@ async def _release_to_pool(
     task itself was never worked on, so it returns to "open" for re-bidding. The Redis
     reservation key is deleted immediately so the next winner isn't blocked by TTL.
     """
-    before = TaskSnapshot.from_domain(task)
+    before = TaskSnapshot.from_domain(task, executing_agent_id=execution.agent_id)
     async with span.session() as session:
         execution.status       = "completed"
         execution.completed_at = datetime.now(timezone.utc)
@@ -345,7 +317,7 @@ async def _finalise_execution(
     task_logger: TaskActivityLogger,
 ) -> None:
     """Write final status for decompose/cfp paths (no graph execution, no quality score)."""
-    before = TaskSnapshot.from_domain(task)
+    before = TaskSnapshot.from_domain(task, executing_agent_id=execution.agent_id)
     async with span.session() as session:
         execution.status       = status
         execution.completed_at = datetime.now(timezone.utc)
@@ -366,8 +338,3 @@ def _merge_skills(
     return dict(current_skills or {})
 
 
-def _update_influence(current: float | None, quality: float) -> float:
-    """Blend quality into the running influence score via EMA."""
-    from core.config import settings
-    base = current if current is not None else 0.0
-    return base + settings.INFLUENCE_EMA_ALPHA * (quality - base)
