@@ -20,16 +20,16 @@ class TaskSnapshot(Snapshot):
     domain_tags: dict | None
 
 
-@dataclasses.dataclass(frozen=True, kw_only=True)
+@dataclasses.dataclass(kw_only=True)
 class TaskCreatedEvent(StateActionEvent[TaskSnapshot]):
     workspace_id: uuid.UUID
 
 
-@dataclasses.dataclass(frozen=True, kw_only=True)
+@dataclasses.dataclass(kw_only=True)
 class TaskUpdatedEvent(StateChangeEvent[TaskSnapshot]):
     workspace_id: uuid.UUID
 
 
-@dataclasses.dataclass(frozen=True, kw_only=True)
+@dataclasses.dataclass(kw_only=True)
 class TaskDeletedEvent(StateActionEvent[TaskSnapshot]):
     workspace_id: uuid.UUID

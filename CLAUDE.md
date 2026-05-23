@@ -24,7 +24,7 @@ Every structural question resolves from this. If you are writing an LLM call ins
 |---|---|---|
 | `api/` | validate, store, enqueue, query | LLM calls, LangGraph, agent decisions |
 | `worker/` | LLM calls, graph execution, scoring, memory writes | serve HTTP, business-level validation |
-| `core/` | shared models, coordination, bus, intelligence, memory | own an entrypoint or run directly |
+| `core/` | shared models, coordination, bus, events, activity loggers, intelligence, memory | own an entrypoint or run directly |
 
 ### Where does X belong?
 
@@ -120,6 +120,137 @@ Every Redis key that varies by workspace must include `workspace_id`. The reserv
 f"reservation:{workspace_id}:{task_id}"   # correct
 f"reservation:{task_id}"                   # wrong — cross-workspace collision
 ```
+
+---
+
+## Event bus
+
+### The two buses
+
+| Bus | Class | Transport | Use |
+|-----|-------|-----------|-----|
+| In-process | `EventBus` | asyncio | Same-process side effects: audit logging, cache invalidation, metrics |
+| Cross-process | `RedisBus` | Redis Streams | Durable task coordination events (`task.created`, `task.completed`) |
+
+`EventBus` does not survive process restart and never should — it is for side effects the current process cares about. `RedisBus` is for events that must reach other processes or survive crashes. Never conflate them.
+
+### Producers never touch the bus directly
+
+Domain code never calls `bus.apublish()` directly. The only legitimate way to publish an event is through an activity logger:
+
+```python
+# correct — logger is the only producer interface
+await logger.created(task)
+
+# wrong — domain code coupling to the event model
+await bus.apublish(TaskCreatedEvent(state=TaskSnapshot.from_domain(task), workspace_id=task.workspace_id))
+```
+
+The logger facade's only job is to construct the right event from a SQLAlchemy model and hand it to a `PublishFn` callable. It knows nothing about handlers, dispatch, or who is listening.
+
+### One activity logger per domain area
+
+```
+core/activity/task_logger.py    ← TaskActivityLogger
+core/activity/agent_logger.py   ← AgentActivityLogger
+```
+
+Loggers receive `PublishFn = Callable[[DomainEvent], Awaitable[None]]` at construction — never the bus directly. This is the smallest possible surface area and makes them trivial to test with `AsyncMock()`.
+
+```python
+# correct — standalone logger, holds publish callable
+class TaskActivityLogger:
+    def __init__(self, publish: PublishFn) -> None: ...
+
+# wrong — logger holds the bus
+class TaskActivityLogger:
+    def __init__(self, bus: EventBus) -> None: ...
+```
+
+Method names describe the domain action, not generic CRUD. The class name already scopes the entity:
+
+```python
+await logger.created(task)          # not logger.task_created(task)
+await logger.updated(before, task)  # not logger.task_updated(before, task)
+await logger.deleted(task)          # not logger.task_deleted(task)
+```
+
+### Snapshots must be taken before the session closes
+
+`XSnapshot.from_domain(orm_model)` reads already-loaded scalar attributes by name. It does not trigger lazy loads. Call it while the ORM object is still attached to an open session and before you mutate it:
+
+```python
+# correct — before snapshot captured before mutation; logger snapshots after internally
+before = TaskSnapshot.from_domain(task)
+task.status = "in_progress"
+await logger.updated(before, task)
+
+# wrong — snapshot taken after mutation; before and after read the same mutated state
+task.status = "in_progress"
+before = TaskSnapshot.from_domain(task)   # too late — already mutated
+await logger.updated(before, task)
+```
+
+`from_domain` also handles nested snapshots (`SnapshotSubclass | None` fields) and snapshot collections (`tuple[SnapshotSubclass, ...]`) via type-hint introspection. Override it on the concrete class when field names diverge or values need transformation.
+
+### Events live in `core/events/`, import nothing from the domain
+
+```
+core/events/task_events.py    ← TaskSnapshot, TaskCreatedEvent, TaskUpdatedEvent, TaskDeletedEvent
+core/events/agent_events.py   ← AgentSnapshot, AgentCreatedEvent, AgentUpdatedEvent, AgentDeletedEvent
+```
+
+Event files import only from `core/bus/common.py` and stdlib. No ORM imports, no bus imports, no activity logger imports. This is what keeps the event model dependency-free and importable in isolation.
+
+### Handler registration and composition
+
+All handlers run fire-and-forget. Compose behaviour at the registration site using the wrappers in `core/bus/handlers.py`:
+
+```python
+# basic fire-and-forget
+bus.bind(TaskCreatedEvent, AuditLogHandler())
+
+# bind one handler to multiple event types
+bus.bind([TaskCreatedEvent, AgentCreatedEvent], MetricsHandler())
+
+# retry on transient failures
+bus.bind(AgentDeletedEvent, Retry(CleanupHandler(), retry_on=(OperationalError,)))
+
+# sync handler wrapped for async dispatch
+bus.bind(AgentDeletedEvent, SyncToAsync(ComplianceHandler()))
+
+# predicate gate — handler only runs when condition is true
+bus.bind(TaskCreatedEvent, Filtering(AuditLogHandler(), predicate=lambda e: e.state.workspace_id == REGULATED_WS))
+```
+
+Handlers are registered once at startup — never at request time.
+
+### Wiring
+
+**FastAPI** — bus lives on `app.state.bus`; dep factories in `api/deps.py` inject `apublish` into loggers at request time:
+
+```python
+def get_event_publisher(bus: EventBus = Depends(get_bus)) -> PublishFn:
+    return bus.apublish
+
+def get_task_activity_logger(publish: PublishFn = Depends(get_event_publisher)) -> TaskActivityLogger:
+    return TaskActivityLogger(publish)
+```
+
+**Worker** — construct loggers directly from `WorkerContext`:
+
+```python
+logger = TaskActivityLogger(wctx.bus.apublish)
+```
+
+Call `await bus.drain_pending()` in both FastAPI and ARQ shutdown hooks to drain in-flight fire-and-forget tasks before the process exits.
+
+### Single responsibility in the event layer
+
+- `TaskActivityLogger` only constructs and publishes task events — no DB access, no handler logic
+- `EventHandler` implementations only handle — they do not publish back onto the bus
+- Snapshots only capture state — `from_domain` reads attributes and nothing else
+- `EventBus` only dispatches — it does not know what events mean or what to do with them
 
 ---
 

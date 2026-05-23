@@ -17,16 +17,16 @@ class AgentSnapshot(Snapshot):
     influence: float | None
 
 
-@dataclasses.dataclass(frozen=True, kw_only=True)
+@dataclasses.dataclass(kw_only=True)
 class AgentCreatedEvent(StateActionEvent[AgentSnapshot]):
     workspace_id: uuid.UUID
 
 
-@dataclasses.dataclass(frozen=True, kw_only=True)
+@dataclasses.dataclass(kw_only=True)
 class AgentUpdatedEvent(StateChangeEvent[AgentSnapshot]):
     workspace_id: uuid.UUID
 
 
-@dataclasses.dataclass(frozen=True, kw_only=True)
+@dataclasses.dataclass(kw_only=True)
 class AgentDeletedEvent(StateActionEvent[AgentSnapshot]):
     workspace_id: uuid.UUID

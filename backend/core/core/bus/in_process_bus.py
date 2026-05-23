@@ -2,87 +2,122 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from collections.abc import Coroutine, Sequence
-from typing import Any
+from collections import defaultdict
+from typing import TYPE_CHECKING
 
 from core.bus.common import DomainEvent
-from core.bus.handlers import AsyncEventHandler
+from core.bus.handlers import EventHandler, ExternalEventSubscriber
+
+if TYPE_CHECKING:
+    from collections.abc import Sequence
 
 logger = logging.getLogger(__name__)
 
 
-class InProcessBus:
+class EventBus:
     """In-process async event bus with MRO-based handler routing.
 
     Handlers bound to a base event class automatically receive all subclass
     events — subscribe once to a category, handle every variant.
 
-    Two registration modes:
-    - bind()             fire-and-forget via asyncio.create_task, errors logged silently
-    - bind_transactional()  awaited before publish() returns, errors propagate to caller
+    All handlers run fire-and-forget. Use :class:`~core.bus.handlers.Retry`,
+    :class:`~core.bus.handlers.Timeout`, and
+    :class:`~core.bus.handlers.Filtering` to compose error-handling behaviour
+    at the registration site rather than inside handler bodies.
+
+    Construct with the running event loop::
+
+        loop = asyncio.get_running_loop()
+        bus = EventBus(loop=loop)
+
+    Use :meth:`apublish` from async callers (FastAPI endpoints, worker jobs).
+    Use :meth:`publish` only from synchronous callers running on a different
+    thread from the event loop.
     """
 
-    def __init__(self) -> None:
-        self._handlers: dict[type[DomainEvent], list[AsyncEventHandler]] = {}
-        self._transactional: dict[type[DomainEvent], list[AsyncEventHandler]] = {}
-        self._background_tasks: set[asyncio.Task[None]] = set()
+    def __init__(self, *, loop: asyncio.AbstractEventLoop) -> None:
+        self._handlers: dict[type, list[EventHandler]] = defaultdict(list)
+        self._subscribers: list[ExternalEventSubscriber] = []
+        self._loop = loop
+        # asyncio.ensure_future only weak-refs the returned Task; without a strong
+        # reference a background handler can be GC'd mid-execution. We pin tasks
+        # here and let the done-callback evict them when they finish.
+        self._pending_tasks: set[asyncio.Task] = set()
 
     def bind(
         self,
         event_types: type[DomainEvent] | Sequence[type[DomainEvent]],
-        handler: AsyncEventHandler,
+        handler: EventHandler,
     ) -> None:
-        for event_type in _normalise(event_types):
-            self._handlers.setdefault(event_type, []).append(handler)
+        """Register a fire-and-forget async handler for one or more event types."""
+        if isinstance(event_types, type):
+            event_types = [event_types]
+        for event_type in event_types:
+            self._handlers[event_type].append(handler)
+        logger.debug("Bound %s to %s", repr(handler), [t.__name__ for t in event_types])
 
-    def bind_transactional(
-        self,
-        event_types: type[DomainEvent] | Sequence[type[DomainEvent]],
-        handler: AsyncEventHandler,
-    ) -> None:
-        for event_type in _normalise(event_types):
-            self._transactional.setdefault(event_type, []).append(handler)
+    def subscribe(self, subscriber: ExternalEventSubscriber) -> None:
+        """Register an external subscriber. Call before :meth:`start_subscribers`."""
+        self._subscribers.append(subscriber)
+        logger.debug("Registered subscriber %s", type(subscriber).__name__)
 
-    async def publish(self, event: DomainEvent) -> None:
-        mro = type(event).mro()
+    def publish(self, event: DomainEvent) -> None:
+        """Dispatch handlers from a synchronous caller on a different thread.
 
-        for cls in mro:
-            if cls is object:
-                continue
-            for handler in self._transactional.get(cls, []):  # type: ignore[arg-type]
-                await handler.handle(event)
+        Uses :func:`asyncio.run_coroutine_threadsafe` to schedule each handler
+        on the bound event loop. Prefer :meth:`apublish` from async callers.
+        """
+        for handler in self._handlers_for(event):
+            asyncio.run_coroutine_threadsafe(self._handle_safely(handler, event), self._loop)
 
-        for cls in mro:
-            if cls is object:
-                continue
-            for handler in self._handlers.get(cls, []):  # type: ignore[arg-type]
-                self._schedule(self._safe_handle(handler, event))
+    async def apublish(self, event: DomainEvent) -> None:
+        """Dispatch handlers from an async caller.
 
-    async def wait_pending(self) -> None:
-        """Drain all in-flight fire-and-forget tasks. Call at shutdown to avoid silent cancellation."""
-        if self._background_tasks:
-            await asyncio.gather(*self._background_tasks, return_exceptions=True)
+        Schedules all handlers fire-and-forget. Exceptions are caught and
+        logged per handler — a failing handler does not affect others.
+        """
+        for handler in self._handlers_for(event):
+            task = asyncio.ensure_future(self._handle_safely(handler, event))
+            self._pending_tasks.add(task)
+            task.add_done_callback(self._pending_tasks.discard)
 
-    def _schedule(self, coro: Coroutine[Any, Any, None]) -> None:
-        task = asyncio.create_task(coro)
-        self._background_tasks.add(task)
-        task.add_done_callback(self._background_tasks.discard)
+    def _handlers_for(self, event: DomainEvent) -> list[EventHandler]:
+        return [
+            handler
+            for cls in type(event).mro()
+            if cls is not object
+            for handler in self._handlers.get(cls, [])
+        ]
 
     @staticmethod
-    async def _safe_handle(handler: AsyncEventHandler, event: DomainEvent) -> None:
+    async def _handle_safely(handler: EventHandler, event: DomainEvent) -> None:
         try:
             await handler.handle(event)
-        except Exception:  # noqa: BLE001 — fire-and-forget boundary, must not propagate
+        except Exception:  # noqa: BLE001
             logger.exception(
-                "Handler %s failed for %s",
-                type(handler).__name__,
+                "Background handler %s failed on event %s (id=%s)",
+                repr(handler),
                 type(event).__name__,
+                event.event_id,
             )
 
+    async def drain_pending(self, *, timeout: float | None = None) -> None:
+        """Await all in-flight fire-and-forget tasks scheduled via :meth:`apublish`.
 
-def _normalise(
-    event_types: type[DomainEvent] | Sequence[type[DomainEvent]],
-) -> Sequence[type[DomainEvent]]:
-    if isinstance(event_types, type):
-        return (event_types,)
-    return event_types
+        Call at shutdown before stopping subscribers to prevent tasks from being
+        cancelled mid-execution when the event loop stops.
+        """
+        if not self._pending_tasks:
+            return
+        await asyncio.wait(list(self._pending_tasks), timeout=timeout)
+
+    async def start_subscribers(self) -> None:
+        for subscriber in self._subscribers:
+            await subscriber.start()
+
+    async def stop_subscribers(self) -> None:
+        for subscriber in self._subscribers:
+            try:
+                await subscriber.stop()
+            except Exception:  # noqa: BLE001
+                logger.exception("Error stopping subscriber %s", type(subscriber).__name__)

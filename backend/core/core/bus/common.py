@@ -1,52 +1,159 @@
-from __future__ import annotations
-
-import dataclasses
+import abc
+import types
 import uuid
+from dataclasses import dataclass, field, fields
 from datetime import UTC, datetime
-from typing import Any, Generic, Self, TypeVar
-
-T = TypeVar("T", bound="Snapshot")
+from typing import Self, Union, get_args, get_origin, get_type_hints
 
 
-def _map_fields(cls: type, model: Any) -> dict[str, Any]:
-    # Reads only already-loaded attributes — no lazy queries triggered here.
-    # Override from_domain on the concrete snapshot when field names diverge.
-    return {f.name: getattr(model, f.name) for f in dataclasses.fields(cls)}
+@dataclass
+class DomainEvent(abc.ABC):  # noqa: B024
+    event_id: uuid.UUID = field(default_factory=uuid.uuid4)
+    timestamp: datetime = field(default_factory=lambda: datetime.now(UTC))
 
 
-@dataclasses.dataclass(frozen=True, kw_only=True)
+@dataclass(frozen=True, kw_only=True)
 class Snapshot:
+    """Immutable point-in-time view of an entity, used as the payload of a
+    :class:`StateActionEvent` or :class:`StateChangeEvent`.
+
+    Concrete subclasses capture only the fields relevant to event consumers::
+
+        @dataclass(frozen=True, kw_only=True)
+        class AgentSnapshot(Snapshot):
+            id: uuid.UUID
+            workspace_id: uuid.UUID
+            name: str
+            skills: dict | None
+
+    The default :meth:`from_domain` constructs the snapshot by matching field
+    names directly to attributes on the domain object. It handles three cases:
+
+    - **Primitive and scalar values** are copied directly.
+    - **Collections** — fields declared as ``tuple[T, ...]`` accept any
+      iterable from the domain object and materialise it as a tuple. If ``T``
+      is a :class:`Snapshot` subclass, ``from_domain`` is called on each
+      element; scalar element types are copied directly.
+    - **Nested snapshots** — fields declared as a :class:`Snapshot` subclass
+      (or ``SnapshotSubclass | None``) are constructed recursively via
+      ``from_domain``.
+
+    Override :meth:`from_domain` when field names on the snapshot differ from
+    those on the domain object, or when a value requires a transformation not
+    covered above.
+    """
+
     @classmethod
-    def from_domain(cls, model: Any) -> Self:
-        return cls(**_map_fields(cls, model))
+    def from_domain(cls, model: object) -> Self:
+        """Construct a snapshot from a domain object by matching field names.
+
+        Covers the full inheritance chain — fields defined on a base snapshot
+        class are included alongside those on the subclass. Override when a
+        field name differs from the domain attribute, or when a value requires
+        transformation beyond a direct field-name mapping.
+        """
+        hints = get_type_hints(cls)
+        kwargs: dict[str, object] = {}
+        for f in fields(cls):
+            value = getattr(model, f.name)
+            hint = hints.get(f.name)
+            snapshot_cls, allows_none = _unwrap_snapshot_type(hint)
+            if snapshot_cls is not None:
+                kwargs[f.name] = None if (value is None and allows_none) else snapshot_cls.from_domain(value)
+                continue
+            tuple_snapshot_cls = _unwrap_tuple_snapshot_type(hint)
+            if tuple_snapshot_cls is not None:
+                kwargs[f.name] = tuple(tuple_snapshot_cls.from_domain(v) for v in value)
+                continue
+            if get_origin(hint) is tuple:
+                kwargs[f.name] = tuple(value)
+                continue
+            kwargs[f.name] = value
+        return cls(**kwargs)
 
 
-@dataclasses.dataclass(frozen=True, kw_only=True)
-class DomainEvent:
-    event_id: uuid.UUID = dataclasses.field(default_factory=uuid.uuid4)
-    timestamp: datetime = dataclasses.field(default_factory=lambda: datetime.now(UTC))
+def _unwrap_snapshot_type(hint: object) -> tuple[type[Snapshot] | None, bool]:
+    """Return (snapshot_cls, allows_none) when hint is or wraps a Snapshot subclass."""
+    if isinstance(hint, type) and issubclass(hint, Snapshot):
+        return hint, False
+    origin = get_origin(hint)
+    if origin is Union or origin is types.UnionType:
+        snapshot_cls: type[Snapshot] | None = None
+        allows_none = False
+        for arg in get_args(hint):
+            if arg is type(None):
+                allows_none = True
+            elif isinstance(arg, type) and issubclass(arg, Snapshot):
+                snapshot_cls = arg
+        if snapshot_cls is not None:
+            return snapshot_cls, allows_none
+    return None, False
 
 
-@dataclasses.dataclass(frozen=True, kw_only=True)
-class StateActionEvent(DomainEvent, Generic[T]):
+def _unwrap_tuple_snapshot_type(hint: object) -> type[Snapshot] | None:
+    """Return the element Snapshot subclass for a hint of the form tuple[SnapshotSubclass, ...]."""
+    if get_origin(hint) is tuple:
+        args = get_args(hint)
+        if (
+            len(args) == 2
+            and args[1] is Ellipsis
+            and isinstance(args[0], type)
+            and issubclass(args[0], Snapshot)
+        ):
+            return args[0]
+    return None
+
+
+@dataclass(kw_only=True)
+class StateActionEvent[T: Snapshot](DomainEvent):
+    """A domain event that carries the resulting state of a CUD operation.
+
+    ``state`` is an immutable :class:`Snapshot` captured at emission time.
+    For creation events it is the initial state; for deletion events it is the
+    final state before removal; for updates, prefer :class:`StateChangeEvent`
+    which additionally records the prior state.
+
+    Can be mixed in alongside a domain-specific event base class::
+
+        @dataclass(kw_only=True)
+        class AgentEvent(DomainEvent):
+            workspace_id: uuid.UUID
+
+        @dataclass(kw_only=True)
+        class AgentCreatedEvent(AgentEvent, StateActionEvent[AgentSnapshot]):
+            pass
+    """
+
     state: T
 
 
-@dataclasses.dataclass(frozen=True, kw_only=True)
-class StateChangeEvent(StateActionEvent[T]):
+@dataclass(kw_only=True)
+class StateChangeEvent[T: Snapshot](StateActionEvent[T]):
+    """A domain event that records an entity transitioning from one state to another.
+
+    Extends :class:`StateActionEvent` with ``before`` — the entity state prior
+    to the operation. ``after`` is a read-only alias for ``state``.
+
+    Construct with ``before`` and ``state`` (the resulting state)::
+
+        AgentUpdatedEvent(workspace_id=..., before=old_snapshot, state=new_snapshot)
+    """
+
     before: T
 
     @property
     def after(self) -> T:
+        """The resulting state — alias for ``state``."""
         return self.state
 
     @property
     def changes(self) -> frozenset[str]:
+        """Names of snapshot fields whose value differs between before and after."""
         return frozenset(
-            f.name
-            for f in dataclasses.fields(self.before)  # type: ignore[arg-type]
+            f.name for f in fields(self.before)
             if getattr(self.before, f.name) != getattr(self.after, f.name)
         )
 
-    def changed(self, field: str) -> bool:
-        return field in self.changes
+    def changed(self, field_name: str) -> bool:
+        """Return True if *field_name* has a different value in before vs after."""
+        return bool(getattr(self.before, field_name) != getattr(self.after, field_name))
