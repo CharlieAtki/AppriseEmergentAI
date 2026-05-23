@@ -22,6 +22,12 @@ async def startup(ctx: dict) -> None:
     init_worker_context(wctx)
     logger.info("worker startup: context ready, graphs compiled for 4 task types")
 
+    from core.eventing.events.task_events import TaskUpdatedEvent
+    from worker.handlers.rollup import RollupSubtaskHandler
+
+    wctx.event_bus.bind(TaskUpdatedEvent, RollupSubtaskHandler(arq_queue=wctx.arq_queue))
+    logger.info("worker startup: event bus handlers registered")
+
     task = asyncio.create_task(run_task_subscriber())
     ctx["_subscriber_task"] = task
     logger.info("worker startup: task subscriber started")
@@ -36,6 +42,7 @@ async def shutdown(ctx: dict) -> None:
             await subscriber_task
 
     wctx = get_worker_context()
+    await wctx.event_bus.drain_pending()
     await wctx.bus.close()
     await wctx.redis.aclose()
     logger.info("worker shutdown complete")

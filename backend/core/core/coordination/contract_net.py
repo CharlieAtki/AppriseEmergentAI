@@ -8,7 +8,7 @@ from redis.asyncio import Redis
 from core.config import settings
 
 if TYPE_CHECKING:
-    from core.bus import BusProtocol
+    from core.eventing.bus import BusProtocol
     from core.models.agents import Agent
     from core.models.tasks import Task
 
@@ -158,7 +158,7 @@ async def issue_cfp(
 
     Subscribing agents bid algorithmically (compute_bid_score) via their bus
     subscriber. Full CFP resolution (bid collection timeout, winner selection,
-    ARQ enqueue) is implemented in the worker once core/bus/ exists.
+    ARQ enqueue) is implemented in the worker subscriber.
     """
     await bus.publish(
         f"cfp.{task.workspace_id}.issued",
@@ -167,6 +167,7 @@ async def issue_cfp(
             "workspace_id": str(task.workspace_id),
             "organisation_id": str(task.organisation_id),
             "initiating_agent_id": str(initiating_agent.id),
+            "coordinator_agent_id": str(task.coordinator_agent_id) if task.coordinator_agent_id else None,
             "required_skills": task.required_skills or {},
             "difficulty": task.difficulty,
             "task_type": task.task_type,

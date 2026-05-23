@@ -20,7 +20,8 @@ def build_prompt(agent_ctx: dict[str, Any], task: dict[str, Any]) -> list[dict]:
         "Guidelines:\n"
         "- Prefer self_execute when the agent's skills cover the required skills.\n"
         "- Prefer cfp when required skills are missing or another agent is clearly better.\n"
-        "- Prefer decompose when difficulty >= 4 or the task has distinct independent parts.\n\n"
+        "- Prefer decompose when difficulty >= 4 or the task has distinct independent parts.\n"
+        "- If depth_exceeded is true, you MUST choose self_execute regardless of other factors.\n\n"
         'Respond with JSON: {"decision": "...", "reasoning": "one sentence"}'
     )
     user = (
@@ -31,7 +32,9 @@ def build_prompt(agent_ctx: dict[str, Any], task: dict[str, Any]) -> list[dict]:
         f"Task description: {task.get('description')}\n"
         f"Required skills: {task.get('required_skills', {})}\n"
         f"Difficulty: {task.get('difficulty')}\n"
-        f"Domain tags: {task.get('domain_tags', {})}"
+        f"Domain tags: {task.get('domain_tags', {})}\n"
+        f"Delegation depth: {task.get('delegation_depth', 0)}\n"
+        f"Depth exceeded: {task.get('depth_exceeded', False)}"
     )
     return [{"role": "system", "content": system}, {"role": "user", "content": user}]
 

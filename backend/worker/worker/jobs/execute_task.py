@@ -7,15 +7,19 @@ from typing import TYPE_CHECKING
 
 from sqlalchemy.orm import selectinload
 
+from core.eventing.activity.task_logger import TaskActivityLogger
 from core.agents.agent import build_initial_state
 from core.agents.graphs.state import GraphState
 from core.agents.scoring import score_outcome
 from core.coordination.contract_net import issue_cfp
 from core.coordination.decompose import decompose_and_publish
+from core.coordination.task_context import MAX_DELEGATION_DEPTH, TaskContext
 from core.coordination.task_state import TaskStateMachine
+from core.eventing.events.task_events import TaskSnapshot
 from core.intelligence.call_types import CallType
 from core.intelligence.prompts import decompose as decompose_prompt
 from core.intelligence.prompts import evaluate
+from core.intelligence.prompts.evaluate import EvaluateResponse
 from core.models.agents import Agent
 from core.models.observability import InfluenceSnapshot, SkillSnapshot
 from core.models.tasks import Task, TaskExecution
@@ -78,7 +82,13 @@ async def execute_task(
             )
             return
 
+        # Build provenance context while task attributes are in-memory.
+        # expire_on_commit=False on SessionLocal keeps scalar attrs after session close.
+        provenance = TaskContext.from_task(task)
+        depth_exceeded = provenance.delegation_depth >= MAX_DELEGATION_DEPTH
+
         wctx = get_worker_context()
+        task_logger = TaskActivityLogger(wctx.event_bus.apublish)
         execution: TaskExecution | None = None
         # Tracks the task status as last committed to DB. In-memory task.status
         # can diverge from the DB if a session raises after the ORM mutation but
@@ -96,11 +106,13 @@ async def execute_task(
                 status="executing",
                 started_at=datetime.now(timezone.utc),
             )
+            before_executing = TaskSnapshot.from_domain(task)
             async with span.session() as session:
                 session.add(execution)
                 TaskStateMachine.transition(task, "executing")
                 session.add(task)
             committed_task_status = task.status  # "executing"
+            await task_logger.updated(before_executing, task)
 
             await span.emit("job.started", {"task_type": task.task_type})
 
@@ -112,12 +124,14 @@ async def execute_task(
                 "influence": agent.influence or 0.0,
             }
             task_ctx = {
-                "title":           task.title,
-                "description":     task.description,
-                "required_skills": task.required_skills or {},
-                "difficulty":      task.difficulty,
-                "domain_tags":     task.domain_tags or {},
-                "task_type":       task.task_type,
+                "title":            task.title,
+                "description":      task.description,
+                "required_skills":  task.required_skills or {},
+                "difficulty":       task.difficulty,
+                "domain_tags":      task.domain_tags or {},
+                "task_type":        task.task_type,
+                "delegation_depth": provenance.delegation_depth,
+                "depth_exceeded":   depth_exceeded,
             }
 
             raw = await wctx.llm_router.complete(
@@ -126,6 +140,13 @@ async def execute_task(
                 json_mode=True,
             )
             decision = evaluate.parse(raw)
+
+            if depth_exceeded and decision.decision != "self_execute":
+                logger.warning(
+                    "execute_task: depth guard forcing self_execute for task=%s (depth=%d)",
+                    task.id, provenance.delegation_depth,
+                )
+                decision = EvaluateResponse(decision="self_execute", reasoning="depth guard")
 
             # ── Phase 4: ACT ON DECISION ─────────────────────────────────────────
             if decision.decision == "decompose":
@@ -139,15 +160,19 @@ async def execute_task(
                 specs = [s.model_dump() for s in decompose_resp.subtasks]
 
                 async with span.session() as session:
-                    await decompose_and_publish(agent, task, specs, session, wctx.bus)
+                    await decompose_and_publish(
+                        agent, task, specs, session, wctx.bus,
+                        task_ctx=provenance,
+                        task_logger=task_logger,
+                    )
 
-                await _finalise_execution(span, execution, task, "completed")
+                await _finalise_execution(span, execution, task, "completed", task_logger)
                 return
 
             if decision.decision == "cfp":
                 await span.emit("agent.issuing_cfp", {"reasoning": decision.reasoning})
                 await issue_cfp(task, agent, wctx.bus)
-                await _release_to_pool(span, execution, task, task_id, workspace_id, wctx)
+                await _release_to_pool(span, execution, task, task_id, workspace_id, wctx, task_logger)
                 return
 
             # ── Phase 5: SELF-EXECUTE via LangGraph ──────────────────────────────
@@ -162,6 +187,7 @@ async def execute_task(
             await span.emit("agent.scored", {"quality_score": quality})
 
             # ── Phase 6: WRITE RESULTS (single atomic commit) ────────────────────
+            before_completed = TaskSnapshot.from_domain(task)
             async with span.session() as session:
                 execution.status        = "completed"
                 execution.quality_score = quality
@@ -192,6 +218,8 @@ async def execute_task(
 
                 TaskStateMachine.transition(task, "completed")
                 session.add(task)
+
+            await task_logger.updated(before_completed, task)   # triggers RollupSubtaskHandler
 
             # ── Phase 7: MEMORY + DOWNSTREAM EVENTS ──────────────────────────────
             await wctx.memory.store_episode(
@@ -243,6 +271,7 @@ async def execute_task(
             logger.exception(
                 "execute_task failed: agent=%s task=%s", agent_id, task_id
             )
+            before_failed: TaskSnapshot | None = None
             try:
                 async with span.session() as session:
                     if execution is not None:
@@ -255,8 +284,11 @@ async def execute_task(
                         session.add(execution)
                     if not TaskStateMachine.is_terminal(committed_task_status):
                         task.status = committed_task_status  # reset in-memory to last committed value
+                        before_failed = TaskSnapshot.from_domain(task)
                         TaskStateMachine.transition(task, "failed")
                         session.add(task)
+                if before_failed is not None:
+                    await task_logger.updated(before_failed, task)
             except Exception:
                 logger.exception(
                     "execute_task: could not write failure state for task=%s", task_id
@@ -271,6 +303,7 @@ async def _release_to_pool(
     task_id: str,
     workspace_id: str,
     wctx,
+    task_logger: TaskActivityLogger,
 ) -> None:
     """CFP path: agent decided to delegate — mark execution done, release task back to pool.
 
@@ -278,6 +311,7 @@ async def _release_to_pool(
     task itself was never worked on, so it returns to "open" for re-bidding. The Redis
     reservation key is deleted immediately so the next winner isn't blocked by TTL.
     """
+    before = TaskSnapshot.from_domain(task)
     async with span.session() as session:
         execution.status       = "completed"
         execution.completed_at = datetime.now(timezone.utc)
@@ -285,6 +319,7 @@ async def _release_to_pool(
         session.add(execution)
         TaskStateMachine.transition(task, "open")
         session.add(task)
+    await task_logger.updated(before, task)
 
     await wctx.redis.delete(f"reservation:{workspace_id}:{task_id}")
 
@@ -307,8 +342,10 @@ async def _finalise_execution(
     execution: TaskExecution,
     task: Task,
     status: str,
+    task_logger: TaskActivityLogger,
 ) -> None:
     """Write final status for decompose/cfp paths (no graph execution, no quality score)."""
+    before = TaskSnapshot.from_domain(task)
     async with span.session() as session:
         execution.status       = status
         execution.completed_at = datetime.now(timezone.utc)
@@ -316,6 +353,7 @@ async def _finalise_execution(
         session.add(execution)
         TaskStateMachine.transition(task, "completed")
         session.add(task)
+    await task_logger.updated(before, task)
 
     await span.emit("job.completed", {"path": "delegated"})
 

@@ -3,7 +3,7 @@ from __future__ import annotations
 import dataclasses
 import uuid
 
-from core.bus.common import Snapshot, StateActionEvent, StateChangeEvent
+from core.eventing.bus import Snapshot, StateActionEvent, StateChangeEvent
 
 
 @dataclasses.dataclass(frozen=True, kw_only=True)

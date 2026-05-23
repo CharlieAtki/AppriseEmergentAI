@@ -24,7 +24,7 @@ Every structural question resolves from this. If you are writing an LLM call ins
 |---|---|---|
 | `api/` | validate, store, enqueue, query | LLM calls, LangGraph, agent decisions |
 | `worker/` | LLM calls, graph execution, scoring, memory writes | serve HTTP, business-level validation |
-| `core/` | shared models, coordination, bus, events, activity loggers, intelligence, memory | own an entrypoint or run directly |
+| `core/` | shared models, coordination, eventing, intelligence, memory | own an entrypoint or run directly |
 
 ### Where does X belong?
 
@@ -151,8 +151,8 @@ The logger facade's only job is to construct the right event from a SQLAlchemy m
 ### One activity logger per domain area
 
 ```
-core/activity/task_logger.py    ← TaskActivityLogger
-core/activity/agent_logger.py   ← AgentActivityLogger
+core/eventing/activity/task_logger.py    ← TaskActivityLogger
+core/eventing/activity/agent_logger.py   ← AgentActivityLogger
 ```
 
 Loggers receive `PublishFn = Callable[[DomainEvent], Awaitable[None]]` at construction — never the bus directly. This is the smallest possible surface area and makes them trivial to test with `AsyncMock()`.
@@ -193,18 +193,18 @@ await logger.updated(before, task)
 
 `from_domain` also handles nested snapshots (`SnapshotSubclass | None` fields) and snapshot collections (`tuple[SnapshotSubclass, ...]`) via type-hint introspection. Override it on the concrete class when field names diverge or values need transformation.
 
-### Events live in `core/events/`, import nothing from the domain
+### Events live in `core/eventing/events/`, import nothing from the domain
 
 ```
-core/events/task_events.py    ← TaskSnapshot, TaskCreatedEvent, TaskUpdatedEvent, TaskDeletedEvent
-core/events/agent_events.py   ← AgentSnapshot, AgentCreatedEvent, AgentUpdatedEvent, AgentDeletedEvent
+core/eventing/events/task_events.py    ← TaskSnapshot, TaskCreatedEvent, TaskUpdatedEvent, TaskDeletedEvent
+core/eventing/events/agent_events.py   ← AgentSnapshot, AgentCreatedEvent, AgentUpdatedEvent, AgentDeletedEvent
 ```
 
-Event files import only from `core/bus/common.py` and stdlib. No ORM imports, no bus imports, no activity logger imports. This is what keeps the event model dependency-free and importable in isolation.
+Event files import only from `core/eventing/bus/common.py` and stdlib. No ORM imports, no bus imports, no activity logger imports. This is what keeps the event model dependency-free and importable in isolation.
 
 ### Handler registration and composition
 
-All handlers run fire-and-forget. Compose behaviour at the registration site using the wrappers in `core/bus/handlers.py`:
+All handlers run fire-and-forget. Compose behaviour at the registration site using the wrappers in `core/eventing/bus/handlers.py`:
 
 ```python
 # basic fire-and-forget
@@ -240,7 +240,7 @@ def get_task_activity_logger(publish: PublishFn = Depends(get_event_publisher)) 
 **Worker** — construct loggers directly from `WorkerContext`:
 
 ```python
-logger = TaskActivityLogger(wctx.bus.apublish)
+logger = TaskActivityLogger(wctx.event_bus.apublish)
 ```
 
 Call `await bus.drain_pending()` in both FastAPI and ARQ shutdown hooks to drain in-flight fire-and-forget tasks before the process exits.

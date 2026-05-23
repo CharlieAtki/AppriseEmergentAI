@@ -46,10 +46,22 @@ class Task(Base, TimestampMixin):
     domain_tags: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
     external_ref: Mapped[str | None] = mapped_column(sa.Text, nullable=True)
     idempotency_key: Mapped[str | None] = mapped_column(sa.Text, nullable=True)
+    coordinator_agent_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        sa.ForeignKey("agents.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    created_by_agent_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        sa.ForeignKey("agents.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    delegation_depth: Mapped[int] = mapped_column(sa.Integer, nullable=False, default=0)
 
     __table_args__ = (
         sa.Index("ix_tasks_workspace_id_status_created_at", "workspace_id", "status", "created_at"),
         sa.Index("ix_tasks_parent_task_id", "parent_task_id"),
+        sa.Index("ix_tasks_coordinator_agent_id", "coordinator_agent_id"),
         # Partial unique index: only enforced when idempotency_key is set
         sa.Index(
             "uq_tasks_workspace_idempotency_key",

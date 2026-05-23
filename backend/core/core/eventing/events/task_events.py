@@ -3,7 +3,7 @@ from __future__ import annotations
 import dataclasses
 import uuid
 
-from core.bus.common import Snapshot, StateActionEvent, StateChangeEvent
+from core.eventing.bus import Snapshot, StateActionEvent, StateChangeEvent
 
 
 @dataclasses.dataclass(frozen=True, kw_only=True)
@@ -12,6 +12,9 @@ class TaskSnapshot(Snapshot):
     workspace_id: uuid.UUID
     organisation_id: uuid.UUID
     parent_task_id: uuid.UUID | None
+    coordinator_agent_id: uuid.UUID | None
+    created_by_agent_id: uuid.UUID | None
+    delegation_depth: int
     title: str
     status: str
     task_type: str | None

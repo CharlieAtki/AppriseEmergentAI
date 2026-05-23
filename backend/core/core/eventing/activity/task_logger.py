@@ -13,8 +13,8 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from core.activity.base import PublishFn
-from core.events.task_events import TaskCreatedEvent, TaskDeletedEvent, TaskSnapshot, TaskUpdatedEvent
+from core.eventing.activity.base import PublishFn
+from core.eventing.events.task_events import TaskCreatedEvent, TaskDeletedEvent, TaskSnapshot, TaskUpdatedEvent
 
 if TYPE_CHECKING:
     from core.models.tasks import Task

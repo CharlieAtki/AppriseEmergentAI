@@ -8,7 +8,8 @@ from redis.asyncio import Redis
 
 from core.agents.graphs.factory import build_graph
 from core.agents.tools.registry import tool_registry
-from core.bus.redis_bus import RedisBus
+from core.eventing.bus.in_process_bus import EventBus
+from core.eventing.bus.redis_bus import RedisBus
 from core.config import settings
 from core.database import get_session
 from core.intelligence.call_types import CallType
@@ -35,6 +36,7 @@ class WorkerContext:
     arq_queue: "ArqRedis"                     # ARQ job queue — enqueue_job()
     memory: AgentMemory                       # Qdrant-backed three-tier memory
     llm_router: LLMRouter                     # routes all LLM calls by CallType
+    event_bus: EventBus                       # in-process — same-process side effects
 
     @classmethod
     async def build(cls, arq_queue: "ArqRedis") -> WorkerContext:
@@ -55,6 +57,7 @@ class WorkerContext:
 
         # 3. Build LLMRouter with all vendor providers
         routing_cfg = resolve_routing(settings.intelligence.routing, workspace_overrides=None)
+        # ToDo: Can we make this dynamic rather than hardcoded?
         vendors = {
             "anthropic": AnthropicProvider(settings.anthropic),
             "azure":     AzureProvider(settings.azure),
@@ -89,6 +92,11 @@ class WorkerContext:
         redis = Redis.from_url(settings.redis.url, decode_responses=True)
         bus = await RedisBus.create(settings.redis.url)
 
+        # 7. In-process event bus — must be created from the running event loop
+        import asyncio # ToDo: Can we move this import to the top without circular import issues? It's needed for EventBus but also for startup() which imports this module.
+        loop = asyncio.get_running_loop()
+        event_bus = EventBus(loop=loop)
+
         return cls(
             graphs=graphs,
             bus=bus,
@@ -96,6 +104,7 @@ class WorkerContext:
             arq_queue=arq_queue,
             memory=memory,
             llm_router=llm_router,
+            event_bus=event_bus,
         )
 
 

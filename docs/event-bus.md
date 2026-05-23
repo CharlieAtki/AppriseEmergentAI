@@ -30,7 +30,7 @@ Producers never import handlers. Handlers never import producers. The bus is the
 
 ---
 
-## Core types (`core/bus/common.py`)
+## Core types (`core/eventing/bus/common.py`)
 
 ### `Snapshot`
 
@@ -84,9 +84,9 @@ Only use `StateChangeEvent` when a handler actually calls `event.changed()` or `
 
 ---
 
-## Concrete events (`core/events/`)
+## Concrete events (`core/eventing/events/`)
 
-### Tasks (`core/events/task_events.py`)
+### Tasks (`core/eventing/events/task_events.py`)
 
 | Event | Type | When |
 |-------|------|------|
@@ -94,7 +94,7 @@ Only use `StateChangeEvent` when a handler actually calls `event.changed()` or `
 | `TaskUpdatedEvent` | `StateChangeEvent[TaskSnapshot]` | Task row modified |
 | `TaskDeletedEvent` | `StateActionEvent[TaskSnapshot]` | Task row deleted |
 
-### Agents (`core/events/agent_events.py`)
+### Agents (`core/eventing/events/agent_events.py`)
 
 | Event | Type | When |
 |-------|------|------|
@@ -104,7 +104,7 @@ Only use `StateChangeEvent` when a handler actually calls `event.changed()` or `
 
 ---
 
-## Handler interface (`core/bus/handlers.py`)
+## Handler interface (`core/eventing/bus/handlers.py`)
 
 Three ABCs:
 
@@ -150,7 +150,7 @@ bus.bind(AgentDeletedEvent,
 
 ---
 
-## `EventBus` (`core/bus/in_process_bus.py`)
+## `EventBus` (`core/eventing/bus/in_process_bus.py`)
 
 ### Construction
 
@@ -205,7 +205,7 @@ await bus.stop_subscribers()
 
 ---
 
-## Activity loggers (`core/activity/`)
+## Activity loggers (`core/eventing/activity/`)
 
 Activity loggers are thin producer facades. Their only job is to construct the correct event from a SQLAlchemy model and forward it to a `publish` callable. They know nothing about the bus, handlers, or dispatch.
 
@@ -290,7 +290,7 @@ await logger.created(task)
 
 ## Adding a new domain area
 
-1. **Define snapshot and events** in `core/events/<domain>_events.py`
+1. **Define snapshot and events** in `core/eventing/events/<domain>_events.py`
 
 ```python
 @dataclass(frozen=True, kw_only=True)
@@ -306,7 +306,7 @@ class ArtifactCreatedEvent(StateActionEvent[ArtifactSnapshot]):
     workspace_id: uuid.UUID
 ```
 
-2. **Add the activity logger** in `core/activity/<domain>_logger.py`
+2. **Add the activity logger** in `core/eventing/activity/<domain>_logger.py`
 
 ```python
 class ArtifactActivityLogger:
@@ -318,7 +318,7 @@ class ArtifactActivityLogger:
         await self._publish(ArtifactCreatedEvent(state=snapshot, workspace_id=artifact.workspace_id))
 ```
 
-3. **Export** from `core/events/__init__.py` and `core/activity/__init__.py`
+3. **Export** from `core/eventing/events/__init__.py` and `core/eventing/activity/__init__.py`
 
 4. **Add dep factory** to `api/deps.py`
 

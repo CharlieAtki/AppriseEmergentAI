@@ -2,11 +2,13 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, TypedDict
 
-from core.bus import BusProtocol
+from core.eventing.bus import BusProtocol
 
 if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession
 
+    from core.eventing.activity.task_logger import TaskActivityLogger
+    from core.coordination.task_context import TaskContext
     from core.models.agents import Agent
     from core.models.tasks import Task
 
@@ -26,6 +28,8 @@ async def decompose_and_publish(
     subtask_specs: list[SubtaskSpec],
     session: AsyncSession,
     bus: BusProtocol,
+    task_ctx: TaskContext,
+    task_logger: TaskActivityLogger,
 ) -> list[Task]:
     """Persist subtasks to Postgres and publish each onto the task bus.
 
@@ -58,12 +62,20 @@ async def decompose_and_publish(
             required_skills=spec.get("required_skills", parent_task.required_skills),
             difficulty=spec.get("difficulty", parent_task.difficulty),
             domain_tags=spec.get("domain_tags", parent_task.domain_tags),
+            coordinator_agent_id=task_ctx.coordinator_agent_id or agent.id,
+            created_by_agent_id=agent.id,
+            delegation_depth=task_ctx.delegation_depth + 1,
         )
         session.add(subtask)
         created.append(subtask)
 
     # Flush to assign server-generated UUIDs without committing.
     await session.flush()
+
+    # Fire in-process events first so same-process handlers see the creation
+    # before cross-process subscribers are notified via Redis.
+    for subtask in created:
+        await task_logger.created(subtask)
 
     for subtask in created:
         await bus.publish(

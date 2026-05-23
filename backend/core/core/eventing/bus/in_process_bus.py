@@ -5,8 +5,8 @@ import logging
 from collections import defaultdict
 from typing import TYPE_CHECKING
 
-from core.bus.common import DomainEvent
-from core.bus.handlers import EventHandler, ExternalEventSubscriber
+from core.eventing.bus.common import DomainEvent
+from core.eventing.bus.handlers import EventHandler, ExternalEventSubscriber
 
 if TYPE_CHECKING:
     from collections.abc import Sequence

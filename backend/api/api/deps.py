@@ -2,10 +2,10 @@ from __future__ import annotations
 
 from fastapi import Depends, Request
 
-from core.activity.agent_logger import AgentActivityLogger
-from core.activity.base import PublishFn
-from core.activity.task_logger import TaskActivityLogger
-from core.bus.in_process_bus import EventBus
+from core.eventing.activity.agent_logger import AgentActivityLogger
+from core.eventing.activity.base import PublishFn
+from core.eventing.activity.task_logger import TaskActivityLogger
+from core.eventing.bus.in_process_bus import EventBus
 
 
 def get_bus(request: Request) -> EventBus:

@@ -13,8 +13,8 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from core.activity.base import PublishFn
-from core.events.agent_events import AgentCreatedEvent, AgentDeletedEvent, AgentSnapshot, AgentUpdatedEvent
+from core.eventing.activity.base import PublishFn
+from core.eventing.events.agent_events import AgentCreatedEvent, AgentDeletedEvent, AgentSnapshot, AgentUpdatedEvent
 
 if TYPE_CHECKING:
     from core.models.agents import Agent

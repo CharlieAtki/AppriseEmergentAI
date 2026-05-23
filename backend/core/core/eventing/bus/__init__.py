@@ -1,5 +1,5 @@
-from core.bus.common import DomainEvent, Snapshot, StateActionEvent, StateChangeEvent
-from core.bus.handlers import (
+from core.eventing.bus.common import DomainEvent, Snapshot, StateActionEvent, StateChangeEvent
+from core.eventing.bus.handlers import (
     EventHandler,
     ExternalEventSubscriber,
     Filtering,
@@ -8,10 +8,10 @@ from core.bus.handlers import (
     SyncToAsync,
     Timeout,
 )
-from core.bus.in_memory_bus import InMemoryBus
-from core.bus.in_process_bus import EventBus
-from core.bus.protocols import BusProtocol, SubscribableBusProtocol
-from core.bus.redis_bus import RedisBus
+from core.eventing.bus.in_memory_bus import InMemoryBus
+from core.eventing.bus.in_process_bus import EventBus
+from core.eventing.bus.protocols import BusProtocol, SubscribableBusProtocol
+from core.eventing.bus.redis_bus import RedisBus
 
 __all__ = [
     "BusProtocol",
