@@ -479,6 +479,7 @@ async def startup(ctx):
     wctx.event_bus.bind(TaskUpdatedEvent, InfluenceUpdateHandler())
     wctx.event_bus.bind(TaskUpdatedEvent, ReflectJobHandler(arq_queue=wctx.arq_queue))
     wctx.event_bus.bind(TaskUpdatedEvent, CoordinatorInfluenceHandler())
+    wctx.event_bus.bind(TaskUpdatedEvent, WebhookDeliveryHandler(arq_queue=wctx.arq_queue))
 
     # Stream handlers (fired by TaskStreamSubscriber after deserialising Redis payload)
     wctx.event_bus.bind(TaskCreatedStreamEvent,   TaskBiddingHandler(redis=wctx.redis, arq_queue=wctx.arq_queue))

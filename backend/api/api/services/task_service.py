@@ -4,6 +4,7 @@ import uuid
 from typing import TYPE_CHECKING
 
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.models.tasks import Task
@@ -15,6 +16,9 @@ if TYPE_CHECKING:
 class TaskService:
     def __init__(self, session: AsyncSession) -> None:
         self._session = session
+
+    async def commit(self) -> None:
+        await self._session.commit()
 
     async def create(
         self,
@@ -35,8 +39,27 @@ class TaskService:
             idempotency_key=body.idempotency_key,
         )
         self._session.add(task)
-        await self._session.flush()
+        try:
+            await self._session.flush()
+        except IntegrityError:
+            await self._session.rollback()
+            if body.idempotency_key:
+                existing = await self._get_by_idempotency_key(workspace_id, body.idempotency_key)
+                if existing:
+                    return existing
+            raise
         return task
+
+    async def _get_by_idempotency_key(
+        self, workspace_id: uuid.UUID, idempotency_key: str
+    ) -> Task | None:
+        result = await self._session.execute(
+            select(Task).where(
+                Task.workspace_id == workspace_id,
+                Task.idempotency_key == idempotency_key,
+            )
+        )
+        return result.scalar_one_or_none()
 
     async def get(self, workspace_id: uuid.UUID, task_id: uuid.UUID) -> Task | None:
         result = await self._session.execute(

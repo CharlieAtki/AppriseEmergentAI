@@ -5,11 +5,12 @@ from arq.connections import RedisSettings
 
 from core.config import settings as core_settings
 from worker.jobs import curate_memory, decay, execute_task, reflect, sample_metrics
+from worker.jobs.deliver_webhook import deliver_webhook
 from worker.startup import shutdown, startup
 
 # ToDo: We don't want decay on a cron job and I think we're now doing snapshots of matrics - no need for cron?
 class WorkerSettings:
-    functions = [execute_task, reflect]
+    functions = [execute_task, reflect, deliver_webhook]
     cron_jobs = [
         cron(decay,          second={0, 30}),          # every 30 seconds
         cron(sample_metrics, second={0, 15, 30, 45}),  # every 15 seconds

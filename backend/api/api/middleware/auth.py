@@ -1,34 +1,64 @@
 from __future__ import annotations
 
-import uuid
-
 from fastapi import Request
 from fastapi.responses import JSONResponse
 from starlette.middleware.base import BaseHTTPMiddleware
 
+from api.services.auth_service import validate_api_key, validate_clerk_token
+
 EXEMPT_PATHS = {"/health", "/docs", "/openapi.json", "/redoc"}
 
 
-class ApiKeyMiddleware(BaseHTTPMiddleware):
-    """Validates X-API-Key header and injects auth context into request.state.
+class AuthMiddleware(BaseHTTPMiddleware):
+    """Resolves caller identity and injects auth context into request.state.auth.
 
-    Stub implementation: accepts any non-empty key and sets a fixed org_id.
-    Full implementation: validate key against Redis-cached bcrypt hash (see
-    Notion "Authentication, API Security & Secrets Management"), look up the
-    ApiKey row to get real org_id and workspace_id, cache for 5 minutes.
+    Two paths:
+    - X-API-Key header → machine-to-machine (scripts, pipelines, MCP clients).
+      Validated via Redis cache (SHA-256 key, 5-min TTL) → bcrypt against Postgres
+      on cache miss. Sets ApiKeyPayload on request.state.auth.
+
+    - Authorization: Bearer <jwt> → human user via Clerk JWT.
+      verify_token() is local crypto (Clerk public keys cached at startup) — no
+      network call per request. DB lookup resolves Clerk string IDs → internal UUIDs.
+      Sets UserPayload on request.state.auth.
     """
 
     async def dispatch(self, request: Request, call_next):
         if request.url.path in EXEMPT_PATHS:
             return await call_next(request)
 
-        api_key = request.headers.get("X-API-Key", "")
-        if not api_key:
-            return JSONResponse({"error": "Unauthorised"}, status_code=401)
+        if api_key := request.headers.get("X-API-Key"):
+            from core.database import SessionLocal
+            session = SessionLocal()
+            try:
+                redis = request.app.state.redis
+                payload = await validate_api_key(api_key, redis, session)
+                await session.commit()
+            except Exception:
+                await session.rollback()
+                return JSONResponse({"error": "Unauthorised"}, status_code=401)
+            finally:
+                await session.close()
+            request.state.auth = payload
+            return await call_next(request)
 
-        # TODO: validate api_key against DB/Redis cache, load real org_id
-        request.state.auth = {
-            "org_id": uuid.UUID("00000000-0000-0000-0000-000000000001"),
-            "auth_type": "api_key",
-        }
-        return await call_next(request)
+        if bearer := request.headers.get("Authorization", "").removeprefix("Bearer "):
+            # Clerk JWT path — local crypto verify (no network call), then DB lookup
+            # to resolve Clerk string IDs → internal UUIDs.
+            # Requires app.state.clerk (Clerk SDK instance) set in lifespan.
+            from core.database import SessionLocal
+            session = SessionLocal()
+            try:
+                clerk = request.app.state.clerk
+                claims = clerk.verify_token(bearer)
+                payload = await validate_clerk_token(claims, session)
+                await session.commit()
+            except Exception:
+                await session.rollback()
+                return JSONResponse({"error": "Unauthorised"}, status_code=401)
+            finally:
+                await session.close()
+            request.state.auth = payload
+            return await call_next(request)
+
+        return JSONResponse({"error": "Unauthorised"}, status_code=401)

@@ -4,31 +4,76 @@ import asyncio
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
+from redis.asyncio import Redis
 
 from core.config import settings as core_settings
 from core.eventing.bus.in_process_bus import EventBus
 from core.eventing.bus.redis_bus import RedisBus
 from core.eventing.events.task_events import TaskCreatedEvent
+from core.intelligence.llm_router import LLMRouter
+from core.intelligence.registry import registry
+from core.intelligence.routing_config import resolve_routing
 from api.handlers.task_bridge import TaskCreatedRedisPublisher
-from api.middleware.auth import ApiKeyMiddleware
+from api.middleware.auth import AuthMiddleware
 from api.routers import tasks as tasks_router
+from api.routers import workspaces as workspaces_router
+from api.routers import agents as agents_router
+from api.routers import api_keys as api_keys_router
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    import core.vendors.anthropic  # noqa: F401 — self-registers models
+
     loop = asyncio.get_running_loop()
     bus = EventBus(loop=loop)
     redis_bus = await RedisBus.create(core_settings.redis.url)
+    redis = Redis.from_url(core_settings.redis.url, decode_responses=True)
+
+    # ToDo: Remove vendor coupling
+    from core.vendors.anthropic.provider import AnthropicProvider
+
+    routing = resolve_routing(core_settings.intelligence.routing, None)
+    llm_router = LLMRouter(
+        vendors={"anthropic": AnthropicProvider(core_settings.anthropic)},
+        catalog=registry,
+        routing=routing.routing,
+        max_concurrent=2,
+        force_heuristic_fallback=core_settings.intelligence.force_heuristic_fallback,
+    )
+
     app.state.bus = bus
     app.state.redis_bus = redis_bus
+    app.state.redis = redis
+    app.state.llm_router = llm_router
+
     bus.bind(TaskCreatedEvent, TaskCreatedRedisPublisher(redis_bus))
+
     yield
+
+    await redis.aclose()
     await redis_bus.close()
     await bus.drain_pending()
 
 
 app = FastAPI(lifespan=lifespan)
-app.add_middleware(ApiKeyMiddleware)
+app.add_middleware(AuthMiddleware)
+
+app.include_router(
+    workspaces_router.router,
+    prefix="/workspaces",
+    tags=["workspaces"],
+)
+app.include_router(
+    agents_router.router,
+    prefix="/workspaces/{workspace_id}/agents",
+    tags=["agents"],
+)
+app.include_router(
+    api_keys_router.router,
+    prefix="/workspaces/{workspace_id}/api-keys",
+    tags=["api-keys"],
+)
 app.include_router(
     tasks_router.router,
     prefix="/workspaces/{workspace_id}/tasks",

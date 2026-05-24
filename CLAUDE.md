@@ -324,6 +324,10 @@ cd core && alembic revision --autogenerate -m "describe the change"
 ```
 Never run `ALTER TABLE` directly.
 
+### webhook_secret is a credential, not a hash
+
+`workspace.webhook_secret` is stored as plaintext in the database. This is correct and unavoidable — HMAC signing requires the raw secret to compute each signature, unlike a password which only ever needs to be verified. The implication: treat `webhook_secret` like a private key. Never include it in API responses, never log it, and never SELECT it except in the job that signs deliveries.
+
 ### Config changes touch both files
 
 `config.py` defaults apply everywhere `.env` is absent. `.env` wins at runtime. Update both in the same commit. A gap between them silently breaks CI and fresh clones.

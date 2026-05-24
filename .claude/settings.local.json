@@ -3,7 +3,9 @@
     "allow": [
       "mcp__claude_ai_Notion__notion-search",
       "mcp__claude_ai_Notion__notion-fetch",
-      "mcp__notion__notion-search"
+      "mcp__notion__notion-search",
+      "Bash(xargs grep -l \"WebhookDelivery\\\\|TaskExecution\")",
+      "Bash(xargs cat)"
     ]
   }
 }
