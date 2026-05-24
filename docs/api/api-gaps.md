@@ -129,7 +129,7 @@ success, rolls back on any exception, and always closes.
 - `worker/jobs/deliver_webhook.py` — ARQ job: loads execution + workspace inside a session
   (captures `target_url`, `webhook_secret`, `artifact_uri` as locals before the session closes),
   creates `WebhookDelivery` row, POST with `X-Apprise-Signature: sha256=<hmac>`, exponential
-  backoff retries (30s → 5m → 30m → 2h), marks `failed` after 4 attempts. `delivery_id` is
+  backoff retries (30s → 5m → 30m → 2h), marks `failed` after 5 total attempts (1 initial + 4 retries). `delivery_id` is
   threaded through retries so each attempt updates the same row rather than inserting a duplicate.
 - Registered in `worker/startup.py`; `deliver_webhook` added to `WorkerSettings.functions`.
 - `httpx>=0.27` added to `worker/pyproject.toml`.
@@ -235,6 +235,88 @@ GET /workspaces/{id}/tasks?status=completed&since=<ISO-timestamp>
 
 ---
 
+### 7. `CreateTaskRequest` missing `overrides` field
+
+**Gap:** The Notion "Task Ingestion & Result Delivery" spec includes an `overrides` object in
+`CreateTaskRequest`:
+
+```json
+{
+  "overrides": {
+    "task_type": "code",
+    "required_skills": ["python", "testing"],
+    "difficulty": 0.7
+  }
+}
+```
+
+`api/schemas/task.py` has no `overrides` field. Customers with domain knowledge (e.g. CI
+systems that know the task is always a coding task) cannot bypass enrichment — every task
+goes through rule-based + LLM enrichment regardless.
+
+**What is needed:**
+
+```python
+class TaskOverrides(BaseModel):
+    task_type: str | None = None
+    required_skills: list[str] | None = None
+    difficulty: float | None = Field(None, ge=0.0, le=1.0)
+
+class CreateTaskRequest(BaseModel):
+    ...
+    overrides: TaskOverrides | None = None
+```
+
+`enrich_and_release` skips enrichment when all three override fields are set; uses provided
+values directly. Partial overrides are merged with enrichment output.
+
+---
+
+### 8. `idempotency_key` should be an HTTP header, not a body field
+
+**Gap:** The Notion spec uses `Idempotency-Key: <uuid>` as an HTTP request header
+(consistent with Stripe, OpenAI, and industry convention). The current implementation
+accepts `idempotency_key` as a JSON body field inside `CreateTaskRequest`.
+
+**Impact:** Clients following the Notion spec send the header, which is silently ignored.
+They get non-idempotent behaviour — a second identical POST creates a second task rather
+than returning the first.
+
+**What is needed:** Add `Idempotency-Key` header extraction in the `create_task` router
+function (or a FastAPI dependency). If both header and body field are present, prefer the
+header. Keep the body field for backwards compatibility during the transition period.
+
+---
+
+### 9. API key prefix format differs from Notion spec
+
+**Gap:** The Notion spec shows API keys with prefix `apk_live_` (e.g. `apk_live_abc123`).
+`api_key_service.create()` generates `appr_<first 8 chars of raw_key>` (e.g. `appr_dQ3kzHj9`).
+
+**Impact:** Customer-facing documentation and any client-side key validation that pattern-matches
+the prefix will fail.
+
+**What is needed:** Decide on the canonical prefix and apply it consistently. If moving to
+`apk_live_` (aligned with Notion), change `api_key_service.create()` and update any prefix
+extraction logic in `validate_api_key()` (currently `raw_key[:8]`, would need adjustment if
+the prefix is variable-length).
+
+---
+
+### 10. `artifact_uri` column name is misleading
+
+**Gap:** `TaskExecution.artifact_uri` stores the literal text content of the agent's artifact
+(a `str | None` from `GraphState.artifact`). The name implies it is a URI or file path. The
+webhook payload correctly sends it as `"artefact": {"type": "text", "content": artifact_uri}`
+so there is no runtime bug — but the column name will mislead any developer who assumes it
+references a file location and tries to fetch/dereference it.
+
+**What is needed:** Rename `artifact_uri → artifact` in `core/models/tasks.py` (requires an
+Alembic migration) and update the two references in `deliver_webhook.py`. Low priority — no
+customer-visible impact, purely an internal naming issue.
+
+---
+
 ### 5. No WebSocket live dashboard
 
 **Gap:** `GET /workspaces/{id}/stream` (WebSocket) is specified in the Notion doc.
@@ -250,7 +332,7 @@ disconnect (leaked subscriptions compound with workspace count).
 |-----|--------|
 | Root tasks invisible to worker bidding | ✅ Closed |
 | API-key validation stub | ✅ Closed |
-| Clerk JWT middleware for human users | ❌ Open |
+| Clerk JWT middleware for human users | ❌ Open — `app.state.clerk` not wired |
 | `require_workspace` stub | ✅ Closed |
 | Double session bug in `create_task` | ✅ Closed |
 | `enrich_and_release` raw `SessionLocal()` | ✅ Closed |
@@ -267,3 +349,7 @@ disconnect (leaked subscriptions compound with workspace count).
 | Response schema gaps | ✅ Closed |
 | Idempotency key not enforced | ✅ Closed |
 | Insufficient task schema validation | ✅ Closed |
+| `overrides` field missing from `CreateTaskRequest` | ❌ Open — customers cannot bypass enrichment |
+| `idempotency_key` is a body field, not HTTP header | ❌ Open — misalignment with Notion spec and industry convention |
+| API key prefix format (`appr_` vs `apk_live_`) | ❌ Open — customer-facing, needs decision |
+| `artifact_uri` column name misleading | ❌ Open — low priority naming issue, no runtime bug |

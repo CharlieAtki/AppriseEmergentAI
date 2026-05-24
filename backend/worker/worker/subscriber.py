@@ -75,7 +75,6 @@ class TaskStreamSubscriber(ExternalEventSubscriber):
             finally:
                 await self.bus.ack(_STREAM, _GROUP, msg_id)
 
-# ToDo: Can we make dynamiuc - is this what we're doing with in process bus?
 # Registry maps event_type discriminator → StreamEvent subclass.
 # Adding a new event type: define the class in stream_events.py and add one line here.
 # No other files need to change.

@@ -98,49 +98,11 @@ updates them. Each process has its own `EventBus` instance.
 
 ---
 
-### 2. API does not publish `task.created` to Redis Streams
+### ~~2. API does not publish `task.created` to Redis Streams~~
 
-**Gap:** When the API creates a root task (`POST /tasks`), `TaskActivityLogger.created()`
-fires a `TaskCreatedEvent` on the API's in-process `EventBus` only. The worker's
-`TaskStreamSubscriber` is listening on `stream:task` — it never sees brand-new root tasks
-created from the API. Bidding never starts for these tasks.
-
-The worker-side paths already handle this correctly: `decompose.py` and
-`_release_to_pool()` both call `await bus.publish("stream:task", {...})` after writing
-subtasks or releasing a task back to the pool. Root task creation from the API is missing
-the equivalent.
-
-**What is needed:**
-
-1. Add a `RedisBus` to the FastAPI lifespan (`api/api/main.py`) and store it on
-   `app.state`.
-2. Register an `EventHandler[TaskCreatedEvent]` on the API's in-process `EventBus` that
-   forwards the event to `RedisBus`:
-
-```python
-class TaskCreatedRedisPublisher(EventHandler[TaskCreatedEvent]):
-    def __init__(self, bus: RedisBus) -> None:
-        self._bus = bus
-
-    async def handle(self, event: TaskCreatedEvent) -> None:
-        await self._bus.publish("stream:task", {
-            "event_type":      "task.created",
-            "task_id":         str(event.state.id),
-            "workspace_id":    str(event.workspace_id),
-            "required_skills": event.state.required_skills or {},
-            "domain_tags":     event.state.domain_tags or {},
-        })
-```
-
-This handler belongs in `api/handlers/task_bridge.py`. Registration in `api/api/main.py`:
-
-```python
-redis_bus = await RedisBus.create(settings.redis.url)
-app.state.redis_bus = redis_bus
-bus.bind(TaskCreatedEvent, TaskCreatedRedisPublisher(redis_bus))
-```
-
-Close the `redis_bus` in the shutdown block.
+**What was done:** `api/handlers/task_bridge.py` — `TaskCreatedRedisPublisher` registered
+on the in-process `EventBus`. `RedisBus` added to the FastAPI lifespan and stored on
+`app.state.redis_bus`. Shutdown block closes the bus.
 
 ---
 
@@ -182,5 +144,5 @@ Use it in place of a real Redis connection for `TaskStreamSubscriber` and handle
 | Handler registration | ✅ Closed — rollup, bidding, social memory all registered |
 | Redis subscriber decoupled via `ExternalEventSubscriber` | ✅ Closed — `TaskStreamSubscriber` + stream event types |
 | Audit log handler | ⚠️ Open — `audit_log` table does not exist yet |
-| API publishes `task.created` to Redis | ⚠️ Open — root tasks invisible to worker bidding |
+| API publishes `task.created` to Redis | ✅ Closed — `TaskCreatedRedisPublisher` in `api/handlers/task_bridge.py` |
 | Tests | ❌ Open — nothing tested yet |

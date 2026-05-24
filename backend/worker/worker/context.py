@@ -57,7 +57,6 @@ class WorkerContext:
 
         # 3. Build LLMRouter with all vendor providers
         routing_cfg = resolve_routing(settings.intelligence.routing, workspace_overrides=None)
-        # ToDo: Can we make this dynamic rather than hardcoded?
         vendors = {
             "anthropic": AnthropicProvider(settings.anthropic),
             "azure":     AzureProvider(settings.azure),
@@ -93,7 +92,7 @@ class WorkerContext:
         bus = await RedisBus.create(settings.redis.url)
 
         # 7. In-process event bus — must be created from the running event loop
-        import asyncio # ToDo: Can we move this import to the top without circular import issues? It's needed for EventBus but also for startup() which imports this module.
+        import asyncio  # local import avoids circular: startup imports this module at module level
         loop = asyncio.get_running_loop()
         event_bus = EventBus(loop=loop)
 

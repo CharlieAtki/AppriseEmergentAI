@@ -17,7 +17,6 @@ if TYPE_CHECKING:
 
 _current_span: ContextVar[JobSpan] = ContextVar("current_span")
 
-# ToDo: Does this need refining? Not sure whether this is clean.
 def current_span() -> JobSpan:
     """Access the active JobSpan from anywhere in the job call stack via ContextVar."""
     try:
