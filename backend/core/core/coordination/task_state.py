@@ -9,7 +9,7 @@ if TYPE_CHECKING:
 class InvalidTaskTransition(Exception):
     pass
 
-
+# Todo: Is this clean - is this texonomy? do we want to have a graph style that can be traced?
 class TaskStateMachine:
     # Maps current status → set of statuses it may legally move to.
     # reserved → open: allows a future cron job to release stale reservations

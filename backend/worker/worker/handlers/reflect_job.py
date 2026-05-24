@@ -4,12 +4,8 @@ import logging
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
-from sqlalchemy import select
-
-from core.database import get_session
 from core.eventing.bus.handlers import EventHandler
 from core.eventing.events.task_events import TaskUpdatedEvent
-from core.models.tasks import TaskExecution
 
 if TYPE_CHECKING:
     from arq import ArqRedis
@@ -27,13 +23,10 @@ class ReflectJobHandler(EventHandler[TaskUpdatedEvent]):
     task completion and should not add latency to the executing job.
 
     Only fires for the self-execute path. Decompose and CFP executions have no
-    quality_score, so no reflect job is enqueued for them — there is nothing
-    to reflect on when the agent delegated rather than executed.
+    execution_path == "self_execute" on the snapshot, so no reflect job is enqueued.
 
     step_count is no longer passed as a parameter. reflect.py derives it from
-    TaskExecution.tool_trace by counting recorded tool invocations. This removes
-    the dependency on ephemeral LangGraph state that only existed in execute_task's
-    memory.
+    TaskExecution.tool_trace by counting recorded tool invocations.
     """
 
     arq_queue: ArqRedis
@@ -41,23 +34,11 @@ class ReflectJobHandler(EventHandler[TaskUpdatedEvent]):
     async def handle(self, event: TaskUpdatedEvent) -> None:
         if not event.changed("status") or event.state.status != "completed":
             return
-        if event.state.executing_agent_id is None:
+        if event.state.execution_path != "self_execute":
             return
-
-        async with get_session() as session:
-            result = await session.execute(
-                select(TaskExecution)
-                .where(
-                    TaskExecution.task_id == event.state.id,
-                    TaskExecution.status == "completed",
-                    TaskExecution.agent_id == event.state.executing_agent_id,
-                )
-                .order_by(TaskExecution.completed_at.desc())
-                .limit(1)
-            )
-            execution = result.scalar_one_or_none()
-
-        if execution is None or execution.quality_score is None:
+        if event.state.executing_agent_id is None or event.state.quality_score is None:
+            return
+        if event.state.execution_id is None:
             return
 
         await self.arq_queue.enqueue_job(
@@ -65,8 +46,8 @@ class ReflectJobHandler(EventHandler[TaskUpdatedEvent]):
             agent_id=str(event.state.executing_agent_id),
             task_id=str(event.state.id),
             workspace_id=str(event.state.workspace_id),
-            execution_id=str(execution.id),
-            quality_score=execution.quality_score,
+            execution_id=str(event.state.execution_id),
+            quality_score=event.state.quality_score,
         )
         logger.debug(
             "ReflectJobHandler: enqueued reflect for agent=%s task=%s",

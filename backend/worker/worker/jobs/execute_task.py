@@ -112,7 +112,7 @@ async def execute_task(
                 TaskStateMachine.transition(task, "executing")
                 session.add(task)
             committed_task_status = task.status  # "executing"
-            await task_logger.updated(before_executing, task)
+            await task_logger.updated(before_executing, task, executing_agent_id=agent.id)
 
             await span.emit("job.started", {"task_type": task.task_type})
 
@@ -166,7 +166,7 @@ async def execute_task(
                         task_logger=task_logger,
                     )
 
-                await _finalise_execution(span, execution, task, "completed", task_logger)
+                await _finalise_execution(span, execution, task, "completed", task_logger, execution_path="decompose")
                 return
 
             if decision.decision == "cfp":
@@ -211,11 +211,15 @@ async def execute_task(
                 TaskStateMachine.transition(task, "completed")
                 session.add(task)
 
-            await task_logger.updated(before_completed, task)   # triggers RollupSubtaskHandler
+            await task_logger.updated(
+                before_completed, task,
+                executing_agent_id=agent.id,
+                quality_score=quality,
+                execution_id=execution.id,
+                execution_path="self_execute",
+            )
 
             # ── Phase 7: DOWNSTREAM EVENTS ───────────────────────────────────────
-            # EpisodicMemoryHandler, InfluenceUpdateHandler, ReflectJobHandler all
-            # fire fire-and-forget from the task_logger.updated() call above.
             await wctx.bus.publish(
                 "stream:task",
                 {
@@ -291,7 +295,7 @@ async def _release_to_pool(
         session.add(execution)
         TaskStateMachine.transition(task, "open")
         session.add(task)
-    await task_logger.updated(before, task)
+    await task_logger.updated(before, task, executing_agent_id=execution.agent_id, execution_path="cfp")
 
     await wctx.redis.delete(f"reservation:{workspace_id}:{task_id}")
 
@@ -315,6 +319,8 @@ async def _finalise_execution(
     task: Task,
     status: str,
     task_logger: TaskActivityLogger,
+    *,
+    execution_path: str,
 ) -> None:
     """Write final status for decompose/cfp paths (no graph execution, no quality score)."""
     before = TaskSnapshot.from_domain(task, executing_agent_id=execution.agent_id)
@@ -325,7 +331,7 @@ async def _finalise_execution(
         session.add(execution)
         TaskStateMachine.transition(task, "completed")
         session.add(task)
-    await task_logger.updated(before, task)
+    await task_logger.updated(before, task, executing_agent_id=execution.agent_id, execution_path=execution_path)
 
     await span.emit("job.completed", {"path": "delegated"})
 

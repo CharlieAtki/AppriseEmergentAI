@@ -41,6 +41,7 @@ async def startup(ctx: dict) -> None:
     from core.eventing.events.stream_events import TaskCompletedStreamEvent, TaskCreatedStreamEvent
     from core.eventing.events.task_events import TaskUpdatedEvent
     from worker.handlers.bidding import TaskBiddingHandler
+    from worker.handlers.coordinator_influence import CoordinatorInfluenceHandler
     from worker.handlers.episodic_memory import EpisodicMemoryHandler
     from worker.handlers.influence import InfluenceUpdateHandler
     from worker.handlers.reflect_job import ReflectJobHandler
@@ -49,10 +50,14 @@ async def startup(ctx: dict) -> None:
     from worker.subscriber import TaskStreamSubscriber
 
     # In-process handlers: same-process side effects triggered by domain events
-    wctx.event_bus.bind(TaskUpdatedEvent, RollupSubtaskHandler(arq_queue=wctx.arq_queue))
+    wctx.event_bus.bind(TaskUpdatedEvent, RollupSubtaskHandler(
+        arq_queue=wctx.arq_queue,
+        publish=wctx.event_bus.apublish,
+    ))
     wctx.event_bus.bind(TaskUpdatedEvent, EpisodicMemoryHandler(memory=wctx.memory))
     wctx.event_bus.bind(TaskUpdatedEvent, InfluenceUpdateHandler())
     wctx.event_bus.bind(TaskUpdatedEvent, ReflectJobHandler(arq_queue=wctx.arq_queue))
+    wctx.event_bus.bind(TaskUpdatedEvent, CoordinatorInfluenceHandler())
 
     # Stream handlers: cross-process events deserialized from Redis Streams
     wctx.event_bus.bind(TaskCreatedStreamEvent, TaskBiddingHandler(redis=wctx.redis, arq_queue=wctx.arq_queue))

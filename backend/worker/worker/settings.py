@@ -7,7 +7,7 @@ from core.config import settings as core_settings
 from worker.jobs import curate_memory, decay, execute_task, reflect, sample_metrics
 from worker.startup import shutdown, startup
 
-
+# ToDo: We don't want decay on a cron job and I think we're now doing snapshots of matrics - no need for cron?
 class WorkerSettings:
     functions = [execute_task, reflect]
     cron_jobs = [

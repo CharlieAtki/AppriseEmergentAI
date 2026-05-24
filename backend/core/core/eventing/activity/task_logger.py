@@ -17,6 +17,9 @@ from core.eventing.activity.base import PublishFn
 from core.eventing.events.task_events import TaskCreatedEvent, TaskDeletedEvent, TaskSnapshot, TaskUpdatedEvent
 
 if TYPE_CHECKING:
+    import uuid
+    from typing import Literal
+
     from core.models.tasks import Task
 
 
@@ -30,10 +33,25 @@ class TaskActivityLogger:
         snapshot = TaskSnapshot.from_domain(task)
         await self._publish(TaskCreatedEvent(state=snapshot, workspace_id=task.workspace_id))
 
-    async def updated(self, before: TaskSnapshot, after: Task) -> None:
+    async def updated(
+        self,
+        before: TaskSnapshot,
+        after: Task,
+        *,
+        executing_agent_id: uuid.UUID | None = None,
+        quality_score: float | None = None,
+        execution_id: uuid.UUID | None = None,
+        execution_path: Literal["self_execute", "cfp", "decompose"] | None = None,
+    ) -> None:
         await self._publish(
             TaskUpdatedEvent(
-                state=TaskSnapshot.from_domain(after),
+                state=TaskSnapshot.from_domain(
+                    after,
+                    executing_agent_id=executing_agent_id,
+                    quality_score=quality_score,
+                    execution_id=execution_id,
+                    execution_path=execution_path,
+                ),
                 before=before,
                 workspace_id=after.workspace_id,
             )
