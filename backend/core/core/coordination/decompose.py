@@ -2,12 +2,11 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, TypedDict
 
-from core.eventing.bus import BusProtocol
-
 if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession
 
     from core.eventing.activity.task_logger import TaskActivityLogger
+    from core.eventing.activity.task_stream_logger import TaskStreamLogger
     from core.coordination.task_context import TaskContext
     from core.models.agents import Agent
     from core.models.tasks import Task
@@ -27,20 +26,30 @@ async def decompose_and_publish(
     parent_task: Task,
     subtask_specs: list[SubtaskSpec],
     session: AsyncSession,
-    bus: BusProtocol,
+    stream_logger: TaskStreamLogger,
     task_ctx: TaskContext,
     task_logger: TaskActivityLogger,
 ) -> list[Task]:
-    """Persist subtasks to Postgres and publish each onto the task bus.
+    """Persist subtasks to Postgres and publish each onto the task stream.
 
     The caller (worker/jobs/execute_task.py) is responsible for generating
     subtask_specs — either via llm_router.decompose() or a heuristic. This
     function only handles persistence and event publishing so that it stays
     LLM-free and testable in isolation.
 
-    The session is NOT committed here; the caller commits so all writes land
-    in one transaction alongside any other state changes (e.g. updating the
-    parent task status to "executing").
+    Ordering invariant: in-process TaskActivityLogger events fire before cross-process
+    stream events. Same-process handlers (e.g. RollupSubtaskHandler) must see the
+    subtask creation before Redis subscribers attempt to bid on it.
+
+    The session is NOT committed here; the caller commits so all writes land in one
+    transaction alongside any other state changes (e.g. updating the parent task status
+    to "executing"). session.flush() is called internally to assign UUIDs — the stream
+    logger needs task.id to be non-None before publishing.
+
+    Provenance (parent_task_id, coordinator_agent_id, created_by_agent_id) is persisted
+    to Postgres on the Task row. It is intentionally excluded from the stream payload —
+    no consumer reads it from the stream, and keeping the payload minimal prevents
+    subscriber drift.
     """
     from core.models.tasks import Task as TaskModel  # local import avoids circular
 
@@ -78,20 +87,6 @@ async def decompose_and_publish(
         await task_logger.created(subtask)
 
     for subtask in created:
-        await bus.publish(
-            "stream:task",
-            {
-                "event_type": "task.created",
-                "task_id": str(subtask.id),
-                "workspace_id": str(subtask.workspace_id),
-                "organisation_id": str(subtask.organisation_id),
-                "parent_task_id": str(parent_task.id),
-                "decomposed_by_agent_id": str(agent.id),
-                "required_skills": subtask.required_skills or {},
-                "difficulty": subtask.difficulty,
-                "task_type": subtask.task_type,
-                "domain_tags": subtask.domain_tags or {},
-            },
-        )
+        await stream_logger.task_created(subtask)
 
     return created

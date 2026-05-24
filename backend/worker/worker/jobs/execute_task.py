@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING
 from sqlalchemy.orm import selectinload
 
 from core.eventing.activity.task_logger import TaskActivityLogger
+from core.eventing.activity.task_stream_logger import TaskStreamLogger
 from core.agents.agent import build_initial_state
 from core.agents.graphs.state import GraphState
 from core.agents.scoring import score_outcome
@@ -88,7 +89,12 @@ async def execute_task(
         depth_exceeded = provenance.delegation_depth >= MAX_DELEGATION_DEPTH
 
         wctx = get_worker_context()
+        # task_logger   — in-process EventBus; fires typed DomainEvents to same-process
+        #                 handlers (RollupSubtaskHandler, etc.). Does not cross process boundary.
+        # stream_logger — Redis Streams; fires typed StreamEvents consumed by
+        #                 TaskStreamSubscriber in any worker process. Durable, at-least-once.
         task_logger = TaskActivityLogger(wctx.event_bus.apublish)
+        stream_logger = TaskStreamLogger(wctx.bus.apublish)
         execution: TaskExecution | None = None
         # Tracks the task status as last committed to DB. In-memory task.status
         # can diverge from the DB if a session raises after the ORM mutation but
@@ -161,7 +167,7 @@ async def execute_task(
 
                 async with span.session() as session:
                     await decompose_and_publish(
-                        agent, task, specs, session, wctx.bus,
+                        agent, task, specs, session, stream_logger,
                         task_ctx=provenance,
                         task_logger=task_logger,
                     )
@@ -171,8 +177,8 @@ async def execute_task(
 
             if decision.decision == "cfp":
                 await span.emit("agent.issuing_cfp", {"reasoning": decision.reasoning})
-                await issue_cfp(task, agent, wctx.bus)
-                await _release_to_pool(span, execution, task, task_id, workspace_id, wctx, task_logger)
+                await issue_cfp(task, agent, stream_logger)
+                await _release_to_pool(span, execution, task, wctx, task_logger, stream_logger)
                 return
 
             # ── Phase 5: SELF-EXECUTE via LangGraph ──────────────────────────────
@@ -220,17 +226,7 @@ async def execute_task(
             )
 
             # ── Phase 7: DOWNSTREAM EVENTS ───────────────────────────────────────
-            await wctx.bus.publish(
-                "stream:task",
-                {
-                    "event_type":          "task.completed",
-                    "task_id":             task_id,
-                    "workspace_id":        workspace_id,
-                    "completing_agent_id": agent_id,
-                    "quality_score":       quality,
-                    "task_type":           task.task_type,
-                },
-            )
+            await stream_logger.task_completed(task, agent_id, quality)
 
             await span.emit("job.completed", {"quality_score": quality})
 
@@ -276,16 +272,21 @@ async def _release_to_pool(
     span: JobSpan,
     execution: TaskExecution,
     task: Task,
-    task_id: str,
-    workspace_id: str,
     wctx,
     task_logger: TaskActivityLogger,
+    stream_logger: TaskStreamLogger,
 ) -> None:
-    """CFP path: agent decided to delegate — mark execution done, release task back to pool.
+    """CFP path: mark execution done and release the task back to the bidding pool.
 
-    The executing agent's decision job is complete (execution → "completed"), but the
-    task itself was never worked on, so it returns to "open" for re-bidding. The Redis
-    reservation key is deleted immediately so the next winner isn't blocked by TTL.
+    The deciding agent's execution record is closed (execution → "completed") and the
+    task returns to "open" — it was never worked on, only routed. The Redis reservation
+    key is deleted immediately so the next winner is not blocked by the TTL.
+
+    stream_logger.task_created() re-publishes the task to stream:task so standard
+    bidding can pick it up. This is separate from the cfp_issued event fired by the
+    caller (issue_cfp) — that event targets the CFP stream which has no subscriber yet.
+    Both must fire: cfp_issued records that a negotiation round was initiated;
+    task_created triggers actual re-bidding now.
     """
     before = TaskSnapshot.from_domain(task, executing_agent_id=execution.agent_id)
     async with span.session() as session:
@@ -297,18 +298,9 @@ async def _release_to_pool(
         session.add(task)
     await task_logger.updated(before, task, executing_agent_id=execution.agent_id, execution_path="cfp")
 
-    await wctx.redis.delete(f"reservation:{workspace_id}:{task_id}")
+    await wctx.redis.delete(f"reservation:{task.workspace_id}:{task.id}")
 
-    await wctx.bus.publish(
-        "stream:task",
-        {
-            "event_type":      "task.created",
-            "task_id":         task_id,
-            "workspace_id":    workspace_id,
-            "required_skills": task.required_skills or {},
-            "domain_tags":     task.domain_tags or {},
-        },
-    )
+    await stream_logger.task_created(task)
 
     await span.emit("job.completed", {"path": "cfp_released"})
 

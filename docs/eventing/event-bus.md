@@ -67,9 +67,18 @@ TaskActivityLogger
 ### Cross-process path (Redis Streams → in-process)
 
 ```
+TaskStreamLogger
+  └─ task_created(task) → TaskCreatedStreamEvent(task_id=..., required_skills=..., ...)
+       └─ event.stream_key  → "stream:task"
+       └─ event.to_payload() → {"event_type": "task.created", "task_id": "...", ...}
+  └─ bus.apublish(event)
+       └─ RedisBus: XADD stream:task * data '<json>'
+
 Redis Stream "stream:task"
   └─ TaskStreamSubscriber (ExternalEventSubscriber)
-       │  _parse_stream_event() → typed DomainEvent
+       │  _parse_stream_event(payload)
+       │    → _REGISTRY["task.created"] → TaskCreatedStreamEvent
+       │    → TaskCreatedStreamEvent.from_payload(payload)  ← typed, validated
        └─ event_bus.apublish(stream_event)
             │
             ├─ TaskBiddingHandler      (bind TaskCreatedStreamEvent)
@@ -82,6 +91,31 @@ reference in both paths.
 ---
 
 ## Core types (`core/eventing/bus/common.py`)
+
+### `StreamEvent`
+
+Base class for all cross-process events published to Redis Streams. Extends `DomainEvent`
+(inheriting `event_id` and `timestamp`) and adds the Redis transport contract:
+
+```python
+@dataclass
+class StreamEvent(DomainEvent):
+    @property
+    def stream_key(self) -> str: ...    # Redis stream name — property, not ClassVar
+    @property
+    def event_type(self) -> str: ...    # discriminator string in the wire payload
+    def to_payload(self) -> dict: ...   # serialize to Redis wire format
+    @classmethod
+    def from_payload(cls, payload): ... # reconstruct from parsed Redis dict
+```
+
+`stream_key` is a property rather than a `ClassVar` because CFP event keys embed
+`workspace_id` at runtime (`f"cfp.{self.workspace_id}.issued"`), which a class-level
+constant cannot do.
+
+Each `StreamEvent` subclass is the single source of truth for its event: field definitions,
+stream routing, serialization, and deserialization all live on the class. Changing a field
+means editing one file; producer and consumer stay in sync automatically.
 
 ### `Snapshot`
 
@@ -176,30 +210,37 @@ These carry full ORM snapshots and are fired by activity loggers within the same
 
 ### Stream events — cross-process, partial payloads (`core/eventing/events/stream_events.py`)
 
-These are fired by `TaskStreamSubscriber` after deserialising Redis Stream messages. They carry
-only the coordination-relevant fields available in the wire format — not full ORM snapshots, which
-cannot cross a process boundary.
+These extend `StreamEvent` and are fired by `TaskStreamSubscriber` after deserialising Redis
+Stream messages. They carry only the coordination-relevant fields available in the wire format —
+not full ORM snapshots, which cannot cross a process boundary.
 
-| Event | Source message | Consumed by |
-|-------|----------------|-------------|
-| `TaskCreatedStreamEvent` | `task.created` on `stream:task` | `TaskBiddingHandler` |
-| `TaskCompletedStreamEvent` | `task.completed` on `stream:task` | `SocialMemoryHandler` |
+| Event | `event_type` | `stream_key` | Consumed by |
+|-------|-------------|-------------|-------------|
+| `TaskCreatedStreamEvent` | `task.created` | `stream:task` | `TaskBiddingHandler` |
+| `TaskCompletedStreamEvent` | `task.completed` | `stream:task` | `SocialMemoryHandler` |
+| `CfpIssuedStreamEvent` | `cfp.issued` | `cfp.{workspace_id}.issued` | no consumer yet |
+
+Each class owns its full wire contract:
 
 ```python
 @dataclass(kw_only=True)
-class TaskCreatedStreamEvent(DomainEvent):
+class TaskCreatedStreamEvent(StreamEvent):
     task_id: uuid.UUID
     workspace_id: uuid.UUID
+    organisation_id: uuid.UUID
     required_skills: dict
+    difficulty: float | None = None
+    task_type: str | None = None
     domain_tags: dict | None = None
 
-@dataclass(kw_only=True)
-class TaskCompletedStreamEvent(DomainEvent):
-    task_id: uuid.UUID
-    workspace_id: uuid.UUID
-    completing_agent_id: uuid.UUID
-    quality_score: float
-    task_type: str
+    @property
+    def stream_key(self) -> str: return "stream:task"
+    @property
+    def event_type(self) -> str: return "task.created"
+
+    def to_payload(self) -> dict: ...      # serializes UUIDs to str, included event_id
+    @classmethod
+    def from_payload(cls, payload): ...    # reconstructs from Redis dict with safe defaults
 ```
 
 Stream events are distinct from domain events by design. `TaskCreatedStreamEvent` is not the
@@ -345,13 +386,16 @@ Activity loggers are thin producer facades. Their only job is to construct the c
 from a SQLAlchemy model and forward it to a `publish` callable. They know nothing about the bus,
 handlers, or dispatch.
 
-### `PublishFn`
+### `PublishFn` and `StreamPublishFn`
 
 ```python
-PublishFn = Callable[[DomainEvent], Awaitable[None]]
+PublishFn       = Callable[[DomainEvent], Awaitable[None]]   # in-process EventBus
+StreamPublishFn = Callable[[StreamEvent], Awaitable[None]]   # cross-process RedisBus
 ```
 
-`bus.apublish` satisfies this type. Loggers hold a reference to it — never to the bus directly.
+`event_bus.apublish` satisfies `PublishFn`. `bus.apublish` satisfies `StreamPublishFn`.
+Loggers hold a reference to the callable — never to the bus directly. Both buses use
+`apublish` as the method name; the argument type is what distinguishes them.
 
 ### Usage pattern
 
@@ -500,32 +544,58 @@ def get_artifact_activity_logger(
 
 ## Adding a new Redis Stream event type
 
-1. **Add the stream event** to `core/eventing/events/stream_events.py`
+1. **Define the class** in `core/eventing/events/stream_events.py` — extend `StreamEvent`,
+   implement all four members:
 
 ```python
-@dataclass(kw_only=True)
-class TaskExpiredStreamEvent(DomainEvent):
+@dataclasses.dataclass(kw_only=True)
+class TaskExpiredStreamEvent(StreamEvent):
     task_id: uuid.UUID
     workspace_id: uuid.UUID
+
+    @property
+    def stream_key(self) -> str: return "stream:task"
+    @property
+    def event_type(self) -> str: return "task.expired"
+
+    def to_payload(self) -> dict:
+        return {
+            "event_type":   self.event_type,
+            "event_id":     str(self.event_id),
+            "task_id":      str(self.task_id),
+            "workspace_id": str(self.workspace_id),
+        }
+
+    @classmethod
+    def from_payload(cls, payload: dict) -> TaskExpiredStreamEvent:
+        return cls(
+            task_id=uuid.UUID(payload["task_id"]),
+            workspace_id=uuid.UUID(payload["workspace_id"]),
+        )
 ```
 
-2. **Add a case to `_parse_stream_event`** in `worker/subscriber.py`
+2. **Add one line to `_REGISTRY`** in `worker/subscriber.py`:
 
 ```python
-case "task.expired":
-    return TaskExpiredStreamEvent(
-        task_id=uuid.UUID(payload["task_id"]),
-        workspace_id=uuid.UUID(payload["workspace_id"]),
-    )
+_REGISTRY: dict[str, type[StreamEvent]] = {
+    "task.created":   TaskCreatedStreamEvent,
+    "task.completed": TaskCompletedStreamEvent,
+    "task.expired":   TaskExpiredStreamEvent,   # ← add this
+}
 ```
 
-3. **Create the handler** in `worker/handlers/<name>.py`
+3. **Add a method to `TaskStreamLogger`** if a producer needs to publish this event.
 
-4. **Register** in `worker/startup.py`
+4. **Create the handler** in `worker/handlers/<name>.py`
+
+5. **Register** in `worker/startup.py`:
 
 ```python
 wctx.event_bus.bind(TaskExpiredStreamEvent, ExpiryCleanupHandler(...))
 ```
+
+No other files change. `_parse_stream_event` is a 6-line registry lookup and never
+needs to grow as new event types are added.
 
 ---
 

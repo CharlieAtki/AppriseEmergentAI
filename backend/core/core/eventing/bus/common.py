@@ -12,6 +12,53 @@ class DomainEvent(abc.ABC):  # noqa: B024
     timestamp: datetime = field(default_factory=lambda: datetime.now(UTC))
 
 
+@dataclass
+class StreamEvent(DomainEvent):  # noqa: B024
+    """Base class for cross-process events published to Redis Streams.
+
+    Extends DomainEvent with the Redis transport contract. Subclasses must
+    implement all four members — the base raises NotImplementedError so that
+    a partially-implemented subclass fails loudly at the call site rather than
+    silently publishing a malformed payload.
+
+    stream_key  — the Redis stream name to XADD to. Implemented as a property
+                  (not a ClassVar) because CFP keys embed workspace_id at runtime:
+                  ``f"cfp.{self.workspace_id}.issued"``. ClassVar cannot do this.
+
+    event_type  — discriminator string written into every payload so the subscriber
+                  can route to the correct ``from_payload`` without knowing the
+                  Python class. Must be unique across all StreamEvent subclasses.
+
+    to_payload  — returns the full dict that is JSON-serialised onto the stream.
+                  Must include ``event_type``. UUID fields must be str-cast.
+                  ``event_id`` and ``timestamp`` should be included for
+                  deduplication and debugging.
+
+    from_payload — reconstructs an instance from the parsed Redis dict. Called by
+                  ``_parse_stream_event`` in worker/subscriber.py. Must handle
+                  missing optional fields with sensible defaults so that messages
+                  published before a field was added are not fatal.
+
+    Invariant: ``from_payload(event.to_payload())`` must round-trip losslessly for
+    all required fields. Optional fields may coerce None on the way back.
+    """
+
+    @property
+    def stream_key(self) -> str:
+        raise NotImplementedError
+
+    @property
+    def event_type(self) -> str:
+        raise NotImplementedError
+
+    def to_payload(self) -> dict:
+        raise NotImplementedError
+
+    @classmethod
+    def from_payload(cls, payload: dict) -> StreamEvent:
+        raise NotImplementedError
+
+
 @dataclass(frozen=True, kw_only=True)
 class Snapshot:
     """Immutable point-in-time view of an entity, used as the payload of a

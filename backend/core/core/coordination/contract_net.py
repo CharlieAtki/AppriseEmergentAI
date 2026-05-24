@@ -8,7 +8,7 @@ from redis.asyncio import Redis
 from core.config import settings
 
 if TYPE_CHECKING:
-    from core.eventing.bus import BusProtocol
+    from core.eventing.activity.task_stream_logger import TaskStreamLogger
     from core.models.agents import Agent
     from core.models.tasks import Task
 
@@ -152,25 +152,21 @@ async def attempt_reservation(
 async def issue_cfp(
     task: Task,
     initiating_agent: Agent,
-    bus: BusProtocol,
+    stream_logger: TaskStreamLogger,
 ) -> None:
-    """Publish a Call for Proposals event on the bus.
+    """Publish a Call for Proposals event to ``cfp.{workspace_id}.issued``.
 
-    Subscribing agents bid algorithmically (compute_bid_score) via their bus
-    subscriber. Full CFP resolution (bid collection timeout, winner selection,
-    ARQ enqueue) is implemented in the worker subscriber.
+    This is a thin delegation to TaskStreamLogger.cfp_issued(). It exists as a
+    named coordination-layer entry point so the CFP concept stays visible here
+    rather than being buried in execute_task.
+
+    The caller (execute_task CFP branch) immediately follows this with
+    _release_to_pool(), which returns the task to ``"open"`` and publishes a
+    standard ``task.created`` event for re-bidding. Those are two distinct events:
+    this one signals that a CFP round was initiated (for a future subscriber);
+    the re-release triggers actual bidding now.
+
+    WARNING: No subscriber currently consumes the CFP stream. See
+    coordination-gaps.md gap 1 before making changes to this path.
     """
-    await bus.publish(
-        f"cfp.{task.workspace_id}.issued",
-        {
-            "task_id": str(task.id),
-            "workspace_id": str(task.workspace_id),
-            "organisation_id": str(task.organisation_id),
-            "initiating_agent_id": str(initiating_agent.id),
-            "coordinator_agent_id": str(task.coordinator_agent_id) if task.coordinator_agent_id else None,
-            "required_skills": task.required_skills or {},
-            "difficulty": task.difficulty,
-            "task_type": task.task_type,
-            "domain_tags": task.domain_tags or {},
-        },
-    )
+    await stream_logger.cfp_issued(task, initiating_agent)

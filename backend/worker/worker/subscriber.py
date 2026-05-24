@@ -3,10 +3,9 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import logging
-import uuid
 from dataclasses import dataclass, field
 
-from core.eventing.bus.common import DomainEvent
+from core.eventing.bus.common import StreamEvent
 from core.eventing.bus.handlers import ExternalEventSubscriber
 from core.eventing.bus.in_process_bus import EventBus
 from core.eventing.bus.redis_bus import RedisBus
@@ -76,36 +75,34 @@ class TaskStreamSubscriber(ExternalEventSubscriber):
             finally:
                 await self.bus.ack(_STREAM, _GROUP, msg_id)
 
+# ToDo: Can we make dynamiuc - is this what we're doing with in process bus?
+# Registry maps event_type discriminator → StreamEvent subclass.
+# Adding a new event type: define the class in stream_events.py and add one line here.
+# No other files need to change.
+_REGISTRY: dict[str, type[StreamEvent]] = {
+    "task.created":   TaskCreatedStreamEvent,
+    "task.completed": TaskCompletedStreamEvent,
+}
 
-def _parse_stream_event(payload: dict) -> DomainEvent | None:
-    """Deserialise a Redis Stream payload into a typed domain event.
 
-    Returns ``None`` for unknown ``event_type`` values so the caller can
-    ack-and-skip without crashing the consumer loop. Unknown types are logged
-    at DEBUG — not WARNING — to avoid noise from future event types that older
-    worker versions don't yet handle.
+def _parse_stream_event(payload: dict) -> StreamEvent | None:
+    """Deserialise a Redis Stream payload into a typed StreamEvent.
+
+    Routes via _REGISTRY keyed on ``event_type``. Returns ``None`` for unknown
+    types so the caller can ack-and-skip without crashing the consumer loop.
+    Unknown types are logged at DEBUG — not WARNING — to avoid noise from future
+    event types that older worker versions don't yet handle.
 
     Missing required keys (e.g. malformed ``task_id``) will raise and be caught
     by the caller's ``except`` block, which logs at ERROR and acks the message
     to avoid it blocking the PEL indefinitely.
+
+    Deserialization logic lives on each StreamEvent class (from_payload), so
+    this function stays stable as event fields evolve.
     """
     event_type = payload.get("event_type", "")
-    match event_type:
-        case "task.created":
-            return TaskCreatedStreamEvent(
-                task_id=uuid.UUID(payload["task_id"]),
-                workspace_id=uuid.UUID(payload["workspace_id"]),
-                required_skills=payload.get("required_skills") or {},
-                domain_tags=payload.get("domain_tags"),
-            )
-        case "task.completed":
-            return TaskCompletedStreamEvent(
-                task_id=uuid.UUID(payload["task_id"]),
-                workspace_id=uuid.UUID(payload["workspace_id"]),
-                completing_agent_id=uuid.UUID(payload["completing_agent_id"]),
-                quality_score=float(payload.get("quality_score", 0.5)),
-                task_type=str(payload.get("task_type", "general")),
-            )
-        case _:
-            logger.debug("subscriber: unknown event_type=%r, skipping", event_type)
-            return None
+    cls = _REGISTRY.get(event_type)
+    if cls is None:
+        logger.debug("subscriber: unknown event_type=%r, skipping", event_type)
+        return None
+    return cls.from_payload(payload)

@@ -1,10 +1,13 @@
 from __future__ import annotations
 
 import json
-from typing import AsyncIterator
+from typing import TYPE_CHECKING, AsyncIterator
 
 from redis.asyncio import Redis
 from redis.exceptions import ResponseError
+
+if TYPE_CHECKING:
+    from core.eventing.bus.common import StreamEvent
 
 # ToDo: Need to wire up ReisBus - Currently using InMemoryBus for testing until we have subs
 class RedisBus:
@@ -45,8 +48,22 @@ class RedisBus:
             if "BUSYGROUP" not in str(exc):
                 raise
 
+    async def apublish(self, event: StreamEvent) -> None:
+        """XADD a typed StreamEvent to its own stream key.
+
+        The event owns both the destination (event.stream_key) and the wire
+        format (event.to_payload()). Callers never construct raw dicts or pass
+        stream key strings — use TaskStreamLogger instead of calling this directly.
+        """
+        await self._redis.xadd(event.stream_key, {"data": json.dumps(event.to_payload())})
+
     async def publish(self, stream: str, payload: dict) -> None:
-        """XADD payload as a JSON blob to a Redis Stream."""
+        """XADD payload as a JSON blob to a Redis Stream.
+
+        Prefer apublish(StreamEvent) for typed publishing. This method is kept
+        for streams that do not yet have a StreamEvent class (e.g. stream:workspace
+        in sample_metrics.py).
+        """
         await self._redis.xadd(stream, {"data": json.dumps(payload)})
 
     async def subscribe(
