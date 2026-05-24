@@ -138,7 +138,9 @@ execute_task(agent=B, task=S1)
              provenance.delegation_depth = 1
 
     Phase 6 (completed):
-        task_logger.updated(before_completed, task)
+        task_logger.updated(before_completed, task,
+            executing_agent_id=B.id, quality_score=0.9,
+            execution_id=exec.id, execution_path="self_execute")
         → fires TaskUpdatedEvent on wctx.event_bus
         → RollupSubtaskHandler.handle(event)
             event.state.parent_task_id = T.id  ← has a parent
@@ -151,19 +153,25 @@ When agent C completes S2:
 ```
 execute_task(agent=C, task=S2)
     Phase 6 (completed):
-        task_logger.updated(before_completed, task)
-        → TaskUpdatedEvent fired
+        task_logger.updated(before_completed, task,
+            executing_agent_id=C.id, quality_score=0.8,
+            execution_id=exec.id, execution_path="self_execute")
+        → TaskUpdatedEvent fired (for S2)
         → RollupSubtaskHandler.handle(event)
             queries siblings: [S1=completed, S2=completed]
             all terminal → proceeds
             loads parent T
             T.status = "executing" → not terminal → transitions to "completed"
-            all_succeeded → _credit_coordinator(session, T, [S1, S2])
-                loads agent A
-                avg_quality = avg(S1.execution.quality_score, S2.execution.quality_score)
-                A.influence = EMA(A.influence, avg_quality)
-                writes InfluenceSnapshot
+            commits
+            TaskActivityLogger(self.publish).updated(before_parent, T)
+            → TaskUpdatedEvent fired (for parent T)
             enqueues reflect(agent_id=A.id, task_id=T.id)
+
+        → CoordinatorInfluenceHandler.handle(parent_event) [separate fire-and-forget]:
+            event.state.coordinator_agent_id = A.id → not None
+            queries completed subtasks, computes avg quality
+            A.influence = EMA(A.influence, avg_quality)
+            writes InfluenceSnapshot
 ```
 
 ### Nested decomposition: coordinator inheritance
@@ -345,9 +353,13 @@ TERMINAL_STATUSES = frozenset({"completed", "failed", "expired"})
 @dataclass
 class RollupSubtaskHandler(EventHandler[TaskUpdatedEvent]):
     arq_queue: ArqRedis
+    publish: PublishFn
 ```
 
-It holds `arq_queue` because completing a parent task triggers a `reflect` job for the coordinator agent.
+It holds `arq_queue` to enqueue a `reflect` job for the coordinator agent once the parent completes.
+It holds `publish` (`wctx.event_bus.apublish`) so it can fire a `TaskUpdatedEvent` for the parent
+after transitioning it — making the parent's completion visible on the bus for other handlers
+(specifically `CoordinatorInfluenceHandler`) without any coupling between the two.
 
 ### `handle()` — early exits
 
@@ -432,27 +444,35 @@ TaskStateMachine.transition(parent, target_status)
 
 If even one sibling failed, the parent fails. No coordinator credit is written (partial failure means the coordination was not successful). The `reflect` job is still enqueued — the coordinator needs to learn from delegation failure as much as from success.
 
-### Credit rollup
+### Coordinator credit — `CoordinatorInfluenceHandler`
+
+Coordinator influence credit is **not** handled inside `RollupSubtaskHandler`. After the parent's
+status is committed, `RollupSubtaskHandler` publishes a `TaskUpdatedEvent` for the parent via
+`TaskActivityLogger(self.publish).updated(before_parent, parent)`. This fires a second event on
+the same bus, which `CoordinatorInfluenceHandler` (registered separately) handles independently:
 
 ```python
-async def _credit_coordinator(self, session, parent, siblings):
-    completed_ids = [s.id for s in siblings if s.status == "completed"]
-    avg_quality = (await session.execute(
-        select(func.avg(TaskExecution.quality_score)).where(
-            TaskExecution.task_id.in_(completed_ids),
-            TaskExecution.status == "completed",
-        )
-    )).scalar() or 0.0
+# worker/handlers/coordinator_influence.py
 
-    base = coordinator.influence or 0.0
-    coordinator.influence = base + settings.INFLUENCE_EMA_ALPHA * (avg_quality - base)
+@dataclass
+class CoordinatorInfluenceHandler(EventHandler[TaskUpdatedEvent]):
+    async def handle(self, event: TaskUpdatedEvent) -> None:
+        if not event.changed("status") or event.state.status != "completed":
+            return
+        if event.state.coordinator_agent_id is None:
+            return
+        # queries completed subtask IDs, computes avg quality_score,
+        # applies compute_influence_ema(), writes InfluenceSnapshot
 ```
 
-`quality_score` comes from `TaskExecution` rows written by the executing agents in Phase 6 of their respective `execute_task` jobs. Only `status == "completed"` executions are included — failed executions have no meaningful quality score and would drag down the average unfairly.
+The guard `coordinator_agent_id is not None` identifies delegated tasks regardless of nesting
+depth. The EMA uses `compute_influence_ema()` from `core/coordination/influence.py` — the same
+shared pure function used by `InfluenceUpdateHandler` for direct executions. This keeps the two
+influence update paths consistent.
 
-The EMA (Exponential Moving Average) blends the new quality signal into the coordinator's running influence. The same formula is used for direct execution in `execute_task._update_influence()`. The coordinator's influence thus reflects both their direct task performance and the quality of the teams they assembled.
-
-An `InfluenceSnapshot` is also written. These are time-series records used to track influence over time — the same pattern as the `SkillSnapshot` written in Phase 6.
+The separation is deliberate: `RollupSubtaskHandler`'s single responsibility is promoting the
+parent status. Influence credit is a separate concern that reacts to that promotion via the bus,
+following the same pattern as every other handler in the system.
 
 ---
 
@@ -463,12 +483,16 @@ An `InfluenceSnapshot` is also written. These are time-series records used to tr
 ```python
 # worker/startup.py
 
-wctx.event_bus.bind(TaskUpdatedEvent, RollupSubtaskHandler(arq_queue=wctx.arq_queue))
+wctx.event_bus.bind(TaskUpdatedEvent, RollupSubtaskHandler(
+    arq_queue=wctx.arq_queue,
+    publish=wctx.event_bus.apublish,
+))
+wctx.event_bus.bind(TaskUpdatedEvent, CoordinatorInfluenceHandler())
 ```
 
 Handlers are registered once at startup. The `EventBus.bind()` call is inside a local import block to avoid circular import risk at module load time (`worker.handlers.rollup` imports from `core.database`, `core.models`, etc.).
 
-`RollupSubtaskHandler` receives `arq_queue` at construction time because it needs to enqueue the reflect job. This is constructor injection — the handler does not read from any global context.
+`RollupSubtaskHandler` receives `arq_queue` at construction time because it needs to enqueue the reflect job, and `publish` so it can fire the parent `TaskUpdatedEvent` after committing. This is constructor injection — the handler does not read from any global context.
 
 ### Drain at shutdown
 
@@ -480,7 +504,7 @@ await wctx.bus.close()
 await wctx.redis.aclose()
 ```
 
-`drain_pending()` awaits all in-flight asyncio tasks. It must run before closing Redis connections because in-flight rollup handlers may be mid-way through `_credit_coordinator`, which queries the DB and enqueues a job via `arq_queue` (which uses the ARQ Redis connection). Closing Redis before draining would cause those handlers to fail with connection errors.
+`drain_pending()` awaits all in-flight asyncio tasks. It must run before closing Redis connections because in-flight handlers (`RollupSubtaskHandler`, `CoordinatorInfluenceHandler`) may be mid-way through DB queries or enqueuing jobs via `arq_queue` (which uses the ARQ Redis connection). Closing Redis before draining would cause those handlers to fail with connection errors.
 
 ---
 
@@ -548,13 +572,22 @@ RollupSubtaskHandler.handle(event) [fire-and-forget asyncio task]:
         query siblings of T → all terminal
         load parent T → status "executing" → not terminal
         transition T → "completed"
-        _credit_coordinator:
-            load coordinator agent A
-            avg quality across completed siblings
-            EMA → A.influence updated
-            write InfluenceSnapshot
         commit
-        enqueue reflect(agent_id=A.id, task_id=T.id)
+    TaskActivityLogger(self.publish).updated(before_parent, T)
+        → TaskUpdatedEvent fired for parent T
+        → asyncio.ensure_future(CoordinatorInfluenceHandler.handle(parent_event))
+        → asyncio.ensure_future(InfluenceUpdateHandler.handle(parent_event))  ← no-op (execution_path=None on parent)
+    enqueue reflect(agent_id=A.id, task_id=T.id)
+
+CoordinatorInfluenceHandler.handle(parent_event) [fire-and-forget asyncio task]:
+    event.changed("status") → True
+    event.state.status = "completed"
+    event.state.coordinator_agent_id = A.id → not None
+    async with get_session():
+        query completed subtasks → avg quality_score
+        A.influence = compute_influence_ema(A.influence, avg_quality)
+        write InfluenceSnapshot
+        commit
 ```
 
 The parent task is completed, the coordinator is credited, and a reflect job is enqueued — all without a single line of code added to `execute_task.py`'s core logic. The job just fires an event and moves on.

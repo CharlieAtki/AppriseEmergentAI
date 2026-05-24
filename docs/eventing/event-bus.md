@@ -57,9 +57,11 @@ immediately re-query the DB anyway. The triggering pod is the right place for th
 Producer                    EventBus                       Consumers
 ────────                    ────────                       ─────────
 TaskActivityLogger
-  └─ updated(task)  ──────────────────────────────►  RollupSubtaskHandler  (bind)
-                            walks MRO                AuditLogHandler        (bind)
-                            all fire-and-forget
+  └─ updated(task)  ──────────────────────────────►  RollupSubtaskHandler       (bind TaskUpdatedEvent)
+                            walks MRO                EpisodicMemoryHandler      (bind TaskUpdatedEvent)
+                            all fire-and-forget      InfluenceUpdateHandler     (bind TaskUpdatedEvent)
+                                                     ReflectJobHandler          (bind TaskUpdatedEvent)
+                                                     CoordinatorInfluenceHandler(bind TaskUpdatedEvent)
 ```
 
 ### Cross-process path (Redis Streams → in-process)
@@ -94,7 +96,16 @@ class TaskSnapshot(Snapshot):
     title: str
     status: str
     ...
+    # Synthetic fields — not columns on Task; passed explicitly by execute_task
+    executing_agent_id: uuid.UUID | None = None
+    quality_score: float | None = None
+    execution_id: uuid.UUID | None = None
+    execution_path: Literal["self_execute", "cfp", "decompose"] | None = None
 ```
+
+Synthetic fields are excluded from the `getattr` loop in `from_domain` and passed as explicit
+kwargs instead. This is the mechanism for attaching execution-context data (known in the job but
+absent from the ORM row) to the snapshot so handlers do not need to re-query the DB.
 
 `Snapshot.from_domain(model)` constructs a snapshot by matching field names to attributes on the
 domain object via `get_type_hints`. It handles three cases:
@@ -353,9 +364,24 @@ class TaskActivityLogger:
         snapshot = TaskSnapshot.from_domain(task)
         await self._publish(TaskCreatedEvent(state=snapshot, workspace_id=task.workspace_id))
 
-    async def updated(self, before: TaskSnapshot, after: Task) -> None:
+    async def updated(
+        self,
+        before: TaskSnapshot,
+        after: Task,
+        *,
+        executing_agent_id: uuid.UUID | None = None,
+        quality_score: float | None = None,
+        execution_id: uuid.UUID | None = None,
+        execution_path: Literal["self_execute", "cfp", "decompose"] | None = None,
+    ) -> None:
         await self._publish(TaskUpdatedEvent(
-            state=TaskSnapshot.from_domain(after),
+            state=TaskSnapshot.from_domain(
+                after,
+                executing_agent_id=executing_agent_id,
+                quality_score=quality_score,
+                execution_id=execution_id,
+                execution_path=execution_path,
+            ),
             before=before,
             workspace_id=after.workspace_id,
         ))
@@ -400,10 +426,17 @@ always finds its handlers registered.
 async def startup(ctx):
     wctx = await WorkerContext.build(arq_queue)
 
-    # In-process handlers
-    wctx.event_bus.bind(TaskUpdatedEvent,         RollupSubtaskHandler(arq_queue=wctx.arq_queue))
+    # In-process handlers: same-process side effects triggered by domain events
+    wctx.event_bus.bind(TaskUpdatedEvent, RollupSubtaskHandler(
+        arq_queue=wctx.arq_queue,
+        publish=wctx.event_bus.apublish,   # publishes parent TaskUpdatedEvent after rollup
+    ))
+    wctx.event_bus.bind(TaskUpdatedEvent, EpisodicMemoryHandler(memory=wctx.memory))
+    wctx.event_bus.bind(TaskUpdatedEvent, InfluenceUpdateHandler())
+    wctx.event_bus.bind(TaskUpdatedEvent, ReflectJobHandler(arq_queue=wctx.arq_queue))
+    wctx.event_bus.bind(TaskUpdatedEvent, CoordinatorInfluenceHandler())
 
-    # Stream handlers (fired by TaskStreamSubscriber)
+    # Stream handlers (fired by TaskStreamSubscriber after deserialising Redis payload)
     wctx.event_bus.bind(TaskCreatedStreamEvent,   TaskBiddingHandler(redis=wctx.redis, arq_queue=wctx.arq_queue))
     wctx.event_bus.bind(TaskCompletedStreamEvent, SocialMemoryHandler(memory=wctx.memory))
 

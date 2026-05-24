@@ -37,13 +37,23 @@ class EpisodicMemoryHandler(EventHandler[TaskUpdatedEvent]):
         if event.state.executing_agent_id is None or event.state.quality_score is None:
             return
 
+        task_type_str = event.state.task_type or "general"
+        domains = ", ".join(event.state.domain_tags.keys()) if event.state.domain_tags else "none"
+        text = (
+            f"Completed {task_type_str} task: {event.state.title}. "
+            f"Domains: {domains}. "
+            f"Quality: {event.state.quality_score:.2f}."
+        )
+
         await self.memory.store_episode(
             str(event.state.executing_agent_id),
             str(event.state.workspace_id),
             {
-                "text":          f"Completed task: {event.state.title}. Quality: {event.state.quality_score:.2f}.",
+                "text":          text,
                 "task_id":       str(event.state.id),
                 "task_type":     event.state.task_type,
+                "domain_tags":   event.state.domain_tags or {},
+                "difficulty":    event.state.difficulty,
                 "quality_score": event.state.quality_score,
             },
         )
