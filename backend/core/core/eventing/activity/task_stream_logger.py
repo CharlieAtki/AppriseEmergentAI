@@ -9,7 +9,7 @@ Construct with ``TaskStreamLogger(wctx.bus.apublish)`` at the start of an ARQ jo
 Consumers of each stream key:
     ``stream:task`` / ``task.created``   → TaskBiddingHandler (worker/handlers/bidding.py)
     ``stream:task`` / ``task.completed`` → SocialMemoryHandler (worker/handlers/social_memory.py)
-    ``cfp.{workspace_id}.issued``        → NO CONSUMER YET (see coordination-gaps.md gap 1)
+    ``stream:cfp``  / ``cfp.issued``     → CfpHandler (worker/handlers/cfp.py)
 
 Adding a field: change the StreamEvent class in core/eventing/events/stream_events.py.
 The logger and subscriber stay in sync automatically because to_payload()/from_payload()
@@ -84,12 +84,12 @@ class TaskStreamLogger:
         ))
 
     async def cfp_issued(self, task: Task, initiating_agent: Agent) -> None:
-        """Publish a Call for Proposals to ``cfp.{workspace_id}.issued``.
+        """Publish a ``cfp.issued`` event to ``stream:cfp``.
 
-        WARNING: No subscriber currently consumes this stream. The CFP path
-        falls back to standard re-bidding via task_created() immediately after.
-        Do not remove this call without first implementing or explicitly
-        abandoning the CFP subscriber (see coordination-gaps.md gap 1).
+        Consumed by CfpHandler (worker/handlers/cfp.py) which runs targeted
+        bidding among agents other than the initiator. ``_release_to_pool()``
+        follows this call with a ``task.created`` event on ``stream:task``
+        as a fallback in case no agent wins the CFP round.
         """
         await self._publish(CfpIssuedStreamEvent(
             task_id=task.id,

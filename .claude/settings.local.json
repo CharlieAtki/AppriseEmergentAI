@@ -5,7 +5,8 @@
       "mcp__claude_ai_Notion__notion-fetch",
       "mcp__notion__notion-search",
       "Bash(xargs grep -l \"WebhookDelivery\\\\|TaskExecution\")",
-      "Bash(xargs cat)"
+      "Bash(xargs cat)",
+      "mcp__notion__notion-fetch"
     ]
   }
 }

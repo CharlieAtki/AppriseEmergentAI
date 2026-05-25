@@ -22,7 +22,6 @@ from core.intelligence.prompts import decompose as decompose_prompt
 from core.intelligence.prompts import evaluate
 from core.intelligence.prompts.evaluate import EvaluateResponse
 from core.models.agents import Agent
-from core.models.observability import SkillSnapshot
 from core.models.tasks import Task, TaskExecution
 from worker.context import get_worker_context
 from worker.span import JobSpan
@@ -104,21 +103,32 @@ async def execute_task(
 
         try:
             # ── Phase 2: WRITE EXECUTION ROW ───────────────────────────────────
-            execution = TaskExecution(
-                task_id=task.id,
-                agent_id=agent.id,
-                organisation_id=agent.organisation_id,
-                workspace_id=task.workspace_id,
-                status="executing",
-                started_at=datetime.now(timezone.utc),
+            # Idempotency guard: if ARQ retries a crashed job, the execution row
+            # already exists and task.status is already "executing". Reuse it to
+            # avoid an InvalidTaskTransition on the state machine transition.
+            existing = next(
+                (e for e in agent.task_executions if e.task_id == task.id and e.status == "executing"),
+                None,
             )
-            before_executing = TaskSnapshot.from_domain(task, executing_agent_id=agent.id)
-            async with span.session() as session:
-                session.add(execution)
-                TaskStateMachine.transition(task, "executing")
-                session.add(task)
-            committed_task_status = task.status  # "executing"
-            await task_logger.updated(before_executing, task, executing_agent_id=agent.id)
+            if existing is not None:
+                execution = existing
+                committed_task_status = task.status  # already "executing"
+            else:
+                execution = TaskExecution(
+                    task_id=task.id,
+                    agent_id=agent.id,
+                    organisation_id=agent.organisation_id,
+                    workspace_id=task.workspace_id,
+                    status="executing",
+                    started_at=datetime.now(timezone.utc),
+                )
+                before_executing = TaskSnapshot.from_domain(task, executing_agent_id=agent.id)
+                async with span.session() as session:
+                    session.add(execution)
+                    TaskStateMachine.transition(task, "executing")
+                    session.add(task)
+                committed_task_status = task.status  # "executing"
+                await task_logger.updated(before_executing, task, executing_agent_id=agent.id)
 
             await span.emit("job.started", {"task_type": task.task_type})
 
@@ -195,24 +205,19 @@ async def execute_task(
             # ── Phase 6: WRITE RESULTS (single atomic commit) ────────────────────
             before_completed = TaskSnapshot.from_domain(task, executing_agent_id=agent.id)
             async with span.session() as session:
-                execution.status        = "completed"
-                execution.quality_score = quality
-                execution.artifact_uri  = final_state.get("artifact")
-                execution.tool_trace    = final_state["tool_trace"]   # structured {tool,args,result} records
-                execution.completed_at  = datetime.now(timezone.utc)
+                execution.status         = "completed"
+                execution.execution_path = "self_execute"
+                execution.quality_score  = quality
+                execution.artifact_uri   = final_state.get("artifact")
+                execution.tool_trace     = final_state["tool_trace"]   # structured {tool,args,result} records
+                execution.completed_at   = datetime.now(timezone.utc)
                 session.add(execution)
 
-                new_skills       = _merge_skills(agent.skills, final_state)
-                agent.skills     = new_skills
+                # Skills and influence are updated downstream (reflect job and AgentCreditHandler
+                # respectively). Only updated_at needs to be stamped here so the agent row
+                # reflects last-active time in monitoring queries.
                 agent.updated_at = datetime.now(timezone.utc)
                 session.add(agent)
-
-                session.add(SkillSnapshot(
-                    agent_id=agent.id,
-                    organisation_id=agent.organisation_id,
-                    workspace_id=agent.workspace_id,
-                    skills=new_skills,
-                ))
 
                 TaskStateMachine.transition(task, "completed")
                 session.add(task)
@@ -290,10 +295,17 @@ async def _release_to_pool(
     """
     before = TaskSnapshot.from_domain(task, executing_agent_id=execution.agent_id)
     async with span.session() as session:
-        execution.status       = "completed"
-        execution.completed_at = datetime.now(timezone.utc)
-        execution.tool_trace   = span.events
+        execution.status          = "completed"
+        execution.execution_path  = "cfp"
+        execution.completed_at    = datetime.now(timezone.utc)
+        execution.tool_trace      = span.events
         session.add(execution)
+        # Only set coordinator if not already tracked — preserves grandparent coordinator
+        # on tasks that were previously decomposed before being CFP'd.
+        if task.coordinator_agent_id is None:
+            task.coordinator_agent_id = execution.agent_id
+        # Increment depth so the existing depth guard prevents infinite CFP loops.
+        task.delegation_depth = (task.delegation_depth or 0) + 1
         TaskStateMachine.transition(task, "open")
         session.add(task)
     await task_logger.updated(before, task, executing_agent_id=execution.agent_id, execution_path="cfp")
@@ -317,9 +329,10 @@ async def _finalise_execution(
     """Write final status for decompose/cfp paths (no graph execution, no quality score)."""
     before = TaskSnapshot.from_domain(task, executing_agent_id=execution.agent_id)
     async with span.session() as session:
-        execution.status       = status
-        execution.completed_at = datetime.now(timezone.utc)
-        execution.tool_trace   = span.events
+        execution.status          = status
+        execution.execution_path  = execution_path
+        execution.completed_at    = datetime.now(timezone.utc)
+        execution.tool_trace      = span.events
         session.add(execution)
         TaskStateMachine.transition(task, "completed")
         session.add(task)
@@ -328,11 +341,5 @@ async def _finalise_execution(
     await span.emit("job.completed", {"path": "delegated"})
 
 
-def _merge_skills(
-    current_skills: dict[str, float] | None,
-    final_state: GraphState,
-) -> dict[str, float]:
-    """Carry existing skills forward — reflect job applies the deltas after LLM reflection."""
-    return dict(current_skills or {})
 
 

@@ -80,49 +80,98 @@ coercions. Producer and deserialiser still had to be kept in sync manually. Two 
 
 ---
 
-## Open gaps
+## Closed gaps (continued)
 
-### 1. CFP path is dead — no subscriber consumes `cfp.{workspace_id}.issued`
+### ~~4. CFP path was dead — no subscriber, no influence credit~~
 
-**Gap:** `issue_cfp()` publishes a `CfpIssuedStreamEvent` to `cfp.{workspace_id}.issued`.
-No handler or subscriber reads this stream.
+**Gap:** `issue_cfp()` published a `CfpIssuedStreamEvent` that no subscriber read.
+`task.coordinator_agent_id` was never set on CFP release, so the initiating agent
+received zero influence credit when the re-bid task completed.
 
-When an agent decides `"cfp"` in `execute_task`, `_release_to_pool` correctly returns
-the task to `"open"` and re-publishes via `stream_logger.task_created(task)` so standard
-bidding picks it up. `issue_cfp()` fires before that — its event goes unconsumed.
+**What was done:**
 
-**Impact:** The structured ContractNet negotiation round (broadcast CFP → agents bid →
-winner selected) never happens. Tasks delegated via CFP fall back silently to whoever
-wins the standard `stream:task` bid.
+- `CfpIssuedStreamEvent.stream_key` changed from `f"cfp.{workspace_id}.issued"` to
+  `"stream:cfp"`, matching the `stream:task` convention. Workspace isolation is enforced
+  by the SETNX key and handler-level filtering, not the stream key. This eliminates the
+  need for workspace-list queries at startup and keeps the subscriber pattern identical to
+  `TaskStreamSubscriber`.
 
-**What is needed:**
+- `_release_to_pool()` in `execute_task.py` now sets `task.coordinator_agent_id =
+  execution.agent_id` before transitioning the task to `"open"`. This is the single wire
+  that connects the CFP path to the existing `CoordinatorInfluenceHandler`.
 
-Option A — remove `issue_cfp()` and treat CFP as standard re-bidding (current de facto
-behaviour). Delete `CfpIssuedStreamEvent`, `cfp_issued` from `TaskStreamLogger`, and
-`issue_cfp` from `contract_net.py`.
+- `CoordinatorInfluenceHandler` extended to handle two delegation paths:
+  - **Decompose** (task has subtasks): quality signal = avg subtask quality (unchanged)
+  - **CFP** (no subtasks, direct completion): quality signal = `quality_score ×
+    CFP_COORDINATOR_CREDIT` (default 0.5). Partial credit because the coordinator routed
+    the task but did not structure or execute it.
 
-Option B — implement a CFP subscriber. `CfpIssuedStreamEvent` already exists with all
-fields. What remains:
+- `CfpHandler` added (`worker/handlers/cfp.py`): fired by `CfpIssuedStreamEvent`, excludes
+  the initiating agent, scores remaining active agents with `compute_bid_score()`, and
+  calls `attempt_reservation()` for the highest scorer. Falls through silently if no
+  agent qualifies — the `TaskCreatedStreamEvent` from `_release_to_pool()` acts as
+  the safety fallback via `TaskBiddingHandler`.
 
-```python
-# worker/handlers/cfp.py
-@dataclasses.dataclass
-class CfpHandler(EventHandler[CfpIssuedStreamEvent]):
-    redis: Redis
-    arq_queue: ArqRedis
+- `CfpStreamSubscriber` added (`worker/subscriber.py`): reads `stream:cfp` via consumer
+  group `"cfp-group"`, deserializes via `_CFP_REGISTRY`, dispatches to `event_bus`. Reuses
+  `_parse_stream_event()` with the CFP registry passed explicitly.
 
-    async def handle(self, event: CfpIssuedStreamEvent) -> None:
-        # Collect bids, select winner, enqueue execute_task for winner.
-        ...
-```
+- `CfpHandler` and `CfpStreamSubscriber` registered in `worker/startup.py`.
 
-- A dedicated `CfpStreamSubscriber` (or extend `TaskStreamSubscriber`) that reads
-  `cfp.{workspace_id}.issued` — this stream key is workspace-specific and cannot be
-  handled by the current single-stream subscriber without changes.
-- Add `"cfp.issued": CfpIssuedStreamEvent` to `_REGISTRY` in `subscriber.py`.
-- Register `CfpHandler` in `worker/startup.py`.
+- `CFP_COORDINATOR_CREDIT: float = 0.5` added to `core/config/__init__.py`.
 
-Decide which option is correct before implementing anything else in the CFP path.
+**Race condition accepted:** `CfpHandler` (excludes initiating agent) and
+`TaskBiddingHandler` (fallback, includes all agents) both race via SETNX on the same
+task. SETNX guarantees exactly one winner. The initiating agent's low skill score makes
+re-winning unlikely; if it does occur, the task re-enters the CFP path with the same
+coordinator tracked.
+
+---
+
+---
+
+### ~~5. Coordinator credit misattribution — three bugs in `_credit_coordinator()`~~
+
+**Gap:** The original `_credit_coordinator()` heuristic used subtask presence *at event time* to
+distinguish the decompose path from the CFP path. This was wrong in three ways:
+
+- **Bug A (pure decompose):** The parent task goes to `"completed"` immediately after
+  `_finalise_execution` — before any subtask executes. At that moment, 0 subtasks are `"completed"`.
+  The query returns empty. The decomposing agent received zero credit despite having structured the work.
+
+- **Bug B (CFP → Decompose):** Same timing problem. Agent A (CFP) and Agent B (decompose) both
+  received zero credit because the quality signal from subtasks did not exist at parent-completion time.
+
+- **Bug C (spurious per-subtask credit):** Subtasks inherit `coordinator_agent_id` from
+  `decompose.py:73`. When each subtask self-executed and completed, `_credit_coordinator()` saw a
+  `coordinator_agent_id`, found no sub-subtasks, fell through to the CFP formula, and gave the
+  decomposer `quality × 0.5` credit per subtask. Three subtasks = three CFP-style partial credits
+  instead of one full credit at avg quality.
+
+**What was done:**
+
+- `execution_path TEXT NULL` column added to `task_executions`. Written atomically with
+  `status="completed"` at every coordination point in `execute_task.py`: `"self_execute"` (Phase 6),
+  `"decompose"` (`_finalise_execution()`), `"cfp"` (`_release_to_pool()`).
+
+- Alembic migration `004_add_execution_path_to_task_executions.py` added.
+
+- `compute_delegation_credits(task_id, workspace_id, quality, session)` module-level helper added
+  to `worker/handlers/agent_credit.py`. Queries `TaskExecution WHERE task_id=X AND
+  execution_path IN ("cfp","decompose") AND status="completed"`. Returns
+  `list[(agent_id, quality_signal)]`. One DB round-trip regardless of chain depth.
+
+- `AgentCreditHandler._credit_coordinator()` rewritten. Dispatches on `parent_task_id`:
+  - Root task: call `compute_delegation_credits()` directly with `event.state.quality_score`.
+  - Subtask: call `_subtask_rollup_credits()` — checks if all siblings are terminal (last sibling
+    gate), computes avg quality across completed sibling executions, then calls
+    `compute_delegation_credits()` on the **parent** task's execution chain.
+
+- `InfluenceUpdateHandler` and `CoordinatorInfluenceHandler` deleted. Replaced by the single
+  `AgentCreditHandler` that handles both executor and coordinator credit in one DB session.
+
+See `docs/eventing/task-provenance-and-rollup.md` — "The `execution_path` audit trail" and
+"The four coordination scenarios end-to-end" for the full flow with traces.
 
 ---
 
@@ -133,4 +182,5 @@ Decide which option is correct before implementing anything else in the CFP path
 | `difficulty` dropped from `TaskCreatedStreamEvent` | ✅ Closed |
 | Raw stream payloads constructed inline — `TaskStreamLogger` missing | ✅ Closed |
 | Stream events untyped end-to-end — `StreamEvent` base class missing | ✅ Closed |
-| CFP subscriber missing — `cfp.{workspace_id}.issued` unconsumed | ❌ Open |
+| CFP subscriber missing — initiating agent received no influence credit | ✅ Closed |
+| Coordinator credit misattribution — three bugs in `_credit_coordinator()` | ✅ Closed |

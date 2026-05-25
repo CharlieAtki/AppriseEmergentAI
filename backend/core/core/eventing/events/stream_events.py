@@ -10,7 +10,7 @@ Each class is the single source of truth for one event type:
 Consumers of each event type:
     TaskCreatedStreamEvent   → TaskBiddingHandler  (worker/handlers/bidding.py)
     TaskCompletedStreamEvent → SocialMemoryHandler (worker/handlers/social_memory.py)
-    CfpIssuedStreamEvent     → NO CONSUMER YET     (see coordination-gaps.md gap 1)
+    CfpIssuedStreamEvent     → CfpHandler          (worker/handlers/cfp.py)
 
 Adding a new event type:
     1. Define the class here (extend StreamEvent, implement all four members).
@@ -138,13 +138,12 @@ class TaskCompletedStreamEvent(StreamEvent):
 class CfpIssuedStreamEvent(StreamEvent):
     """Fired when an agent issues a Call for Proposals for a task.
 
-    WARNING: No subscriber currently consumes this stream. The CFP path falls
-    back to standard re-bidding via TaskCreatedStreamEvent immediately after
-    this fires. This class exists as the correct typed definition for when a
-    full ContractNet subscriber is implemented (see coordination-gaps.md gap 1).
-
-    stream_key is a property (not a ClassVar) because it embeds workspace_id,
-    making it workspace-scoped to prevent cross-workspace bid collisions.
+    Published to ``"stream:cfp"`` (not workspace-scoped, matching the ``stream:task``
+    convention). Workspace isolation is enforced by the SETNX reservation key
+    (``reservation:{workspace_id}:{task_id}``) and handler-level workspace filtering,
+    not the stream key. ``initiating_agent_id`` identifies the agent that chose to
+    route; ``coordinator_agent_id`` is the grandparent coordinator if this task was
+    itself part of a prior decomposition (may be None).
     """
 
     task_id: uuid.UUID
@@ -159,7 +158,7 @@ class CfpIssuedStreamEvent(StreamEvent):
 
     @property
     def stream_key(self) -> str:
-        return f"cfp.{self.workspace_id}.issued"
+        return "stream:cfp"
 
     @property
     def event_type(self) -> str:

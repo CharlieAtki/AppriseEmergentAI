@@ -38,17 +38,17 @@ async def startup(ctx: dict) -> None:
     init_worker_context(wctx)
     logger.info("worker startup: context ready, graphs compiled for 4 task types")
 
-    from core.eventing.events.stream_events import TaskCompletedStreamEvent, TaskCreatedStreamEvent
+    from core.eventing.events.stream_events import CfpIssuedStreamEvent, TaskCompletedStreamEvent, TaskCreatedStreamEvent
     from core.eventing.events.task_events import TaskUpdatedEvent
+    from worker.handlers.agent_credit import AgentCreditHandler
     from worker.handlers.bidding import TaskBiddingHandler
-    from worker.handlers.coordinator_influence import CoordinatorInfluenceHandler
+    from worker.handlers.cfp import CfpHandler
     from worker.handlers.episodic_memory import EpisodicMemoryHandler
-    from worker.handlers.influence import InfluenceUpdateHandler
     from worker.handlers.reflect_job import ReflectJobHandler
     from worker.handlers.rollup import RollupSubtaskHandler
     from worker.handlers.social_memory import SocialMemoryHandler
     from worker.handlers.webhook import WebhookDeliveryHandler
-    from worker.subscriber import TaskStreamSubscriber
+    from worker.subscriber import CfpStreamSubscriber, TaskStreamSubscriber
 
     # In-process handlers: same-process side effects triggered by domain events
     wctx.event_bus.bind(TaskUpdatedEvent, RollupSubtaskHandler(
@@ -56,14 +56,14 @@ async def startup(ctx: dict) -> None:
         publish=wctx.event_bus.apublish,
     ))
     wctx.event_bus.bind(TaskUpdatedEvent, EpisodicMemoryHandler(memory=wctx.memory))
-    wctx.event_bus.bind(TaskUpdatedEvent, InfluenceUpdateHandler())
+    wctx.event_bus.bind(TaskUpdatedEvent, AgentCreditHandler())
     wctx.event_bus.bind(TaskUpdatedEvent, ReflectJobHandler(arq_queue=wctx.arq_queue))
-    wctx.event_bus.bind(TaskUpdatedEvent, CoordinatorInfluenceHandler())
     wctx.event_bus.bind(TaskUpdatedEvent, WebhookDeliveryHandler(arq_queue=wctx.arq_queue))
 
     # Stream handlers: cross-process events deserialized from Redis Streams
     wctx.event_bus.bind(TaskCreatedStreamEvent, TaskBiddingHandler(redis=wctx.redis, arq_queue=wctx.arq_queue))
     wctx.event_bus.bind(TaskCompletedStreamEvent, SocialMemoryHandler(memory=wctx.memory))
+    wctx.event_bus.bind(CfpIssuedStreamEvent, CfpHandler(redis=wctx.redis, arq_queue=wctx.arq_queue))
 
     logger.info("worker startup: event bus handlers registered")
 
@@ -72,6 +72,11 @@ async def startup(ctx: dict) -> None:
         bus=wctx.bus,
         event_bus=wctx.event_bus,
         consumer=f"worker-{os.getpid()}",
+    ))
+    wctx.event_bus.subscribe(CfpStreamSubscriber(
+        bus=wctx.bus,
+        event_bus=wctx.event_bus,
+        consumer=f"cfp-worker-{os.getpid()}",
     ))
     await wctx.event_bus.start_subscribers()
     logger.info("worker startup: task subscriber started")

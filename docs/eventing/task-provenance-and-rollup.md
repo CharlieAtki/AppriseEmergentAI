@@ -444,35 +444,15 @@ TaskStateMachine.transition(parent, target_status)
 
 If even one sibling failed, the parent fails. No coordinator credit is written (partial failure means the coordination was not successful). The `reflect` job is still enqueued — the coordinator needs to learn from delegation failure as much as from success.
 
-### Coordinator credit — `CoordinatorInfluenceHandler`
+### Coordinator credit — `AgentCreditHandler`
 
-Coordinator influence credit is **not** handled inside `RollupSubtaskHandler`. After the parent's
-status is committed, `RollupSubtaskHandler` publishes a `TaskUpdatedEvent` for the parent via
-`TaskActivityLogger(self.publish).updated(before_parent, parent)`. This fires a second event on
-the same bus, which `CoordinatorInfluenceHandler` (registered separately) handles independently:
+Coordinator influence credit is **not** handled inside `RollupSubtaskHandler`. It is handled
+by `AgentCreditHandler` (`worker/handlers/agent_credit.py`), registered separately on the same
+bus. The two handlers have completely separate concerns: rollup promotes the parent task status;
+credit reacts to individual completions via the audit trail.
 
-```python
-# worker/handlers/coordinator_influence.py
-
-@dataclass
-class CoordinatorInfluenceHandler(EventHandler[TaskUpdatedEvent]):
-    async def handle(self, event: TaskUpdatedEvent) -> None:
-        if not event.changed("status") or event.state.status != "completed":
-            return
-        if event.state.coordinator_agent_id is None:
-            return
-        # queries completed subtask IDs, computes avg quality_score,
-        # applies compute_influence_ema(), writes InfluenceSnapshot
-```
-
-The guard `coordinator_agent_id is not None` identifies delegated tasks regardless of nesting
-depth. The EMA uses `compute_influence_ema()` from `core/coordination/influence.py` — the same
-shared pure function used by `InfluenceUpdateHandler` for direct executions. This keeps the two
-influence update paths consistent.
-
-The separation is deliberate: `RollupSubtaskHandler`'s single responsibility is promoting the
-parent status. Influence credit is a separate concern that reacts to that promotion via the bus,
-following the same pattern as every other handler in the system.
+See the **`execution_path` audit trail** section below for a full explanation of how and when
+coordinator credit fires across all four coordination paths.
 
 ---
 
@@ -487,12 +467,14 @@ wctx.event_bus.bind(TaskUpdatedEvent, RollupSubtaskHandler(
     arq_queue=wctx.arq_queue,
     publish=wctx.event_bus.apublish,
 ))
-wctx.event_bus.bind(TaskUpdatedEvent, CoordinatorInfluenceHandler())
+wctx.event_bus.bind(TaskUpdatedEvent, AgentCreditHandler())
 ```
 
 Handlers are registered once at startup. The `EventBus.bind()` call is inside a local import block to avoid circular import risk at module load time (`worker.handlers.rollup` imports from `core.database`, `core.models`, etc.).
 
 `RollupSubtaskHandler` receives `arq_queue` at construction time because it needs to enqueue the reflect job, and `publish` so it can fire the parent `TaskUpdatedEvent` after committing. This is constructor injection — the handler does not read from any global context.
+
+`AgentCreditHandler` requires no constructor arguments — it reads everything it needs from the event and the DB session.
 
 ### Drain at shutdown
 
@@ -548,46 +530,244 @@ Both handlers receive the same `TaskUpdatedEvent`. The `EventBus` walks its hand
 
 ---
 
+## The `execution_path` audit trail
+
+### What it is
+
+`TaskExecution.execution_path` is a `TEXT NULL` column that records how an agent handled a task:
+
+| Value | Meaning |
+|---|---|
+| `"self_execute"` | Agent ran the LangGraph graph and produced an artifact |
+| `"decompose"` | Agent structured the task into subtasks via LLM decomposition |
+| `"cfp"` | Agent issued a Call for Proposals and released the task back to bidding |
+
+It is written in the same atomic session as `execution.status = "completed"`, at three sites in
+`execute_task.py`:
+
+| Code path | Location | Value written |
+|---|---|---|
+| Self-execute | Phase 6 session block | `"self_execute"` |
+| Decompose | `_finalise_execution()` session block | `"decompose"` (forwarded from parameter) |
+| CFP | `_release_to_pool()` session block | `"cfp"` |
+
+Before this column existed, `execution_path` was only a synthetic field on `TaskSnapshot` — it
+appeared in events but was never persisted. The DB had no record of how a task was handled, which
+made correct coordinator credit attribution impossible.
+
+### Why this fixes coordinator credit
+
+`AgentCreditHandler` (`worker/handlers/agent_credit.py`) uses this column to find every agent
+in a task's delegation chain via a single indexed query:
+
+```python
+async def compute_delegation_credits(task_id, workspace_id, quality, session):
+    rows = await session.execute(
+        select(TaskExecution.agent_id, TaskExecution.execution_path).where(
+            TaskExecution.task_id == task_id,
+            TaskExecution.execution_path.in_(["cfp", "decompose"]),
+            TaskExecution.status == "completed",
+        )
+    )
+    # "decompose" → full quality signal
+    # "cfp"       → quality × CFP_COORDINATOR_CREDIT (0.5)
+```
+
+This replaces a fragile heuristic that checked for completed subtask children at event time — a
+timing-dependent check that was wrong in all three delegation scenarios.
+
+### The timing constraint for decompose
+
+A critical detail: the parent task goes to `"completed"` **immediately** when `_finalise_execution`
+runs for the decompose path, before any subtask has executed. At that moment, the quality signal
+from the subtasks does not exist yet. Coordinator credit cannot fire at parent-completion time.
+
+`AgentCreditHandler._credit_coordinator()` handles this by dispatching on `parent_task_id`:
+
+- **Root task** (`parent_task_id is None`): quality_score is set directly on the event (self_execute
+  path). Query this task's delegation chain and credit immediately.
+- **Subtask** (`parent_task_id is not None`): check whether ALL siblings have reached a terminal
+  status. If not, return — more subtasks are still running. If yes, this is the last sibling:
+  compute avg quality from completed siblings, then query the **parent** task's delegation chain
+  and credit each agent.
+
+This "last sibling" detection is independent of `RollupSubtaskHandler` — they share the same
+check but for different purposes (rollup = status promotion, credit = quality attribution).
+
+---
+
+## The four coordination scenarios end-to-end
+
+### Scenario 1: Self-execute (baseline)
+
+```
+Task T ingested → bidding → Agent B reserves → execute_task runs
+
+Phase 2:  TaskExecution created  (status="executing")
+Phase 6:  TaskExecution updated  (status="completed", execution_path="self_execute", quality_score=0.82)
+          task → "completed"
+          TaskUpdatedEvent fires (execution_path="self_execute", quality_score=0.82, parent_task_id=None)
+
+AgentCreditHandler:
+  _credit_executor():    execution_path="self_execute" ✓ → Agent B EMA(0.82) → InfluenceSnapshot
+  _credit_coordinator(): parent_task_id=None, quality_score=0.82
+                         → compute_delegation_credits(T.id) → 0 rows (no cfp/decompose exec)
+                         → no coordinator credit
+
+task_executions for T:
+  Agent B | self_execute | completed | quality=0.82
+```
+
+### Scenario 2: CFP → Self-execute
+
+```
+Agent A wins bid. Evaluates. Decision: "cfp".
+
+Phase 2:  TaskExecution for A created  (status="executing")
+_release_to_pool():
+  TaskExecution for A updated  (status="completed", execution_path="cfp")
+  task.coordinator_agent_id = Agent A
+  task → "open"
+  TaskUpdatedEvent fires (status="open") → AgentCreditHandler exits (not "completed")
+  TaskCreatedStreamEvent published → TaskBiddingHandler → Agent B wins next bid
+
+Agent B self-executes. quality=0.78.
+
+Phase 6:  TaskExecution for B updated  (status="completed", execution_path="self_execute", quality_score=0.78)
+          task → "completed"
+          TaskUpdatedEvent fires (execution_path="self_execute", quality_score=0.78, parent_task_id=None)
+
+AgentCreditHandler:
+  _credit_executor():    Agent B EMA(0.78)
+  _credit_coordinator(): parent_task_id=None, quality_score=0.78
+                         → compute_delegation_credits(T.id)
+                         → finds Agent A row (execution_path="cfp")
+                         → (Agent A, 0.78 × 0.5 = 0.39)
+                         → Agent A EMA(0.39)
+
+task_executions for T:
+  Agent A | cfp          | completed | quality=NULL
+  Agent B | self_execute | completed | quality=0.78
+```
+
+### Scenario 3: Pure decompose
+
+```
+Agent B wins bid. Evaluates. Decision: "decompose".
+
+Phase 2:  TaskExecution for B created  (status="executing")
+_finalise_execution(execution_path="decompose"):
+  TaskExecution for B updated  (status="completed", execution_path="decompose")
+  task → "completed"     ← IMMEDIATELY, before any subtask runs
+  TaskUpdatedEvent fires (execution_path="decompose", quality_score=None, parent_task_id=None)
+
+AgentCreditHandler:
+  _credit_coordinator(): parent_task_id=None, quality_score=None → return immediately
+  ← No credit yet. Subtasks haven't run.
+
+Subtasks S1, S2, S3 created (each with coordinator_agent_id=Agent B, parent_task_id=T.id).
+Each subtask goes through its own lifecycle: pending → enriching → open → bidding → executing → completed.
+
+S1 completes (Agent C, quality=0.80):
+  _credit_executor(): Agent C EMA(0.80)
+  _credit_coordinator(): parent_task_id=T.id → _subtask_rollup_credits()
+    query siblings: S2=executing, S3=pending → NOT all terminal → []
+
+S2 completes (Agent D, quality=0.70):
+  _credit_executor(): Agent D EMA(0.70)
+  query siblings: S3=executing → NOT all terminal → []
+
+S3 completes (Agent E, quality=0.90):  ← LAST SIBLING
+  _credit_executor(): Agent E EMA(0.90)
+  _subtask_rollup_credits():
+    query siblings: S1=completed, S2=completed, S3=completed → ALL terminal ✓
+    SELECT AVG(quality_score) WHERE task_id IN (S1,S2,S3) → avg = 0.80
+    compute_delegation_credits(T.id, quality=0.80)
+      → finds Agent B row (execution_path="decompose")
+      → (Agent B, 0.80)   ← full signal: Agent B structured the problem
+    Agent B EMA(0.80)
+
+task_executions:
+  Agent B | decompose    | completed | quality=NULL   (on task T)
+  Agent C | self_execute | completed | quality=0.80   (on subtask S1)
+  Agent D | self_execute | completed | quality=0.70   (on subtask S2)
+  Agent E | self_execute | completed | quality=0.90   (on subtask S3)
+
+The credit query for T targets task_id=T only. Agent C/D/E rows have task_id=S1/S2/S3.
+They are completely invisible to the coordinator credit lookup.
+```
+
+### Scenario 4: CFP → Decompose (the complex case)
+
+```
+Agent A wins bid. Evaluates. Decision: "cfp".
+  TaskExecution for A: execution_path="cfp"
+  task.coordinator_agent_id = Agent A
+  task → "open"
+
+Agent B wins re-bid. Evaluates. Decision: "decompose".
+  TaskExecution for B: execution_path="decompose"
+  task → "completed"   ← before subtasks run
+  TaskUpdatedEvent (quality_score=None) → AgentCreditHandler returns early
+
+Subtasks S1, S2, S3 execute (Agents C, D, E).
+
+S3 completes last:
+  _subtask_rollup_credits():
+    all siblings terminal → avg_quality = (0.80+0.70+0.90)/3 = 0.80
+    compute_delegation_credits(T.id, quality=0.80)
+      → finds Agent A row (execution_path="cfp")      → (Agent A, 0.80 × 0.5 = 0.40)
+      → finds Agent B row (execution_path="decompose") → (Agent B, 0.80)
+    Agent A EMA(0.40)   ← partial: routed the task, didn't structure it
+    Agent B EMA(0.80)   ← full: structured the problem
+    Both credited in the same DB session.
+
+task_executions for T:
+  Agent A | cfp          | completed | quality=NULL
+  Agent B | decompose    | completed | quality=NULL
+```
+
+The query is a simple indexed lookup on `task_id=T` + `execution_path IN (...)`. The number of
+delegation hops in a chain does not change the query — it returns more rows, each credited in one
+Python loop iteration. This is correct regardless of chain depth.
+
+---
+
 ## Summary: the complete call chain for a subtask completing
 
 ```
 execute_task (worker process, Phase 6)
-    DB commit: task.status = "completed"
-    await task_logger.updated(before_completed, task)
+    DB commit: task.status = "completed", execution.execution_path = "self_execute"
+    await task_logger.updated(before_completed, task, execution_path="self_execute", quality_score=q)
         → TaskActivityLogger constructs TaskUpdatedEvent
         → wctx.event_bus.apublish(event)
             → asyncio.ensure_future(RollupSubtaskHandler.handle(event))
+            → asyncio.ensure_future(AgentCreditHandler.handle(event))
             → execute_task continues to Phase 7 immediately
 
-Phase 7 (concurrent with rollup handler):
-    wctx.memory.store_episode(...)        → Qdrant write
-    wctx.bus.publish("stream:task", ...)  → Redis Streams → subscriber → social memory
-    arq_queue.enqueue_job("reflect", ...) → ARQ job for the executing agent
+Phase 7 (concurrent with handlers):
+    stream_logger.task_completed(...)       → Redis Streams → SocialMemoryHandler
+    arq_queue.enqueue_job("reflect", ...)   → ARQ job for the executing agent
 
-RollupSubtaskHandler.handle(event) [fire-and-forget asyncio task]:
-    event.changed("status") → True
-    event.state.status = "completed" → in TERMINAL_STATUSES
+AgentCreditHandler.handle(event) [fire-and-forget]:
+    event.state.status = "completed" ✓
+    _credit_executor():    execution_path="self_execute" → EMA(quality_score) → InfluenceSnapshot
+    _credit_coordinator(): parent_task_id=T.id → _subtask_rollup_credits()
+        query siblings → last one? → avg_quality
+        compute_delegation_credits(parent_id) → [(Agent B, avg_quality)]
+        Agent B EMA(avg_quality) → InfluenceSnapshot
+
+RollupSubtaskHandler.handle(event) [fire-and-forget]:
     event.state.parent_task_id = T.id → not None
     async with get_session():
-        query siblings of T → all terminal
-        load parent T → status "executing" → not terminal
-        transition T → "completed"
-        commit
-    TaskActivityLogger(self.publish).updated(before_parent, T)
-        → TaskUpdatedEvent fired for parent T
-        → asyncio.ensure_future(CoordinatorInfluenceHandler.handle(parent_event))
-        → asyncio.ensure_future(InfluenceUpdateHandler.handle(parent_event))  ← no-op (execution_path=None on parent)
-    enqueue reflect(agent_id=A.id, task_id=T.id)
-
-CoordinatorInfluenceHandler.handle(parent_event) [fire-and-forget asyncio task]:
-    event.changed("status") → True
-    event.state.status = "completed"
-    event.state.coordinator_agent_id = A.id → not None
-    async with get_session():
-        query completed subtasks → avg quality_score
-        A.influence = compute_influence_ema(A.influence, avg_quality)
-        write InfluenceSnapshot
-        commit
+        query siblings → all terminal
+        load parent T → status "executing" (NOT yet terminal for root tasks whose parent
+                        hasn't been rolled up; OR already "completed" for decompose path)
+        if not terminal: transition T → "completed", commit
+    if transitioned: TaskActivityLogger(self.publish).updated(before_parent, T)
+    enqueue reflect(agent_id=coordinator.id, task_id=T.id)
 ```
 
-The parent task is completed, the coordinator is credited, and a reflect job is enqueued — all without a single line of code added to `execute_task.py`'s core logic. The job just fires an event and moves on.
+The parent task is completed, every agent in the delegation chain is credited, and a reflect job
+is enqueued — all without a single line of logic added to `execute_task.py`'s core phases. The
+job fires an event and moves on; the handlers compose the rest.

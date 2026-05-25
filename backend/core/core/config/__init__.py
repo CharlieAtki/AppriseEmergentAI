@@ -29,6 +29,12 @@ class Settings(BaseSettings):
     SKILL_DECAY_RATE: float = 0.02
     INFLUENCE_EMA_ALPHA: float = 0.15
     BID_SCORE_THRESHOLD: float = 0.3
+    # Fraction of the executing agent's quality score credited to the CFP initiator.
+    # Lower than 1.0 because the initiator routed the task but did not structure or execute it.
+    CFP_COORDINATOR_CREDIT: float = 0.5
+    # Sweeper thresholds — tasks stuck in these states longer than the timeout are cleaned up.
+    TASK_OPEN_TIMEOUT_SECONDS: int = 600      # 10 min — stuck-open → expired
+    TASK_RESERVED_TIMEOUT_SECONDS: int = 120  # 2 min  — stale reservation → re-open
 
     # ------------------------------------------------------------------ #
     # Domain sub-configs — each reads its own env_prefix independently.   #
