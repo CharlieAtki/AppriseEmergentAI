@@ -141,12 +141,14 @@ source = { editable = "backend/worker" }
 dependencies = [
     { name = "apprise-core" },
     { name = "arq" },
+    { name = "httpx" },
 ]
 
 [package.metadata]
 requires-dist = [
     { name = "apprise-core" },
     { name = "arq", specifier = ">=0.26" },
+    { name = "httpx", specifier = ">=0.27" },
 ]
 
 [[package]]
