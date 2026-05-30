@@ -19,6 +19,7 @@ from core.coordination.task_context import MAX_DELEGATION_DEPTH, TaskContext
 from core.coordination.task_state import TaskStateMachine
 from core.eventing.events.task_events import TaskSnapshot
 from core.intelligence.call_types import CallType
+from core.intelligence.context import AgentContext, TaskEvaluationContext
 from core.intelligence.prompts import decompose as decompose_prompt
 from core.intelligence.prompts import evaluate
 from core.intelligence.prompts.evaluate import EvaluateResponse
@@ -135,21 +136,21 @@ async def execute_task(
 
             # ── Phase 3: LLM EVALUATE ────────────────────────────────────────────
             await span.emit("agent.evaluating", {})
-            agent_ctx = {
-                "name":      agent.name,
-                "skills":    agent.skills or {},
-                "influence": agent.influence or 0.0,
-            }
-            task_ctx = {
-                "title":            task.title,
-                "description":      task.description,
-                "required_skills":  task.required_skills or {},
-                "difficulty":       task.difficulty,
-                "domain_tags":      task.domain_tags or {},
-                "task_type":        task.task_type,
-                "delegation_depth": provenance.delegation_depth,
-                "depth_exceeded":   depth_exceeded,
-            }
+            agent_ctx = AgentContext(
+                name=agent.name,
+                skills=agent.skills or {},
+                influence=agent.influence or 0.0,
+            )
+            task_ctx = TaskEvaluationContext(
+                title=task.title,
+                description=task.description,
+                required_skills=task.required_skills or {},
+                difficulty=task.difficulty,
+                domain_tags=task.domain_tags or {},
+                task_type=task.task_type,
+                delegation_depth=provenance.delegation_depth,
+                depth_exceeded=depth_exceeded,
+            )
 
             raw = await wctx.llm_router.complete(
                 evaluate.build_prompt(agent_ctx, task_ctx),

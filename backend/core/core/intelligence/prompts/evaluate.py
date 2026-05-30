@@ -1,8 +1,10 @@
 from __future__ import annotations
 
-from typing import Any, Literal
+from typing import Literal
 
 from pydantic import BaseModel
+
+from core.intelligence.context import AgentContext, TaskEvaluationContext
 
 
 class EvaluateResponse(BaseModel):
@@ -10,7 +12,7 @@ class EvaluateResponse(BaseModel):
     reasoning: str
 
 
-def build_prompt(agent_ctx: dict[str, Any], task: dict[str, Any]) -> list[dict]:
+def build_prompt(agent: AgentContext, task: TaskEvaluationContext) -> list[dict]:
     system = (
         "You are deciding how an agent should handle an incoming task. "
         "Choose exactly one of three strategies:\n\n"
@@ -25,16 +27,16 @@ def build_prompt(agent_ctx: dict[str, Any], task: dict[str, Any]) -> list[dict]:
         'Respond with JSON: {"decision": "...", "reasoning": "one sentence"}'
     )
     user = (
-        f"Agent: {agent_ctx.get('name')}\n"
-        f"Skills: {agent_ctx.get('skills', {})}\n"
-        f"Influence: {agent_ctx.get('influence', 0.0):.2f}\n\n"
-        f"Task title: {task.get('title')}\n"
-        f"Task description: {task.get('description')}\n"
-        f"Required skills: {task.get('required_skills', {})}\n"
-        f"Difficulty: {task.get('difficulty')}\n"
-        f"Domain tags: {task.get('domain_tags', {})}\n"
-        f"Delegation depth: {task.get('delegation_depth', 0)}\n"
-        f"Depth exceeded: {task.get('depth_exceeded', False)}"
+        f"Agent: {agent.name}\n"
+        f"Skills: {agent.skills}\n"
+        f"Influence: {agent.influence:.2f}\n\n"
+        f"Task title: {task.title}\n"
+        f"Task description: {task.description}\n"
+        f"Required skills: {task.required_skills}\n"
+        f"Difficulty: {task.difficulty}\n"
+        f"Domain tags: {task.domain_tags}\n"
+        f"Delegation depth: {task.delegation_depth}\n"
+        f"Depth exceeded: {task.depth_exceeded}"
     )
     return [{"role": "system", "content": system}, {"role": "user", "content": user}]
 

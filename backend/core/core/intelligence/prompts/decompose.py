@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-from typing import Any
-
 from pydantic import BaseModel
+
+from core.intelligence.context import AgentContext, TaskEvaluationContext
 
 
 class SubtaskSpec(BaseModel):
@@ -16,7 +16,7 @@ class DecomposeResponse(BaseModel):
     subtasks: list[SubtaskSpec]
 
 
-def build_prompt(agent_ctx: dict[str, Any], task: dict[str, Any]) -> list[dict]:
+def build_prompt(agent: AgentContext, task: TaskEvaluationContext) -> list[dict]:
     system = (
         "You are breaking a complex task into subtasks that independent agents can execute.\n\n"
         "Rules:\n"
@@ -30,12 +30,12 @@ def build_prompt(agent_ctx: dict[str, Any], task: dict[str, Any]) -> list[dict]:
         '"required_skills": {}, "difficulty": 2.0}, ...]}'
     )
     user = (
-        f"Agent: {agent_ctx.get('name')}\n\n"
-        f"Task title: {task.get('title')}\n"
-        f"Task description: {task.get('description')}\n"
-        f"Required skills: {task.get('required_skills', {})}\n"
-        f"Difficulty: {task.get('difficulty')}\n"
-        f"Domain tags: {task.get('domain_tags', {})}"
+        f"Agent: {agent.name}\n\n"
+        f"Task title: {task.title}\n"
+        f"Task description: {task.description}\n"
+        f"Required skills: {task.required_skills}\n"
+        f"Difficulty: {task.difficulty}\n"
+        f"Domain tags: {task.domain_tags}"
     )
     return [{"role": "system", "content": system}, {"role": "user", "content": user}]
 
