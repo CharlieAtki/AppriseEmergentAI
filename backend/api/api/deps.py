@@ -7,7 +7,7 @@ from fastapi import Depends, HTTPException, Request, status
 from redis.asyncio import Redis
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from core.database import SessionLocal
+from core.database import get_session
 from core.eventing.activity.agent_logger import AgentActivityLogger
 from core.eventing.activity.base import PublishFn
 from core.eventing.activity.task_logger import TaskActivityLogger
@@ -44,15 +44,8 @@ def get_llm_router(request: Request):
 
 
 async def get_db() -> AsyncGenerator[AsyncSession, None]:
-    session = SessionLocal()
-    try:
+    async with get_session() as session:
         yield session
-        await session.commit()
-    except Exception:
-        await session.rollback()
-        raise
-    finally:
-        await session.close()
 
 
 def require_workspace(permission: str = "write"):

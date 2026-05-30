@@ -27,7 +27,7 @@ class Settings(BaseSettings):
     BID_MAX_PARALLEL_TASKS: int = 3
     BID_INFLUENCE_K: float = 2.0
     BID_ADD_JITTER: bool = True
-    SKILL_DECAY_RATE: float = 0.02
+    SKILL_DECAY_RATE: float = 0.02   # per task completion in execute_task Phase 6 — recalibrate for target throughput
     INFLUENCE_EMA_ALPHA: float = 0.15
     BID_SCORE_THRESHOLD: float = 0.3
     # Fraction of the executing agent's quality score credited to the CFP initiator.

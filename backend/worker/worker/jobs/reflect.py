@@ -3,6 +3,7 @@ from __future__ import annotations
 import logging
 import uuid
 
+from core.coordination.skills import apply_skill_delta
 from core.intelligence.call_types import CallType
 from core.intelligence.prompts import reflect as reflect_prompt
 from core.models.observability import ProceduralKnowledgeLog, SkillSnapshot
@@ -90,7 +91,7 @@ async def reflect(
         async with span.session() as session:
             if response.skill_deltas:
                 merged = {
-                    k: max(0.0, min(1.0, (agent.skills or {}).get(k, 0.0) + delta))
+                    k: apply_skill_delta((agent.skills or {}).get(k, 0.0), delta)
                     for k, delta in response.skill_deltas.items()
                 }
                 agent.skills = {**(agent.skills or {}), **merged}

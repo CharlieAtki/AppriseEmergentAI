@@ -26,6 +26,9 @@ At a glance:
 | ContractNet CFP path (subscriber, `CfpHandler`, influence credit) | ✅ Done |
 | Subtask decomposition + rollup (`RollupSubtaskHandler`) | ✅ Done |
 | Coordinator credit — all three execution paths | ✅ Done |
+| Skill decay — per-task entropy (Phase 6, not cron) | ✅ Done |
+| Skill updates — logistic growth formula (`apply_skill_delta`) | ✅ Done |
+| Coordinator reflect — rollup now passes `execution_id` + `quality_score` | ✅ Done |
 | Webhook delivery with HMAC signing and exponential backoff | ✅ Done |
 | Memory — episodic, procedural, social writes | ✅ Done |
 | Nightly curation cron (`curate_memory`) | ✅ Done |

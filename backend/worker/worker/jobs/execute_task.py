@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING
 
 from sqlalchemy.orm import selectinload
 
+from core.config import settings
 from core.eventing.activity.task_logger import TaskActivityLogger
 from core.eventing.activity.task_stream_logger import TaskStreamLogger
 from core.agents.agent import build_initial_state
@@ -213,9 +214,14 @@ async def execute_task(
                 execution.completed_at   = datetime.now(timezone.utc)
                 session.add(execution)
 
-                # Skills and influence are updated downstream (reflect job and AgentCreditHandler
-                # respectively). Only updated_at needs to be stamped here so the agent row
-                # reflects last-active time in monitoring queries.
+                # Flat entropy decay across all skills — one step per task completion.
+                # Reflect applies targeted, quality-weighted deltas to used skills on top.
+                # Influence is updated downstream by AgentCreditHandler.
+                if agent.skills:
+                    agent.skills = {
+                        k: max(0.0, v * (1.0 - settings.SKILL_DECAY_RATE))
+                        for k, v in agent.skills.items()
+                    }
                 agent.updated_at = datetime.now(timezone.utc)
                 session.add(agent)
 

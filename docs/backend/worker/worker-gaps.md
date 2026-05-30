@@ -63,17 +63,99 @@ data is there when it is needed.
 
 ---
 
-### 4. `decay` cron job may be redundant
+### ~~4. `decay` cron job may be redundant~~
 
-**Gap:** `settings.py` runs `decay` as a cron job every 30 seconds. The TODO in that file
-questions whether decay should remain on a cron schedule given that `sample_metrics` now
-snapshots workspace metrics on its own schedule. If skill decay is already triggered by
-task completion events, running it unconditionally every 30 seconds may cause unnecessary
-DB writes and interfere with event-driven decay that happens naturally.
+**Decision:** Closed. Two separate changes:
 
-**What is needed:** Audit whether `decay` is still needed as a cron or whether it can be
-removed in favour of event-driven decay triggered by `TaskUpdatedEvent`. Remove the cron
-entry if redundant; document the decision either way.
+**Skill decay** moved to `execute_task` Phase 6 — one flat decay step fires atomically per
+task completion for the executing agent. Decay is not quality-weighted: per the Notion spec,
+it is entropy/regularization applied uniformly to prevent skill convergence ("skills unused
+for a configurable number of ticks lose value gradually"). The quality signal for individual
+skills lives in `reflect`, which applies LLM-generated targeted deltas to the skills actually
+exercised. Separating these two mechanisms avoids penalising skills unrelated to the task.
+
+**Influence decay** removed from the cron entirely — `AgentCreditHandler` already applies
+natural decay via the EMA formula (`new = base + alpha * (quality - base)`): low-quality
+completions pull influence down on every task. The cron was double-dipping, misusing
+`INFLUENCE_EMA_ALPHA` (an EMA blending rate) as a straight-line decay rate.
+
+`SKILL_DECAY_RATE` semantic change: previously "2% per 30-second tick", now "2% per task
+completion". Recalibrate against experimental throughput targets before running emergence
+experiments.
+
+---
+
+### ~~10. `RollupSubtaskHandler` reflect enqueue was missing required parameters~~
+
+**Gap:** `RollupSubtaskHandler.handle()` enqueued the `reflect` ARQ job with only
+`agent_id`, `task_id`, and `workspace_id`. The `reflect()` job signature requires two
+additional parameters — `execution_id: str` and `quality_score: float` — both of which it
+uses on every invocation to load the `TaskExecution` row and pass quality context to the
+LLM. Without them ARQ raised `TypeError` at deserialisation and silently dropped the job.
+The coordinator agent for any decomposed task therefore never received a reflect pass,
+meaning no skill deltas were ever applied for the coordination/decomposition path.
+
+**Root cause:** `_evaluate_parent()` did not query for the decompose execution or the
+average sibling quality. It returned only `(before_snapshot, parent_task, reflect_agent_id)`.
+
+**What was done:**
+- `_evaluate_parent()` return type extended to
+  `tuple[..., uuid.UUID | None, float | None]` — adding `(execution_id, avg_quality)`.
+- Two additional queries added inside the existing session: one for `func.avg(quality_score)`
+  across completed sibling `TaskExecution` rows; one for the parent's decompose
+  `TaskExecution.id` (the execution the coordinator ran).
+- `handle()` unpacks the new values and passes all five parameters to `enqueue_job`.
+  A guard skips the enqueue when either value is `None` (all siblings failed, or no
+  decompose execution exists) — preventing a broken job from being queued rather than
+  swallowing the failure silently.
+- The average sibling quality is the same signal `AgentCreditHandler` uses for
+  coordinator influence credit, keeping influence and skill updates consistent.
+
+**File changed:** `worker/worker/handlers/rollup.py` only.
+
+---
+
+### ~~11. Skill updates used flat linear addition — logistic growth not implemented~~
+
+**Gap:** The Notion spec states: *"Skill evolution follows a logistic growth formula. A
+skill at 0.3 grows faster than a skill at 0.8, diminishing returns."* The `reflect` job
+used `clamp(old + delta, 0, 1)` — a flat linear merge. A +0.3 delta applied the same
+absolute gain regardless of current skill level. An agent at 0.9 could reach 1.0 trivially;
+an agent at 0.0 could not gain at all below the clamped floor.
+
+**What was done:**
+- New pure function `apply_skill_delta(current, delta)` created in
+  `core/coordination/skills.py` (alongside `influence.py`, same pattern).
+- Formula splits on delta sign:
+  - Positive: `new = current + delta * (1 - current)` — growth tapers toward 1.0
+  - Negative: `new = current + delta * current` — penalty tapers toward 0.0
+- Edge-case safe: at `current=0`, positive delta still produces gain; at `current=1`,
+  positive delta produces no overflow; at `current=0`, negative delta produces no
+  underflow.
+- `reflect.py` import updated; merge dict comprehension now calls `apply_skill_delta`.
+  No changes to the LLM prompt — deltas from the model continue to be used as-is.
+- `SKILL_DECAY_RATE` delta magnitudes may need recalibration against emergence experiment
+  baselines now that gains are logistic rather than linear.
+
+**Files changed:** New `core/coordination/skills.py`; `worker/worker/jobs/reflect.py`.
+
+---
+
+### 9. `SKILL_DECAY_RATE` is static — no dynamic rate adjustment
+
+**Gap:** `SKILL_DECAY_RATE` (now applied per task completion in Phase 6) is a single static
+value. In low-throughput systems (few tasks per hour) this produces negligible decay; in
+high-throughput systems (many tasks per minute) it may over-decay before `reflect` has a
+chance to reinforce used skills. The rate has no awareness of system load or task frequency.
+
+**What is needed (future):** A dynamic rate adjuster that scales `SKILL_DECAY_RATE` inversely
+with recent task throughput — e.g., higher throughput → smaller per-task decay rate so that
+the effective decay per unit time stays roughly constant. Could be computed in
+`sample_metrics` (which already runs every 15s per workspace) and stored as a
+workspace-scoped setting, allowing per-workspace calibration without touching the global
+constant.
+
+Defer until emergence experiments produce throughput baseline data to calibrate against.
 
 ---
 
@@ -141,8 +223,11 @@ needed; current state (static dict) is not wrong, just inconsistent with the in-
 | API key revocation eventual consistency (5-min window) | ✅ Closed — `key_sha256` stored at creation; immediate Redis delete on revoke |
 | `WebhookDelivery` row not committed before HTTP POST | ❌ Open — low probability, no retry coverage if it hits |
 | No dead-letter handling for failed webhook deliveries | ❌ Open — defer until customer need |
-| `decay` cron may be redundant | ❌ Open — needs audit against event-driven decay |
+| `decay` cron may be redundant | ✅ Closed — skill decay in Phase 6; influence decay removed (EMA sufficient) |
 | Worker vendor providers hard-coded in `context.py` | ❌ Open — close together with API gap #6; keep in sync manually until then |
 | `AuthMiddleware` uses raw `SessionLocal()` | ✅ Closed — both paths now use `async with get_session()` |
 | `JobSpan` ContextVar under ARQ concurrency | ❌ Open — audit LangGraph sub-task spawning for context propagation |
 | Stream event registry is static | ❌ Open — decide: accept static dict or align with in-process bus self-registration |
+| `RollupSubtaskHandler` missing reflect params | ✅ Closed — `execution_id` + avg sibling `quality_score` now queried and passed |
+| Skill updates used flat linear addition | ✅ Closed — logistic growth implemented in `core/coordination/skills.py` |
+| `SKILL_DECAY_RATE` is static | ❌ Open — defer until emergence experiment baselines available |
