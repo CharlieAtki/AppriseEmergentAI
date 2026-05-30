@@ -10,6 +10,7 @@ dependencies = [
     "apprise-core",
     "fastapi>=0.110.0",
     "uvicorn[standard]>=0.29.0",
+    "passlib[bcrypt]>=1.7.4",
 ]
 
 [tool.hatch.build.targets.wheel]

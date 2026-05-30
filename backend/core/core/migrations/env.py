@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import asyncio
-import os
 from logging.config import fileConfig
 
 from sqlalchemy.ext.asyncio import create_async_engine
@@ -9,6 +8,7 @@ from sqlalchemy.pool import NullPool
 
 from alembic import context
 
+from core.config import settings
 from core.models import Base
 
 config = context.config
@@ -16,8 +16,7 @@ config = context.config
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
-_raw_url = os.environ.get("DATABASE_URL", "postgresql://localhost/apprise")
-DATABASE_URL = _raw_url.replace("postgresql://", "postgresql+asyncpg://", 1)
+DATABASE_URL = settings.database.url
 
 target_metadata = Base.metadata
 

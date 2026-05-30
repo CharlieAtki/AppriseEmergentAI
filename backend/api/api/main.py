@@ -59,6 +59,11 @@ async def lifespan(app: FastAPI):
 app = FastAPI(lifespan=lifespan)
 app.add_middleware(AuthMiddleware)
 
+
+@app.get("/health", include_in_schema=False)
+async def health() -> dict:
+    return {"status": "ok"}
+
 app.include_router(
     workspaces_router.router,
     prefix="/workspaces",

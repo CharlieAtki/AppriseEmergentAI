@@ -1,15 +1,13 @@
 from __future__ import annotations
 
-import os
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 
-import sqlalchemy as sa
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
-_raw_url = os.environ.get("DATABASE_URL", "postgresql://localhost/apprise")
-# Ensure the asyncpg driver is used regardless of how the env var is set.
-DATABASE_URL = _raw_url.replace("postgresql://", "postgresql+asyncpg://", 1)
+from core.config import settings
+
+DATABASE_URL = settings.database.url
 
 engine = create_async_engine(
     DATABASE_URL,

@@ -2,22 +2,22 @@ from __future__ import annotations
 
 import asyncio
 
-from sentence_transformers import SentenceTransformer
+from fastembed import TextEmbedding
 
 from core.config import settings
 
-_encoder: SentenceTransformer | None = None
+_encoder: TextEmbedding | None = None
 
 
-def get_encoder() -> SentenceTransformer:
+def get_encoder() -> TextEmbedding:
     global _encoder
     if _encoder is None:
-        _encoder = SentenceTransformer(settings.memory.embedding_model)
+        _encoder = TextEmbedding(settings.memory.embedding_model)
     return _encoder
 
 
 def embed(text: str) -> list[float]:
-    return get_encoder().encode(text, normalize_embeddings=True).tolist()
+    return next(get_encoder().embed([text])).tolist()
 
 
 async def aembed(text: str) -> list[float]:

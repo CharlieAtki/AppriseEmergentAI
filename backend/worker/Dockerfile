@@ -1,13 +1,13 @@
-FROM python:3.11-slim
+FROM python:3.14-slim
+
+RUN pip install --no-cache-dir uv
 
 WORKDIR /app
 
-# Install core first (local dependency)
 COPY core/ ./core/
-RUN pip install --no-cache-dir ./core
+RUN uv pip install --system --no-cache ./core
 
-# Install worker and its dependencies
 COPY worker/ ./worker/
-RUN pip install --no-cache-dir ./worker
+RUN uv pip install --system --no-cache ./worker
 
-CMD ["python", "-m", "worker.main"]
+CMD ["arq", "worker.settings.WorkerSettings"]
