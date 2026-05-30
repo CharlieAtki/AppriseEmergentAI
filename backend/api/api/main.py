@@ -42,10 +42,17 @@ async def lifespan(app: FastAPI):
         force_heuristic_fallback=core_settings.intelligence.force_heuristic_fallback,
     )
 
+    from clerk_backend_api import Clerk
+
     app.state.bus = bus
     app.state.redis_bus = redis_bus
     app.state.redis = redis
     app.state.llm_router = llm_router
+    # Clerk SDK instance — used by AuthMiddleware to verify human user JWTs.
+    # bearer_auth is the Clerk secret key; the SDK fetches Clerk's public JWKS
+    # on first verify call and caches them, so subsequent verifications are local
+    # crypto with no network round-trip per request.
+    app.state.clerk = Clerk(bearer_auth=core_settings.clerk.secret_key.get_secret_value())
 
     bus.bind(TaskCreatedEvent, TaskCreatedRedisPublisher(redis_bus))
 

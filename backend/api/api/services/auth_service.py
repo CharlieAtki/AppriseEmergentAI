@@ -110,19 +110,20 @@ async def revoke_api_key(
     session: AsyncSession,
     redis: Redis,
 ) -> None:
+    """Revoke an API key and immediately invalidate its Redis cache entry.
+
+    Sets revoked=True in Postgres, then deletes the cached validation result
+    so the revocation takes effect on the next request rather than after the
+    5-minute cache TTL.
+
+    key_sha256 may be None for keys created before migration 005. Those keys
+    fall back to eventual-consistency revocation via the TTL — the DB flag is
+    still set correctly and will catch any cache-miss validation.
+    """
     record = await session.get(ApiKey, key_id)
     if record is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="API key not found")
     record.revoked = True
     await session.commit()
-    sha = _sha256_from_hash(record.key_hash)
-    if sha:
-        await redis.delete(f"apikey_valid:{sha}")
-
-
-def _sha256_from_hash(key_hash: str) -> str | None:
-    # We can't recover the SHA-256 from the bcrypt hash — the cache key uses
-    # SHA-256 of the raw key which we no longer have at revoke time.
-    # The TTL (5 min) provides the eventual-consistency window.
-    # For immediate revocation, the caller should pass the raw key if available.
-    return None
+    if record.key_sha256:
+        await redis.delete(f"apikey_valid:{record.key_sha256}")

@@ -145,6 +145,29 @@ success, rolls back on any exception, and always closes.
 
 ---
 
+### ~~1. Clerk JWT middleware — `app.state.clerk` not wired~~
+
+**Gap:** The Bearer JWT branch in `AuthMiddleware` was fully implemented but `app.state.clerk`
+was never set in the lifespan — any Bearer request hit `AttributeError` and returned 401.
+Additionally, the existing `clerk.verify_token(bearer)` call did not exist in the SDK.
+
+**What was done:**
+- `core/config/vendors/clerk.py` — `ClerkConfig(env_prefix="CLERK__")` with an empty-string
+  default so the worker process doesn't fail on startup when `CLERK__SECRET_KEY` is absent.
+- `core/config/__init__.py` — `clerk: ClerkConfig` field added to `Settings`.
+- `.env` — `CLERK__SECRET_KEY` placeholder added.
+- `api/pyproject.toml` — `clerk-backend-api>=5.0.7` added as a dependency.
+- `api/api/main.py` — `Clerk(bearer_auth=...)` instantiated in the lifespan and stored on
+  `app.state.clerk`. The SDK fetches Clerk's public JWKS on first call and caches them,
+  so subsequent JWT verifications are local crypto with no network round-trip per request.
+- `api/api/middleware/auth.py` — Bearer path rewritten to use
+  `clerk.authenticate_request_async(request, AuthenticateRequestOptions())` (the correct
+  v5 SDK method). Returns a `RequestState`; `req_state.payload` contains `org_id` and `sub`
+  which are passed directly to the existing `validate_clerk_token()` DB lookup.
+  Both auth paths also migrated from raw `SessionLocal()` to `async with get_session()`.
+
+---
+
 ### ~~16. Idempotency key not enforced~~
 
 **Gap:** Duplicate submission with the same `idempotency_key` crashed with a raw 500.
@@ -165,19 +188,6 @@ minimum 10 chars, `deadline_at` must be in the future, `priority` must be one of
 ---
 
 ## Open gaps
-
-### 1. Clerk JWT middleware — `app.state.clerk` not wired
-
-**Gap:** The Bearer JWT branch in `AuthMiddleware` is implemented (`validate_clerk_token`
-does the DB lookup and maps Clerk string IDs → internal UUIDs) but `app.state.clerk` is
-never set in the lifespan. Any Bearer request hits `AttributeError` and returns 401.
-
-**What is needed:**
-1. Instantiate `Clerk(secret_key=settings.clerk_secret_key)` in the FastAPI lifespan,
-   store on `app.state.clerk`.
-2. Add `CLERK_SECRET_KEY` to `.env` and `config.py`.
-
----
 
 ### 6. Vendor provider wiring is hard-coded in `main.py`
 
@@ -332,7 +342,7 @@ disconnect (leaked subscriptions compound with workspace count).
 |-----|--------|
 | Root tasks invisible to worker bidding | ✅ Closed |
 | API-key validation stub | ✅ Closed |
-| Clerk JWT middleware for human users | ❌ Open — `app.state.clerk` not wired |
+| Clerk JWT middleware for human users | ✅ Closed |
 | `require_workspace` stub | ✅ Closed |
 | Double session bug in `create_task` | ✅ Closed |
 | `enrich_and_release` raw `SessionLocal()` | ✅ Closed |

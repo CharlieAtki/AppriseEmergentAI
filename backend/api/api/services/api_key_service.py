@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import secrets
 import uuid
 from typing import TYPE_CHECKING
@@ -28,8 +29,16 @@ class ApiKeyService:
         user_id: uuid.UUID | None,
         body: CreateApiKeyRequest,
     ) -> tuple[ApiKey, str]:
+        """Create a new API key and return the ORM record alongside the raw key.
+
+        The raw key is returned once here and never stored — only the bcrypt hash
+        persists. key_sha256 is stored so revocation can immediately clear the
+        Redis cache entry without needing the original raw key (bcrypt is
+        non-deterministic and cannot be used to reconstruct the cache key).
+        """
         raw_key = secrets.token_urlsafe(32)
         key_hash = bcrypt.hash(raw_key)
+        key_sha256 = hashlib.sha256(raw_key.encode()).hexdigest()
         key_prefix = f"appr_{raw_key[:8]}"
 
         record = ApiKey(
@@ -39,6 +48,7 @@ class ApiKeyService:
             name=body.name,
             key_hash=key_hash,
             key_prefix=key_prefix,
+            key_sha256=key_sha256,
             scopes=body.scopes,
             expires_at=body.expires_at,
         )

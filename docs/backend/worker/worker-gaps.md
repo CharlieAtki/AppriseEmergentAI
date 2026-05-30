@@ -8,28 +8,23 @@ Tracks known gaps, design limitations, and deferred improvements in the ARQ work
 
 ## Open gaps
 
-### 1. API key revocation has a 5-minute eventual-consistency window
+### ~~1. API key revocation had a 5-minute eventual-consistency window~~
 
-**Gap:** `revoke_api_key()` sets `revoked=True` in Postgres and attempts to delete the
-Redis cache entry (`apikey_valid:{sha256}`). But the cache key is `SHA-256(raw_key)` and
-at revoke time only the bcrypt hash is available — the raw key is gone. `_sha256_from_hash`
-returns `None`, so the Redis delete is a no-op. A revoked key remains valid until its
-5-minute TTL expires.
+**Gap:** `revoke_api_key()` attempted to delete `apikey_valid:{sha256}` from Redis but
+`_sha256_from_hash()` always returned `None` — the raw key is gone at revoke time and
+SHA-256 cannot be recovered from bcrypt. The Redis delete was a permanent no-op.
 
-**Impact:** A revoked key can still authenticate for up to 5 minutes. Acceptable for most
-use cases; a problem for immediate-revocation requirements (leaked key, offboarding).
-
-**What is needed:**
-
-Option A — store `key_sha256` alongside `key_hash` in the `api_keys` table at creation
-time. `revoke_api_key()` reads it and deletes `apikey_valid:{key_sha256}` immediately.
-This is a one-column migration and a two-line change to `api_key_service.create()`.
-
-Option B — reduce the cache TTL (e.g. 60s). Simpler but doesn't fully close the window
-and increases DB load.
-
-Option A is correct. The SHA-256 is not sensitive (it cannot reverse to the raw key) and
-storing it is the only way to enable immediate cache invalidation.
+**What was done:**
+- `core/models/auth.py` — `key_sha256: Mapped[str | None]` column added (nullable so
+  rows created before migration 005 are unaffected).
+- `core/migrations/versions/005_add_api_key_sha256.py` — migration adding the column.
+- `api/services/api_key_service.py` — `create()` now computes
+  `hashlib.sha256(raw_key.encode()).hexdigest()` and stores it as `key_sha256`. The
+  SHA-256 is not sensitive (one-way; cannot reconstruct the raw key).
+- `api/services/auth_service.py` — `revoke_api_key()` now reads `record.key_sha256`
+  and deletes `apikey_valid:{key_sha256}` immediately. `_sha256_from_hash()` removed.
+  Keys created before migration 005 (`key_sha256 is None`) still get eventual-consistency
+  revocation via the 5-minute cache TTL.
 
 ---
 
@@ -97,23 +92,13 @@ also closes this. Defer together. For now, ensure at minimum that the vendor set
 
 ---
 
-### 6. `AuthMiddleware` uses raw `SessionLocal()` instead of `get_session()`
+### ~~6. `AuthMiddleware` used raw `SessionLocal()` instead of `get_session()`~~
 
-**Gap:** Both auth paths in `AuthMiddleware` open a session via `SessionLocal()` with
-manual commit/rollback/close logic. The rest of the codebase uses `async with get_session()`
-which handles this automatically. Middleware cannot use `Depends()`, but it can still use
-the async context manager.
+**Gap:** Both auth paths in `AuthMiddleware` opened sessions via `SessionLocal()` with
+manual commit/rollback/close in a try/except/finally block.
 
-**What is needed:** Replace the manual session blocks with `async with get_session()`:
-
-```python
-from core.database import get_session
-async with get_session() as session:
-    payload = await validate_api_key(api_key, request.app.state.redis, session)
-```
-
-This removes the manual try/except/finally and aligns with every other session usage in
-the codebase.
+**What was done:** Both paths in `api/api/middleware/auth.py` replaced with
+`async with get_session() as session:`. Closed alongside the Clerk JWT fix (H1).
 
 ---
 
@@ -153,11 +138,11 @@ needed; current state (static dict) is not wrong, just inconsistent with the in-
 
 | Gap | Status |
 |-----|--------|
-| API key revocation eventual consistency (5-min window) | ❌ Open — Option A (store `key_sha256`) is the fix |
+| API key revocation eventual consistency (5-min window) | ✅ Closed — `key_sha256` stored at creation; immediate Redis delete on revoke |
 | `WebhookDelivery` row not committed before HTTP POST | ❌ Open — low probability, no retry coverage if it hits |
 | No dead-letter handling for failed webhook deliveries | ❌ Open — defer until customer need |
 | `decay` cron may be redundant | ❌ Open — needs audit against event-driven decay |
 | Worker vendor providers hard-coded in `context.py` | ❌ Open — close together with API gap #6; keep in sync manually until then |
-| `AuthMiddleware` uses raw `SessionLocal()` | ❌ Open — replace with `async with get_session()` |
+| `AuthMiddleware` uses raw `SessionLocal()` | ✅ Closed — both paths now use `async with get_session()` |
 | `JobSpan` ContextVar under ARQ concurrency | ❌ Open — audit LangGraph sub-task spawning for context propagation |
 | Stream event registry is static | ❌ Open — decide: accept static dict or align with in-process bus self-registration |

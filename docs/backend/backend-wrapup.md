@@ -464,7 +464,7 @@ sampling agents whose social observations are recent. Non-issue at Phase 1 scale
 
 | Gap | Area | Priority |
 |-----|------|----------|
-| Clerk JWT — `app.state.clerk` not set | API | High — human users cannot log in |
+| ~~Clerk JWT — `app.state.clerk` not set~~ | API | ✅ Closed |
 | No metrics endpoints | API | Medium |
 | No batch task endpoint | API | Medium — blocks high-volume integrations |
 | No bulk polling endpoint | API | Medium — blocks webhook-less integrations |
@@ -474,11 +474,11 @@ sampling agents whose social observations are recent. Non-issue at Phase 1 scale
 | `artifact_uri` column name | API | Low — internal rename |
 | Vendor provider wiring hard-coded | API + Worker | Low — defer until second vendor |
 | No WebSocket dashboard | API | Low — defer until customer demand |
-| API key revocation 5-min window | Worker | High if immediate revocation is required |
+| ~~API key revocation 5-min window~~ | Worker | ✅ Closed |
 | `WebhookDelivery` row not committed first | Worker | Low — low probability window |
 | No dead-letter handling | Worker | Low — defer until customer need |
 | `decay` cron audit | Worker | Low — may be removable |
-| `AuthMiddleware` raw `SessionLocal()` | Worker | Low — cleanup |
+| ~~`AuthMiddleware` raw `SessionLocal()`~~ | Worker | ✅ Closed |
 | `JobSpan` ContextVar audit | Worker | Low — needs code audit |
 | Stream event registry static | Worker | Low — consistency decision |
 | No audit log handler (needs table first) | Event bus | Medium |

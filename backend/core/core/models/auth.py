@@ -38,6 +38,11 @@ class ApiKey(Base, CreatedAtMixin):
     name: Mapped[str] = mapped_column(sa.Text, nullable=False)
     key_hash: Mapped[str] = mapped_column(sa.Text, nullable=False)
     key_prefix: Mapped[str] = mapped_column(sa.Text, nullable=False)
+    # SHA-256 hex digest of the raw key, stored at creation so revocation can
+    # immediately delete the Redis cache entry (apikey_valid:{key_sha256}).
+    # Not sensitive — SHA-256 is one-way and cannot reconstruct the raw key.
+    # Nullable to handle keys created before migration 005.
+    key_sha256: Mapped[str | None] = mapped_column(sa.Text, nullable=True)
     scopes: Mapped[list | None] = mapped_column(JSONB, nullable=True)
     last_used_at: Mapped[datetime | None] = mapped_column(sa.DateTime(timezone=True), nullable=True)
     expires_at: Mapped[datetime | None] = mapped_column(sa.DateTime(timezone=True), nullable=True)
