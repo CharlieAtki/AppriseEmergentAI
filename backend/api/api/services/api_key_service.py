@@ -36,10 +36,11 @@ class ApiKeyService:
         Redis cache entry without needing the original raw key (bcrypt is
         non-deterministic and cannot be used to reconstruct the cache key).
         """
-        raw_key = secrets.token_urlsafe(32)
-        key_hash = bcrypt.hash(raw_key)
-        key_sha256 = hashlib.sha256(raw_key.encode()).hexdigest()
-        key_prefix = f"appr_{raw_key[:8]}"
+        token = secrets.token_urlsafe(32)
+        full_key = f"apk_live_{token}"
+        key_hash = bcrypt.hash(full_key)
+        key_sha256 = hashlib.sha256(full_key.encode()).hexdigest()
+        key_prefix = f"apk_live_{token[:8]}"
 
         record = ApiKey(
             organisation_id=workspace.organisation_id,
@@ -54,7 +55,7 @@ class ApiKeyService:
         )
         self._session.add(record)
         await self._session.flush()
-        return record, raw_key
+        return record, full_key
 
     async def list(self, workspace_id: uuid.UUID) -> list[ApiKey]:
         result = await self._session.execute(

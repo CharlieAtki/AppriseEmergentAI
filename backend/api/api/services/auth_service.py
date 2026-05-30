@@ -46,9 +46,10 @@ async def validate_api_key(
         return ApiKeyPayload.model_validate_json(cached)
 
     # Cache miss — validate against Postgres.
-    # key_prefix = f"appr_{raw_key[:8]}" (set at creation) — narrows the scan to
+    # key_prefix = f"apk_live_{token[:8]}" (set at creation) — narrows the scan to
     # at most a handful of rows; bcrypt.verify is the authoritative check.
-    key_prefix = f"appr_{raw_key[:8]}"
+    # raw_key format: "apk_live_{token}" — skip the 9-char prefix, take 8 chars of token.
+    key_prefix = f"apk_live_{raw_key[9:17]}"
     result = await session.execute(
         select(ApiKey).where(
             ApiKey.key_prefix == key_prefix,

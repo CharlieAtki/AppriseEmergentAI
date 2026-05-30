@@ -124,67 +124,46 @@ table-scans on every call.
 
 ---
 
-#### 5. `CreateTaskRequest` missing `overrides` field
+#### ~~5. `CreateTaskRequest` missing `overrides` field~~
 
-Customers with domain knowledge (a CI pipeline that always submits coding tasks) cannot
-bypass enrichment — every task goes through rule-based and potentially LLM enrichment
-regardless. The spec includes an `overrides` object for exactly this case.
-
-**What is needed:**
-
-```python
-class TaskOverrides(BaseModel):
-    task_type: str | None = None
-    required_skills: list[str] | None = None
-    difficulty: float | None = Field(None, ge=0.0, le=1.0)
-
-class CreateTaskRequest(BaseModel):
-    ...
-    overrides: TaskOverrides | None = None
-```
-
-`enrich_and_release` skips enrichment when all three fields are set and uses the provided
-values directly. Partial overrides are merged with enrichment output.
+**What was done:**
+- `api/schemas/task.py` — `TaskOverrides` Pydantic model added (`task_type`, `required_skills: dict[str, float]`,
+  `difficulty` validated as `[1.0, 5.0]`); `overrides: TaskOverrides | None = None` added to `CreateTaskRequest`.
+- `core/intelligence/enrichment.py` — `EnrichmentOverrides` frozen dataclass added; unified `async enrich()` pipeline
+  function added as the **single point of truth** for all enrichment logic (full override, partial merge, rule-based,
+  LLM escalation). All branching removed from the router layer.
+- `api/routers/tasks.py` — `enrich_and_release` reduced to ORM write + event publish; router converts
+  `TaskOverrides → EnrichmentOverrides` at the API/core boundary before passing to the background task.
 
 ---
 
-#### 6. `idempotency_key` should be an HTTP header, not a body field
+#### ~~6. `idempotency_key` should be an HTTP header, not a body field~~
 
-Industry convention (Stripe, OpenAI, the Notion spec) puts idempotency keys in an
-`Idempotency-Key` request header, not the JSON body. The current implementation accepts
-`idempotency_key` as a body field. Clients following the spec send the header, which is
-silently ignored — a second identical POST creates a second task rather than returning
-the first.
-
-**What is needed:** Extract `Idempotency-Key` from the request headers in `create_task`
-(or a FastAPI dependency). If both header and body field are present, prefer the header.
-Keep the body field for backwards compatibility during the transition.
+**What was done:**
+- `api/routers/tasks.py` — `create_task` now reads `Idempotency-Key` as a FastAPI `Header()` param.
+  Header wins when both are present; body field retained for backward compatibility.
+- `api/services/task_service.py` — `create()` accepts an optional `idempotency_key` override param;
+  resolved value used for both the ORM write and the duplicate-detection lookup.
 
 ---
 
-#### 7. API key prefix format mismatch
+#### ~~7. API key prefix format mismatch~~
 
-The spec shows `apk_live_<token>`. The implementation generates `appr_<first 8 chars>`.
-This is customer-facing — any client-side prefix validation or key display will differ
-from the documentation.
-
-**What is needed:** Decide on the canonical prefix and apply it consistently. Changing
-to `apk_live_` requires updating `api_key_service.create()` and the prefix extraction
-logic in `validate_api_key()` (currently takes `raw_key[:8]`, needs adjustment if the
-prefix has variable length).
+**What was done:**
+- `api/services/api_key_service.py` — generates `full_key = f"apk_live_{token}"`;
+  bcrypt hash, SHA-256, and stored prefix all computed from the full key; `full_key` returned to the client.
+- `api/services/auth_service.py` — prefix reconstruction updated to `f"apk_live_{raw_key[9:17]}"` (skip
+  9-char `apk_live_` prefix, take 8 chars of token). Comment updated.
+- **Note:** keys created before this change (`appr_` prefix) stop authenticating. Acceptable — no production keys existed.
 
 ---
 
-#### 8. `artifact_uri` column name is misleading
+#### ~~8. `artifact_uri` column name is misleading~~
 
-`TaskExecution.artifact_uri` stores the literal text content of the agent's artifact — a
-`str | None` from `GraphState.artifact`. The name implies a file path or URI. There is no
-runtime bug (the webhook payload wraps it correctly as `{"type": "text", "content": ...}`)
-but any developer reading the column name will assume it can be dereferenced.
-
-**What is needed:** Rename `artifact_uri → artifact` in `core/models/tasks.py`, add an
-Alembic migration, and update the two references in `deliver_webhook.py`. Low priority —
-purely an internal naming issue with no customer-visible impact.
+**What was done:**
+- `core/models/tasks.py` — column renamed `artifact_uri → artifact`.
+- `core/migrations/versions/006_rename_artifact_uri.py` — Alembic migration using `op.alter_column`.
+- `worker/jobs/execute_task.py`, `worker/jobs/deliver_webhook.py`, `worker/jobs/reflect.py` — all references updated.
 
 ---
 
@@ -471,10 +450,10 @@ sampling agents whose social observations are recent. Non-issue at Phase 1 scale
 | No metrics endpoints | API | Medium |
 | No batch task endpoint | API | Medium — blocks high-volume integrations |
 | No bulk polling endpoint | API | Medium — blocks webhook-less integrations |
-| `overrides` field missing | API | Medium |
-| `idempotency_key` should be HTTP header | API | Medium — spec misalignment |
-| API key prefix format (`appr_` vs `apk_live_`) | API | Low — naming decision |
-| `artifact_uri` column name | API | Low — internal rename |
+| ~~`overrides` field missing~~ | API | ✅ Closed — `TaskOverrides` + unified `enrich()` in core |
+| ~~`idempotency_key` should be HTTP header~~ | API | ✅ Closed — `Idempotency-Key` header wins; body field kept |
+| ~~API key prefix format (`appr_` vs `apk_live_`)~~ | API | ✅ Closed — full key is now `apk_live_{token}` |
+| ~~`artifact_uri` column name~~ | API | ✅ Closed — renamed to `artifact`, migration 006 |
 | Vendor provider wiring hard-coded | API + Worker | Low — defer until second vendor |
 | No WebSocket dashboard | API | Low — defer until customer demand |
 | ~~API key revocation 5-min window~~ | Worker | ✅ Closed |

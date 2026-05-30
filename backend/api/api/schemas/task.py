@@ -3,7 +3,13 @@ from __future__ import annotations
 import uuid
 from datetime import datetime, timezone
 
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel, Field, field_validator
+
+
+class TaskOverrides(BaseModel):
+    task_type: str | None = None
+    required_skills: dict[str, float] | None = None
+    difficulty: float | None = Field(None, ge=1.0, le=5.0)
 
 
 class CreateTaskRequest(BaseModel):
@@ -13,7 +19,7 @@ class CreateTaskRequest(BaseModel):
     priority: str | None = None
     deadline_at: datetime | None = None
     external_ref: str | None = None
-    idempotency_key: str | None = None
+    overrides: TaskOverrides | None = None
 
     @field_validator("description")
     @classmethod

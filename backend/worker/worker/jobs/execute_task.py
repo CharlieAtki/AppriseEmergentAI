@@ -209,7 +209,7 @@ async def execute_task(
                 execution.status         = "completed"
                 execution.execution_path = "self_execute"
                 execution.quality_score  = quality
-                execution.artifact_uri   = final_state.get("artifact")
+                execution.artifact        = final_state.get("artifact")
                 execution.tool_trace     = final_state["tool_trace"]   # structured {tool,args,result} records
                 execution.completed_at   = datetime.now(timezone.utc)
                 session.add(execution)

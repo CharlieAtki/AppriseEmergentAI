@@ -124,7 +124,7 @@ class TaskExecution(Base):
     )
     status: Mapped[str] = mapped_column(sa.Text, nullable=False)
     quality_score: Mapped[float | None] = mapped_column(sa.Float, nullable=True)
-    artifact_uri: Mapped[str | None] = mapped_column(sa.Text, nullable=True)
+    artifact: Mapped[str | None] = mapped_column(sa.Text, nullable=True)
     tool_trace: Mapped[list | None] = mapped_column(JSONB, nullable=True)
     execution_path: Mapped[str | None] = mapped_column(sa.Text, nullable=True)
     error: Mapped[dict | None] = mapped_column(JSONB, nullable=True)

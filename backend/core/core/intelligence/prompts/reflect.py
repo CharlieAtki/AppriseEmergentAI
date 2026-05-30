@@ -1,8 +1,31 @@
 from __future__ import annotations
 
-from typing import Any, Literal
+from dataclasses import dataclass
+from typing import Literal
 
 from pydantic import BaseModel
+
+
+@dataclass(frozen=True)
+class TaskContext:
+    title: str
+    description: str | None
+    task_type: str | None
+    required_skills: dict[str, float]
+    difficulty: float | None
+
+
+@dataclass(frozen=True)
+class ResultContext:
+    summary: str
+    tool_trace: list
+
+
+@dataclass(frozen=True)
+class ExistingRule:
+    id: str
+    domain: str
+    text: str
 
 
 class ReflectResponse(BaseModel):
@@ -13,15 +36,15 @@ class ReflectResponse(BaseModel):
 
 
 def build_prompt(
-    task: dict[str, Any],
-    result: dict[str, Any],
+    task: TaskContext,
+    result: ResultContext,
     quality_score: float,
-    existing_rules: list[dict[str, Any]] | None = None,
+    existing_rules: list[ExistingRule] | None = None,
 ) -> list[dict]:
     existing_block = ""
     if existing_rules:
         rules_text = "\n".join(
-            f"  [{r['id']}] ({r['domain']}): {r['text']}" for r in existing_rules
+            f"  [{r.id}] ({r.domain}): {r.text}" for r in existing_rules
         )
         existing_block = (
             f"\nExisting procedural rules for this domain:\n{rules_text}\n"
@@ -42,13 +65,13 @@ def build_prompt(
         '"superseded_ids": null or ["id1"]}'
     )
     user = (
-        f"Task: {task.get('title')}\n"
-        f"Description: {task.get('description')}\n"
-        f"Task type: {task.get('task_type')}\n"
-        f"Required skills: {task.get('required_skills', {})}\n"
-        f"Difficulty: {task.get('difficulty')}\n\n"
-        f"Result summary: {result.get('summary', result.get('text', ''))}\n"
-        f"Tools used: {result.get('tool_trace', [])}\n"
+        f"Task: {task.title}\n"
+        f"Description: {task.description}\n"
+        f"Task type: {task.task_type}\n"
+        f"Required skills: {task.required_skills}\n"
+        f"Difficulty: {task.difficulty}\n\n"
+        f"Result summary: {result.summary}\n"
+        f"Tools used: {result.tool_trace}\n"
         f"Quality score: {quality_score:.2f}"
     )
     return [{"role": "system", "content": system}, {"role": "user", "content": user}]

@@ -2,12 +2,13 @@ from __future__ import annotations
 
 import hashlib
 import hmac
-import json
 import logging
 import uuid
 from datetime import datetime, timedelta, timezone
+from typing import Literal
 
 import httpx
+from pydantic import BaseModel
 from sqlalchemy import select
 
 from core.database import get_session
@@ -17,6 +18,21 @@ from core.models.tenant import Workspace
 logger = logging.getLogger(__name__)
 
 _RETRY_DELAYS = [30, 300, 1800, 7200]  # 30s, 5m, 30m, 2h
+
+
+class _WebhookArtefact(BaseModel):
+    type: Literal["text"] = "text"
+    content: str | None
+
+
+class _WebhookPayload(BaseModel):
+    delivery_id: str
+    event: Literal["task.completed"] = "task.completed"
+    task_id: uuid.UUID | None
+    workspace_id: uuid.UUID
+    completed_at: datetime | None
+    external_ref: str | None
+    artefact: _WebhookArtefact
 
 
 async def deliver_webhook(
@@ -59,7 +75,7 @@ async def deliver_webhook(
         org_id = execution.organisation_id
         task_id = execution.task_id
         completed_at = execution.completed_at
-        artifact_uri = execution.artifact_uri
+        artifact = execution.artifact
 
         external_ref = None
         if task_id:
@@ -80,16 +96,14 @@ async def deliver_webhook(
             )
             session.add(delivery)
 
-    payload = {
-        "delivery_id": delivery_id,
-        "event": "task.completed",
-        "task_id": str(task_id),
-        "workspace_id": workspace_id,
-        "completed_at": completed_at.isoformat() if completed_at else None,
-        "external_ref": external_ref,
-        "artefact": {"type": "text", "content": artifact_uri},
-    }
-    body = json.dumps(payload).encode()
+    body = _WebhookPayload(
+        delivery_id=delivery_id,
+        task_id=task_id,
+        workspace_id=ws_uuid,
+        completed_at=completed_at,
+        external_ref=external_ref,
+        artefact=_WebhookArtefact(content=artifact),
+    ).model_dump_json().encode()
 
     headers: dict[str, str] = {"Content-Type": "application/json"}
     if webhook_secret:

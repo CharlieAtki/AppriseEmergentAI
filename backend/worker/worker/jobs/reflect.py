@@ -6,6 +6,7 @@ import uuid
 from core.coordination.skills import apply_skill_delta
 from core.intelligence.call_types import CallType
 from core.intelligence.prompts import reflect as reflect_prompt
+from core.intelligence.prompts.reflect import ExistingRule, ResultContext, TaskContext
 from core.models.observability import ProceduralKnowledgeLog, SkillSnapshot
 from core.models.tasks import Task, TaskExecution
 from core.models.agents import Agent
@@ -50,31 +51,31 @@ async def reflect(
 
         await span.emit("agent.reflecting", {"full_reflect": full_reflect})
 
-        existing_rules: list[dict] = []
+        existing_rules: list[ExistingRule] = []
         if full_reflect and task.task_type:
             items = await wctx.memory.retrieve_procedures_for_domain(
                 agent_id, workspace_id, task.task_type
             )
             existing_rules = [
-                {
-                    "id":     item.id,
-                    "domain": (item.payload or {}).get("domain", ""),
-                    "text":   item.text,
-                }
+                ExistingRule(
+                    id=item.id,
+                    domain=(item.payload or {}).get("domain", ""),
+                    text=item.text,
+                )
                 for item in items
             ]
 
-        task_ctx = {
-            "title":           task.title,
-            "description":     task.description,
-            "task_type":       task.task_type,
-            "required_skills": task.required_skills or {},
-            "difficulty":      task.difficulty,
-        }
-        result_ctx = {
-            "summary":    execution.artifact_uri or "",
-            "tool_trace": execution.tool_trace or [],
-        }
+        task_ctx = TaskContext(
+            title=task.title,
+            description=task.description,
+            task_type=task.task_type,
+            required_skills=task.required_skills or {},
+            difficulty=task.difficulty,
+        )
+        result_ctx = ResultContext(
+            summary=execution.artifact or "",
+            tool_trace=execution.tool_trace or [],
+        )
 
         raw = await wctx.llm_router.complete(
             reflect_prompt.build_prompt(

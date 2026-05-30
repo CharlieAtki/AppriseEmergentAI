@@ -25,6 +25,7 @@ class TaskService:
         workspace_id: uuid.UUID,
         organisation_id: uuid.UUID,
         body: CreateTaskRequest,
+        idempotency_key: str | None = None,
     ) -> Task:
         task = Task(
             workspace_id=workspace_id,
@@ -36,15 +37,15 @@ class TaskService:
             priority=body.priority,
             deadline_at=body.deadline_at,
             external_ref=body.external_ref,
-            idempotency_key=body.idempotency_key,
+            idempotency_key=idempotency_key,
         )
         self._session.add(task)
         try:
             await self._session.flush()
         except IntegrityError:
             await self._session.rollback()
-            if body.idempotency_key:
-                existing = await self._get_by_idempotency_key(workspace_id, body.idempotency_key)
+            if idempotency_key:
+                existing = await self._get_by_idempotency_key(workspace_id, idempotency_key)
                 if existing:
                     return existing
             raise
