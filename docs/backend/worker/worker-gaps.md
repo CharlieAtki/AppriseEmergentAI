@@ -141,6 +141,120 @@ an agent at 0.0 could not gain at all below the clamped floor.
 
 ---
 
+### 13. Embedding model not pre-warmed at startup
+
+**Gap:** The fastembed ONNX model (`qdrant/bge-small-en-v1.5-onnx-q`) is downloaded lazily on the
+first call to `get_encoder()` in `core/memory/embeddings.py`. When the worker starts cold and
+multiple jobs invoke the `search_episodic_memory` tool concurrently for the first time, they all
+race to initialise the encoder simultaneously via `TextEmbedding(settings.memory.embedding_model)`.
+The first caller triggers the download from HuggingFace; concurrent callers find partially-written
+model files and fail with:
+
+```
+onnxruntime.capi.onnxruntime_pybind11_state.NoSuchFile:
+  /tmp/fastembed_cache/models--qdrant--bge-small-en-v1.5-onnx-q/snapshots/.../model_optimized.onnx
+```
+
+There is no retry path for tool call errors in the graph — the exception propagates out of
+`_call_tool`, unwinds through the graph invocation, and lands in the `execute_task` except block.
+The task is written to `"failed"` permanently. This only happens once per worker lifetime (after the
+model is cached to disk, subsequent restarts find it immediately), but a freshly-provisioned worker
+or a cleared `/tmp` will silently fail every task that touches episodic memory until the race window
+closes.
+
+**What is needed:** Pre-warm the encoder once in `WorkerContext.build()` before the ARQ worker
+begins accepting jobs. A single `get_encoder()` call blocks until the model is fully written to disk;
+all subsequent calls hit the in-process cache. No jobs are queued during `startup()`, so there is
+no race window.
+
+---
+
+### 14. Unbound tool calls crash the job instead of returning a tool error
+
+**Gap:** When the LLM requests a tool that is not present in the current graph's `tool_map`
+(e.g. `execute_code` during a `research`-type task), `_call_tool` raises `KeyError`. This
+propagates unhandled through the graph invocation and into the `execute_task` except block,
+writing the task to `"failed"` permanently with `{"type": "KeyError", "message": "'execute_code'"}`.
+
+Two things are wrong:
+
+1. **Missing graceful recovery.** The LLM may occasionally hallucinate a tool name, or a task
+   type/tool mapping may drift out of sync. In either case the correct response is to return a
+   structured tool-error message back to the LLM (e.g. `"tool 'execute_code' is not available"`)
+   so the graph can continue and the LLM can recover. A `KeyError` in a tool dispatch should never
+   kill the job.
+
+2. **Tool map auditing.** In the observed failure, the `execute_code` tool is likely present in
+   the global tool registry but absent from the `research` graph's tool set. The LLM sees the tool
+   in its training data and selects it; the graph has never declared it as available. The bound tool
+   list passed to `.bind_tools()` at graph compilation is the contract — the LLM should only see
+   tools that are in the map. This is already the case if compilation is correct; the gap is that
+   there is no assertion or startup check that validates map ↔ bound-tools consistency.
+
+**What is needed:**
+- `_call_tool` should catch `KeyError` and return a tool-error dict (following LangChain's tool
+  result schema) rather than raising.
+- Add a startup assertion in `WorkerContext.build()` that verifies each compiled graph's
+  `tool_map` keys match the tools passed to `.bind_tools()`, so map/bound mismatches are caught
+  at worker start rather than at runtime.
+
+---
+
+### 15. Runaway decomposition below the difficulty threshold
+
+**Gap:** The evaluate prompt instructs the LLM to "prefer decompose when difficulty ≥ 4". In live
+testing with the semiconductor shortage task (parent difficulty 4.5), decomposition cascaded three
+levels deep:
+
+- Depth 1 → 6 subtasks (expected — parent difficulty 4.5)
+- Depth 2 → 5 sub-subtasks from a difficulty-3.5 subtask (should have been `self_execute`)
+- Depth 3 → 3 sub-sub-subtasks from a difficulty-3.0 node (well below threshold)
+
+The LLM consistently ignores the difficulty threshold as a soft guideline and selects `decompose`
+for tasks that are complex-sounding but not genuinely difficult enough to warrant delegation. The
+only hard stop is the `MAX_DELEGATION_DEPTH = 5` guard in `execute_task.py` — without it,
+decomposition would recurse until the rate limit intervened.
+
+**Impact:** Unnecessary decomposition multiplies LLM calls (each depth level triggers one
+`EVALUATE` + one `DECOMPOSE` call), burns token budget, fragments tasks into units too small for
+meaningful specialisation, and creates large concurrent job spikes that saturate the TPM limit.
+Six concurrent subtasks from a single parent is already at the edge of the Tier 1 limit; three
+levels of decomposition creates fan-out that a low-tier API key cannot sustain.
+
+**What is needed:**
+- Harden the evaluate prompt — replace the soft "prefer decompose when difficulty ≥ 4" guideline
+  with an explicit rule: `decompose` is only valid when `difficulty >= 4.0`. Make it a constraint,
+  not a preference.
+- Consider a code-level guard: if `task.difficulty < settings.DECOMPOSE_DIFFICULTY_THRESHOLD`,
+  override any `decompose` decision to `self_execute` before the LLM decompose call fires (same
+  pattern as the existing depth guard). This makes the threshold enforceable independently of
+  prompt quality.
+- Expose `DECOMPOSE_DIFFICULTY_THRESHOLD` in `core/config/` so it can be tuned per experiment
+  without code changes.
+
+---
+
+### 12. Influence has no mechanical effect on the evaluate strategy decision
+
+**Gap:** The evaluate prompt (`core/intelligence/prompts/evaluate.py`) sends `agent.influence`
+to the LLM as context, but the guidelines contain no rule referencing it. Influence affects
+bid scoring (`BID_W_INFLUENCE`) but not the `self_execute / cfp / decompose` strategy choice.
+
+**Design intent:** High-influence agents should lean toward `decompose` (acting as
+coordinators) rather than self-executing everything. Low-influence agents should prefer
+`self_execute` to build a track record. This is the emergent coordinator pattern the system
+is designed to produce — but it cannot emerge without the signal being in the decision rules.
+
+**What is needed:** Add influence-aware guidelines to the evaluate prompt, e.g.:
+- `influence > 0.7` → prefer `decompose` for complex tasks (coordinator role)
+- `influence < 0.2` → prefer `self_execute` to build influence before delegating
+- `cfp` should remain skill-driven, not influence-driven
+
+Thresholds should be tunable (ideally drawn from `settings`) rather than hardcoded in the
+prompt string, so emergence experiments can vary them without code changes.
+
+---
+
 ### 9. `SKILL_DECAY_RATE` is static — no dynamic rate adjustment
 
 **Gap:** `SKILL_DECAY_RATE` (now applied per task completion in Phase 6) is a single static
@@ -231,3 +345,7 @@ needed; current state (static dict) is not wrong, just inconsistent with the in-
 | `RollupSubtaskHandler` missing reflect params | ✅ Closed — `execution_id` + avg sibling `quality_score` now queried and passed |
 | Skill updates used flat linear addition | ✅ Closed — logistic growth implemented in `core/coordination/skills.py` |
 | `SKILL_DECAY_RATE` is static | ❌ Open — defer until emergence experiment baselines available |
+| Influence not wired into evaluate strategy decision | ❌ Open — high-influence coordinator pattern cannot emerge without it |
+| Embedding model not pre-warmed at startup | ❌ Open — concurrent first-use races cause `NoSuchFile`; pre-warm in `WorkerContext.build()` |
+| Unbound tool calls crash the job | ❌ Open — `KeyError` in `_call_tool` kills the job; needs graceful tool-error response + startup map validation |
+| Runaway decomposition below difficulty threshold | ❌ Open — LLM ignores soft difficulty guideline; needs hard code-level guard + config threshold |

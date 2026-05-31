@@ -4,6 +4,7 @@ import asyncio
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
+from fastapi.openapi.utils import get_openapi
 from redis.asyncio import Redis
 
 from core.config import settings as core_settings
@@ -65,6 +66,22 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(lifespan=lifespan)
 app.add_middleware(AuthMiddleware)
+
+
+def _custom_openapi():
+    if app.openapi_schema:
+        return app.openapi_schema
+    schema = get_openapi(title=app.title, version=app.version, routes=app.routes)
+    schema.setdefault("components", {})["securitySchemes"] = {
+        "ApiKeyAuth": {"type": "apiKey", "in": "header", "name": "X-API-Key"},
+        "BearerAuth": {"type": "http", "scheme": "bearer"},
+    }
+    schema["security"] = [{"ApiKeyAuth": []}, {"BearerAuth": []}]
+    app.openapi_schema = schema
+    return app.openapi_schema
+
+
+app.openapi = _custom_openapi  # type: ignore[method-assign]
 
 
 @app.get("/health", include_in_schema=False)

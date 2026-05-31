@@ -33,4 +33,5 @@ def build_prompt(task: dict[str, Any], document: str) -> list[dict]:
 
 
 def parse(raw: str) -> ScoreDocumentResponse:
-    return ScoreDocumentResponse.model_validate_json(raw)
+    from core.intelligence.prompts import strip_fences
+    return ScoreDocumentResponse.model_validate_json(strip_fences(raw))

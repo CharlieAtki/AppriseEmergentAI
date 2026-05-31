@@ -78,4 +78,5 @@ def build_prompt(
 
 
 def parse(raw: str) -> ReflectResponse:
-    return ReflectResponse.model_validate_json(raw)
+    from core.intelligence.prompts import strip_fences
+    return ReflectResponse.model_validate_json(strip_fences(raw))

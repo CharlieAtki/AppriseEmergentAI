@@ -5,8 +5,9 @@ import uuid
 from datetime import datetime, timezone
 from typing import Literal
 
+import bcrypt as _bcrypt
+
 from fastapi import HTTPException, status
-from passlib.hash import bcrypt
 from pydantic import BaseModel
 from redis.asyncio import Redis
 from sqlalchemy import select
@@ -19,7 +20,7 @@ from core.models.tenant import Organisation, User
 class ApiKeyPayload(BaseModel):
     workspace_id: uuid.UUID
     org_id: uuid.UUID
-    scopes: list[str]
+    scopes: list[str] | None
     auth_type: Literal["api_key"] = "api_key"
 
 
@@ -59,7 +60,7 @@ async def validate_api_key(
     candidates = result.scalars().all()
     record: ApiKey | None = None
     for candidate in candidates:
-        if bcrypt.verify(raw_key, candidate.key_hash):
+        if _bcrypt.checkpw(raw_key.encode(), candidate.key_hash.encode()):
             record = candidate
             break
 
@@ -72,7 +73,7 @@ async def validate_api_key(
     payload = ApiKeyPayload(
         workspace_id=record.workspace_id,
         org_id=record.organisation_id,
-        scopes=record.scopes or [],
+        scopes=record.scopes,
     )
     await redis.set(cache_key, payload.model_dump_json(), ex=300)
 

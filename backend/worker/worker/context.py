@@ -18,6 +18,7 @@ from core.intelligence.registry import registry
 from core.intelligence.routing_config import resolve_routing
 from core.intelligence.sync import sync_models
 from core.memory.agent_memory import AgentMemory
+from core.memory.collections import ensure_collections
 from core.vendors.anthropic.provider import AnthropicProvider
 from core.vendors.aws.provider import AWSProvider
 from core.vendors.azure.provider import AzureProvider
@@ -73,6 +74,7 @@ class WorkerContext:
 
         # 4. Build AgentMemory — always HTTP client, never embedded mode
         qdrant = AsyncQdrantClient(url=settings.memory.qdrant_url)
+        await ensure_collections(qdrant)
         memory = AgentMemory(qdrant)
 
         # 5. Compile one graph per task type — expensive, done ONCE per process

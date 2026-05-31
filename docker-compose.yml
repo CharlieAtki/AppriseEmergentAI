@@ -38,10 +38,11 @@ services:
     volumes:
       - qdrant_data:/qdrant/storage
     healthcheck:
-      test: ["CMD-SHELL", "curl -f http://localhost:6333/ || exit 1"]
+      test: ["CMD-SHELL", "timeout 2 bash -c 'cat < /dev/null > /dev/tcp/127.0.0.1/6333' || exit 1"]
       interval: 10s
       timeout: 5s
-      retries: 10
+      retries: 12
+      start_period: 45s
 
   # ── Application ─────────────────────────────────────────────────────────── #
 
@@ -60,7 +61,7 @@ services:
       sh -c "cd /app/core && alembic upgrade head &&
              uvicorn api.main:app --host 0.0.0.0 --port 8000"
     healthcheck:
-      test: ["CMD-SHELL", "curl -f http://localhost:8000/health || exit 1"]
+      test: ["CMD-SHELL", "python3 -c 'import urllib.request; urllib.request.urlopen(\"http://localhost:8000/health\")' || exit 1"]
       interval: 10s
       timeout: 5s
       retries: 10
@@ -71,7 +72,7 @@ services:
       redis:
         condition: service_healthy
       qdrant:
-        condition: service_healthy
+        condition: service_started
 
   worker:
     build:
@@ -88,7 +89,7 @@ services:
       redis:
         condition: service_healthy
       qdrant:
-        condition: service_healthy
+        condition: service_started
 
   frontend:
     build:

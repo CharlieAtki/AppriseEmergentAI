@@ -42,4 +42,5 @@ def build_prompt(agent: AgentContext, task: TaskEvaluationContext) -> list[dict]
 
 
 def parse(raw: str) -> EvaluateResponse:
-    return EvaluateResponse.model_validate_json(raw)
+    from core.intelligence.prompts import strip_fences
+    return EvaluateResponse.model_validate_json(strip_fences(raw))

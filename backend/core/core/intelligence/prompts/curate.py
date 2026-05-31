@@ -34,4 +34,5 @@ def build_prompt(rules: list[dict[str, Any]]) -> list[dict]:
 
 
 def parse(raw: str) -> CurateResponse:
-    return CurateResponse.model_validate_json(raw)
+    from core.intelligence.prompts import strip_fences
+    return CurateResponse.model_validate_json(strip_fences(raw))

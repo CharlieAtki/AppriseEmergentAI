@@ -10,4 +10,6 @@ RUN uv pip install --system --no-cache ./core
 COPY api/ ./api/
 RUN uv pip install --system --no-cache ./api
 
+COPY scripts/ ./scripts/
+
 CMD ["uvicorn", "api.main:app", "--host", "0.0.0.0", "--port", "8000"]

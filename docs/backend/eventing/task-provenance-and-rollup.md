@@ -666,7 +666,7 @@ AgentCreditHandler:
   ← No credit yet. Subtasks haven't run.
 
 Subtasks S1, S2, S3 created (each with coordinator_agent_id=Agent B, parent_task_id=T.id).
-Each subtask goes through its own lifecycle: pending → enriching → open → bidding → executing → completed.
+Each subtask goes through its own lifecycle: open → reserved → executing → completed. Subtasks skip enrichment — the decompose LLM already sets required_skills, difficulty, task_type, and domain_tags.
 
 S1 completes (Agent C, quality=0.80):
   _credit_executor(): Agent C EMA(0.80)

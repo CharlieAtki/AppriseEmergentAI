@@ -5,7 +5,7 @@ import secrets
 import uuid
 from typing import TYPE_CHECKING
 
-from passlib.hash import bcrypt
+import bcrypt as _bcrypt
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -38,7 +38,7 @@ class ApiKeyService:
         """
         token = secrets.token_urlsafe(32)
         full_key = f"apk_live_{token}"
-        key_hash = bcrypt.hash(full_key)
+        key_hash = _bcrypt.hashpw(full_key.encode(), _bcrypt.gensalt()).decode()
         key_sha256 = hashlib.sha256(full_key.encode()).hexdigest()
         key_prefix = f"apk_live_{token[:8]}"
 

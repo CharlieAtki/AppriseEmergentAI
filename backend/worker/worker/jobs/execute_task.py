@@ -178,11 +178,14 @@ async def execute_task(
                 specs = [s.model_dump() for s in decompose_resp.subtasks]
 
                 async with span.session() as session:
-                    await decompose_and_publish(
-                        agent, task, specs, session, stream_logger,
+                    subtasks = await decompose_and_publish(
+                        agent, task, specs, session,
                         task_ctx=provenance,
                         task_logger=task_logger,
                     )
+                # Session committed — subtasks are now visible to all connections.
+                for subtask in subtasks:
+                    await stream_logger.task_created(subtask)
 
                 await _finalise_execution(span, execution, task, "completed", task_logger, execution_path="decompose")
                 return
@@ -197,7 +200,8 @@ async def execute_task(
             # No open DB session during graph execution — connections are a scarce resource.
             await span.emit("agent.executing", {})
             initial_state = build_initial_state(agent, task)
-            final_state: GraphState = await wctx.graphs[task.task_type or "general"].ainvoke(
+            graph_key = task.task_type if task.task_type in wctx.graphs else "general"
+            final_state: GraphState = await wctx.graphs[graph_key].ainvoke(
                 initial_state
             )
 

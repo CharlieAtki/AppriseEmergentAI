@@ -41,4 +41,5 @@ def build_prompt(agent: AgentContext, task: TaskEvaluationContext) -> list[dict]
 
 
 def parse(raw: str) -> DecomposeResponse:
-    return DecomposeResponse.model_validate_json(raw)
+    from core.intelligence.prompts import strip_fences
+    return DecomposeResponse.model_validate_json(strip_fences(raw))

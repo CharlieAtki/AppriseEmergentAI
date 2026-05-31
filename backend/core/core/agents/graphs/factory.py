@@ -27,7 +27,10 @@ def build_graph(
 
     async def _reason(state: GraphState) -> dict:
         response = await model_with_tools.ainvoke(state["messages"])
-        return {"messages": [response], "step_count": state["step_count"] + 1}
+        update: dict = {"messages": [response], "step_count": state["step_count"] + 1}
+        if not getattr(response, "tool_calls", None):
+            update["artifact"] = response.content
+        return update
 
     async def _call_tool(state: GraphState) -> dict:
         last: AIMessage = state["messages"][-1]

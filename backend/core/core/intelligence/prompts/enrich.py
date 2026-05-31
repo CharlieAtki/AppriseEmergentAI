@@ -28,4 +28,5 @@ def build_prompt(title: str, description: str) -> list[dict]:
 
 
 def parse(raw: str) -> EnrichResponse:
-    return EnrichResponse.model_validate_json(raw)
+    from core.intelligence.prompts import strip_fences
+    return EnrichResponse.model_validate_json(strip_fences(raw))

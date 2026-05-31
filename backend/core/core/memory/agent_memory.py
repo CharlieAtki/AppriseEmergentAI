@@ -149,16 +149,16 @@ class AgentMemory:
         vector = await aembed(task_description)
         filt = _base_filter(workspace_id, agent_id)
 
-        ep_hits, pr_hits, so_hits = await asyncio.gather(
-            self._client.search("mem_episodic", query_vector=vector, query_filter=filt, limit=k, with_payload=True),
-            self._client.search("mem_procedural", query_vector=vector, query_filter=filt, limit=k, with_payload=True),
-            self._client.search("mem_social", query_vector=vector, query_filter=filt, limit=k, with_payload=True),
+        ep_res, pr_res, so_res = await asyncio.gather(
+            self._client.query_points("mem_episodic", query=vector, query_filter=filt, limit=k, with_payload=True),
+            self._client.query_points("mem_procedural", query=vector, query_filter=filt, limit=k, with_payload=True),
+            self._client.query_points("mem_social", query=vector, query_filter=filt, limit=k, with_payload=True),
         )
 
         return MemoryContext(
-            episodes=[_to_item("episodic", h) for h in ep_hits],
-            procedures=[_to_item("procedural", h) for h in pr_hits],
-            social=[_to_item("social", h) for h in so_hits],
+            episodes=[_to_item("episodic", h) for h in ep_res.points],
+            procedures=[_to_item("procedural", h) for h in pr_res.points],
+            social=[_to_item("social", h) for h in so_res.points],
         )
 
     async def scroll_all_procedures(

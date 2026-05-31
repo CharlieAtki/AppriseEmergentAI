@@ -327,6 +327,58 @@ customer-visible impact, purely an internal naming issue.
 
 ---
 
+### 11. No Clerk webhook handler — human JWT auth broken in production
+
+**Gap:** `validate_clerk_token` looks up `clerk_org_id` / `clerk_user_id` in the `organisations`
+and `users` tables, but nothing ever creates those rows. There is no `POST /webhooks/clerk`
+endpoint to receive Clerk lifecycle events. In production, every Bearer JWT request returns 401
+because the DB is empty.
+
+**Workaround:** `backend/scripts/seed_dev.py` inserts fake rows directly. Acceptable locally;
+breaks in production.
+
+**What is needed:**
+- `api/routers/webhooks.py` — `POST /webhooks/clerk`, exempt from `AuthMiddleware`.
+- Svix signature verification using `CLERK__WEBHOOK_SECRET`.
+- Handlers for: `organization.created`, `user.created`, `organizationMembership.created`,
+  `organization.deleted`, `user.deleted`.
+- `svix` added to `api/pyproject.toml`.
+
+---
+
+### 12. API key scope system has no role abstraction
+
+**Gap:** `require_workspace()` in `deps.py` checks for granular scope strings like `"tasks:write"`.
+There is no role layer — no `admin` / `operator` / `readonly` role that expands to a set of
+scopes at key creation time. Dev keys use `scopes=None` (unrestricted) as a workaround.
+
+**Impact:** The key creation endpoint (`POST /workspaces/{id}/api-keys`) accepts arbitrary
+scope strings. There is no validation, no canonical list, and no documentation of what scopes
+exist. Callers must know the exact internal strings.
+
+**What is needed:** A role enum (`admin`, `operator`, `readonly`) that maps to a fixed scope
+set at key creation. The underlying string check in `deps.py` stays untouched — roles just
+pre-populate `scopes` with the right list.
+
+---
+
+### 13. Enrichment classification accuracy
+
+**Gap:** The rule-based classifier in `core/intelligence/enrichment.py` uses greedy first-match
+keyword rules. Rules match on short, common words (e.g. `"api"` in the coding rule) that appear
+frequently in non-coding tasks. A research task titled "Design a microservices architecture" with
+"API contracts" in the description will be classified as `coding` with confidence 0.9 — and because
+confidence exceeds the 0.85 threshold, the LLM escalation never fires.
+
+The result: tasks are silently mis-classified, no agents bid on them (skill mismatch), and they
+expire. The bug is invisible — no error is logged, the task reaches `"open"` status, and the worker
+simply finds no qualifying agents.
+
+**What is needed:** Solution not yet decided. The problem is well-understood; the right fix
+requires more thought.
+
+---
+
 ### 5. No WebSocket live dashboard
 
 **Gap:** `GET /workspaces/{id}/stream` (WebSocket) is specified in the Notion doc.
@@ -363,3 +415,6 @@ disconnect (leaked subscriptions compound with workspace count).
 | `idempotency_key` is a body field, not HTTP header | ❌ Open — misalignment with Notion spec and industry convention |
 | API key prefix format (`appr_` vs `apk_live_`) | ❌ Open — customer-facing, needs decision |
 | `artifact_uri` column name misleading | ❌ Open — low priority naming issue, no runtime bug |
+| No Clerk webhook handler | ❌ Open — human JWT auth returns 401 in production; seed workaround for dev |
+| API key scope system has no role abstraction | ❌ Open — no Admin/Operator/Readonly roles; callers must know internal scope strings |
+| Enrichment classification accuracy | ❌ Open — coarse keyword rules cause silent mis-classification; LLM fallback never fires for high-confidence wrong matches |
