@@ -255,6 +255,24 @@ prompt string, so emergence experiments can vary them without code changes.
 
 ---
 
+### 16. Reflection pipeline — heuristic quality, no failure reflection, episodic/reflect decoupling
+
+**Gap:** Three compounding problems in the post-execution learning layer that block reliable agent emergence. See full analysis: [`reflect-pipeline-gap.md`](./reflect-pipeline-gap.md).
+
+**Summary:**
+
+1. **Quality score is heuristic.** `score_outcome()` measures execution mechanics (artifact presence, step efficiency, tool use), not whether the output answers the task. Agents that produce confident, wrong answers score identically to agents that solve problems correctly. All downstream emergence signals — skill deltas, influence credit, bid scoring — are corrupted by this.
+
+2. **Episodic memory uses the heuristic score and cannot be corrected.** `EpisodicMemoryHandler` fires immediately from the event with the heuristic number. The reflect job runs later with better context but cannot overwrite the Qdrant episode (no point ID tracking). The two systems are temporally decoupled and write different quality values into the same memory tier.
+
+3. **No failure reflection.** Failed tasks produce no episodic record, no skill penalties, no procedural rule. Agents repeat failures without consequence.
+
+**Proposed solution:** Restructure `reflect` as a unified four-stage pipeline (judge → episodic write → skill deltas → procedural rule). Remove `EpisodicMemoryHandler` as a standalone handler. All post-execution memory and learning writes are owned by the reflect ARQ job. See the gap document for open design questions, constraints, and the full task list.
+
+**Status:** Design under discussion — solution not yet finalised.
+
+---
+
 ### 9. `SKILL_DECAY_RATE` is static — no dynamic rate adjustment
 
 **Gap:** `SKILL_DECAY_RATE` (now applied per task completion in Phase 6) is a single static
@@ -349,3 +367,4 @@ needed; current state (static dict) is not wrong, just inconsistent with the in-
 | Embedding model not pre-warmed at startup | ❌ Open — concurrent first-use races cause `NoSuchFile`; pre-warm in `WorkerContext.build()` |
 | Unbound tool calls crash the job | ❌ Open — `KeyError` in `_call_tool` kills the job; needs graceful tool-error response + startup map validation |
 | Runaway decomposition below difficulty threshold | ❌ Open — LLM ignores soft difficulty guideline; needs hard code-level guard + config threshold |
+| Reflection pipeline — heuristic quality, no failure reflection, episodic/reflect decoupling | 🔵 Design — solution under discussion; see [reflect-pipeline-gap.md](./reflect-pipeline-gap.md) |
