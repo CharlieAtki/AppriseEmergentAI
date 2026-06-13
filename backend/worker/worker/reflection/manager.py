@@ -1,0 +1,57 @@
+from __future__ import annotations
+
+import logging
+from dataclasses import dataclass
+
+from core.intelligence.reflection.pipeline import PipelineStage
+from core.intelligence.reflection.types import PipelineResult, ReflectContext
+from core.intelligence.llm_router import LLMRouter
+from core.memory.agent_memory import AgentMemory
+from worker.reflection.stages import _stage_reflect, _stage_rules, _stage_skills
+from worker.span import JobSpan
+
+logger = logging.getLogger(__name__)
+
+# Execution order matters: reflect must run before skills (skills reads skill_domains
+# set by reflect) and before rules (rules persists result.rule set by reflect).
+# The rules stage is gated — it only runs on non-trivial executions.
+REFLECT_PIPELINE: tuple[PipelineStage, ...] = (
+    PipelineStage("reflect", fn=_stage_reflect),
+    PipelineStage("skills",  fn=_stage_skills),
+    PipelineStage("rules",   fn=_stage_rules, gate=lambda ctx: ctx.full_reflect),
+)
+
+
+@dataclass(frozen=True)
+class ReflectionManager:
+    """Sequences the reflection pipeline stages. Owns LLMRouter and AgentMemory.
+
+    Constructed once at worker startup and held in WorkerContext. Reused across all jobs.
+    Per-stage exceptions are caught and logged — a failing stage does not abort the pipeline.
+    """
+
+    pipeline:   tuple[PipelineStage, ...]
+    llm_router: LLMRouter
+    memory:     AgentMemory
+
+    async def run(self, rctx: ReflectContext, span: JobSpan) -> PipelineResult:
+        """Execute the three pipeline stages in order, accumulating outputs into PipelineResult.
+
+        Each stage receives the same ``rctx`` (immutable) and the same ``result``
+        accumulator (mutable). A stage that fails is logged and skipped — the pipeline
+        continues with whatever partial result has been built so far.
+
+        Stage names are appended to ``result.stages_run`` on success and
+        ``result.stages_failed`` on exception, for observability.
+        """
+        result = PipelineResult()
+        for stage in self.pipeline:
+            if stage.gate is not None and not stage.gate(rctx):
+                continue
+            try:
+                result = await stage.fn(rctx, result, self.llm_router, self.memory, span)
+                result.stages_run.append(stage.name)
+            except Exception:
+                logger.exception("reflect stage=%s failed — continuing with partial result", stage.name)
+                result.stages_failed.append(stage.name)
+        return result

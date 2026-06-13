@@ -7,15 +7,15 @@ from langchain_core.messages import HumanMessage, SystemMessage
 
 from core.intelligence.call_types import CallType
 from core.intelligence.registry import ModelRegistry
+from core.utils.retry import is_retryable_http, retry_async
 from core.vendors.base import VendorProvider
 
 _FALLBACK_STUBS: dict[CallType, str] = {
-    CallType.EVALUATE: '{"decision":"self_execute","reasoning":"heuristic fallback"}',
-    CallType.REFLECT: '{"skill_deltas":{},"generalised_rule":null,"verdict":null}',
-    CallType.DECOMPOSE: '{"subtasks":[]}',
-    CallType.ENRICH: '{"required_skills":{},"difficulty":1.0,"task_type":"general","domain_tags":{}}',
+    CallType.EVALUATE:      '{"decision":"self_execute","reasoning":"heuristic fallback"}',
+    CallType.REFLECT:       '{"skill_domains":[],"new_skill_suggestions":[],"generalised_rule":null,"verdict":null,"superseded_ids":[]}',
+    CallType.DECOMPOSE:     '{"subtasks":[]}',
+    CallType.ENRICH:        '{"required_skills":{},"difficulty":1.0,"task_type":"general","domain_tags":{}}',
     CallType.CURATE_MEMORY: '{"flagged":[]}',
-    CallType.SCORE_DOCUMENT: '{"score":0.5,"reasoning":"heuristic fallback"}',
 }
 
 _JSON_INSTRUCTION = (
@@ -74,7 +74,10 @@ class LLMRouter:
         model = self._get_model(call_type, routing_override)
 
         async with self._semaphore:
-            response = await model.ainvoke(lc_messages)
+            response = await retry_async(
+                lambda: model.ainvoke(lc_messages),
+                is_retryable=is_retryable_http,
+            )
 
         return str(response.content)
 

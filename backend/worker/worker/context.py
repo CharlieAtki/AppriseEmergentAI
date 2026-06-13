@@ -19,6 +19,7 @@ from core.intelligence.routing_config import resolve_routing
 from core.intelligence.sync import sync_models
 from core.memory.agent_memory import AgentMemory
 from core.memory.collections import ensure_collections
+from core.memory.resilient_client import ResilientQdrantClient
 from core.vendors.anthropic.provider import AnthropicProvider
 from core.vendors.aws.provider import AWSProvider
 from core.vendors.azure.provider import AzureProvider
@@ -27,17 +28,19 @@ from core.vendors.ollama.provider import OllamaProvider
 if TYPE_CHECKING:
     from arq import ArqRedis
     from langgraph.graph.state import CompiledStateGraph
+    from worker.reflection.manager import ReflectionManager
 
 
 @dataclass(frozen=True)
 class WorkerContext:
-    graphs: dict[str, "CompiledStateGraph"]  # keyed by task_type
-    bus: RedisBus                             # Redis Streams — durable task events
-    redis: Redis                              # raw Redis — Pub/Sub (observability) + SETNX (reservations)
-    arq_queue: "ArqRedis"                     # ARQ job queue — enqueue_job()
-    memory: AgentMemory                       # Qdrant-backed three-tier memory
-    llm_router: LLMRouter                     # routes all LLM calls by CallType
-    event_bus: EventBus                       # in-process — same-process side effects
+    graphs:             dict[str, "CompiledStateGraph"]  # keyed by task_type
+    bus:                RedisBus                          # Redis Streams — durable task events
+    redis:              Redis                             # raw Redis — Pub/Sub + SETNX reservations
+    arq_queue:          "ArqRedis"                        # ARQ job queue — enqueue_job()
+    memory:             AgentMemory                       # Qdrant-backed three-tier memory
+    llm_router:         LLMRouter                         # routes all LLM calls by CallType
+    event_bus:          EventBus                          # in-process — same-process side effects
+    reflection_manager: "ReflectionManager"               # post-execution learning pipeline
 
     @classmethod
     async def build(cls, arq_queue: "ArqRedis") -> WorkerContext:
@@ -73,8 +76,9 @@ class WorkerContext:
         )
 
         # 4. Build AgentMemory — always HTTP client, never embedded mode
-        qdrant = AsyncQdrantClient(url=settings.memory.qdrant_url)
-        await ensure_collections(qdrant)
+        _raw_qdrant = AsyncQdrantClient(url=settings.memory.qdrant_url)
+        await ensure_collections(_raw_qdrant)
+        qdrant = ResilientQdrantClient(_raw_qdrant)
         memory = AgentMemory(qdrant)
 
         # 5. Compile one graph per task type — expensive, done ONCE per process
@@ -98,6 +102,13 @@ class WorkerContext:
         loop = asyncio.get_running_loop()
         event_bus = EventBus(loop=loop)
 
+        from worker.reflection.manager import REFLECT_PIPELINE, ReflectionManager
+        reflection_manager = ReflectionManager(
+            pipeline=REFLECT_PIPELINE,
+            llm_router=llm_router,
+            memory=memory,
+        )
+
         return cls(
             graphs=graphs,
             bus=bus,
@@ -106,6 +117,7 @@ class WorkerContext:
             memory=memory,
             llm_router=llm_router,
             event_bus=event_bus,
+            reflection_manager=reflection_manager,
         )
 
 

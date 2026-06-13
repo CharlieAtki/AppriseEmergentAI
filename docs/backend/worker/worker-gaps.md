@@ -267,9 +267,19 @@ prompt string, so emergence experiments can vary them without code changes.
 
 3. **No failure reflection.** Failed tasks produce no episodic record, no skill penalties, no procedural rule. Agents repeat failures without consequence.
 
-**Proposed solution:** Restructure `reflect` as a unified four-stage pipeline (judge → episodic write → skill deltas → procedural rule). Remove `EpisodicMemoryHandler` as a standalone handler. All post-execution memory and learning writes are owned by the reflect ARQ job. See the gap document for open design questions, constraints, and the full task list.
+**What was done:** Implemented as a unified three-stage pipeline (reflect → skills → rules) under `worker/reflection/`. `EpisodicMemoryHandler` removed, but episodic writes remain in `execute_task` Phase 7. `execution.quality_score` remains the heuristic signal from `score_outcome()` (no `CallType.JUDGE` overwrite). See [`reflect-pipeline-refactor.md`](./reflect-pipeline-refactor.md) for the full design.
 
-**Status:** Design under discussion — solution not yet finalised.
+- Pipeline refactor completed — `ReflectionManager` now sequences `_stage_reflect`, `_stage_skills`, and `_stage_rules`.
+- Heuristic score retained — reflection reads persisted `execution.quality_score`; there is no `_stage_episodic` or `CallType.JUDGE`.
+- Failure reflection enabled — `ReflectJobHandler` fires on `{"completed", "failed"}` and `execute_task` writes failure episodic entries in Phase 7.
+
+**Remaining known limitation — Qdrant rule duplicate on retry.**
+
+If the process dies after `_stage_rules` Phase 2 (Qdrant upsert) but before Phase 3 stamps `ProceduralKnowledgeLog.vector_store_ref`, an ARQ retry will upsert a second rule point for the same execution.
+
+Fix if needed: use a stable Qdrant point ID derived from `execution_id`, or persist the generated `point_id` before upserting so retries can be deduplicated.
+
+**Status:** ✅ Closed — pipeline implemented. Episodic retry duplicate is a known, accepted limitation.
 
 ---
 
@@ -367,4 +377,4 @@ needed; current state (static dict) is not wrong, just inconsistent with the in-
 | Embedding model not pre-warmed at startup | ❌ Open — concurrent first-use races cause `NoSuchFile`; pre-warm in `WorkerContext.build()` |
 | Unbound tool calls crash the job | ❌ Open — `KeyError` in `_call_tool` kills the job; needs graceful tool-error response + startup map validation |
 | Runaway decomposition below difficulty threshold | ❌ Open — LLM ignores soft difficulty guideline; needs hard code-level guard + config threshold |
-| Reflection pipeline — heuristic quality, no failure reflection, episodic/reflect decoupling | 🔵 Design — solution under discussion; see [reflect-pipeline-gap.md](./reflect-pipeline-gap.md) |
+| Reflection pipeline — heuristic quality, no failure reflection, episodic/reflect decoupling | ✅ Closed — reflect→skills→rules pipeline implemented; episodic entries now written in `execute_task` for completed + failed tasks |

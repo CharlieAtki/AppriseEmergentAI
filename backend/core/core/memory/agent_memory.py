@@ -12,9 +12,6 @@ from core.config import settings
 from core.memory.embeddings import aembed
 from core.memory.types import MemoryContext, MemoryItem, MemoryTier, SupersessionVerdict
 
-if TYPE_CHECKING:
-    from sqlalchemy.ext.asyncio import AsyncSession
-
 
 def _to_item(tier: MemoryTier, point: Any) -> MemoryItem:
     payload = point.payload or {}
@@ -73,10 +70,12 @@ class AgentMemory:
         *,
         verdict: SupersessionVerdict | None = None,
         superseded_ids: list[str] | None = None,
-        session: AsyncSession | None = None,
     ) -> str:
-        from core.models.observability import ProceduralKnowledgeLog
+        """Write a procedural rule to Qdrant only.
 
+        Postgres persistence (ProceduralKnowledgeLog) is the caller's responsibility
+        so the caller controls dual-write order and idempotency.
+        """
         point_id = str(uuid.uuid4())
         vector = await aembed(rule)
         payload = {
@@ -101,17 +100,6 @@ class AgentMemory:
                     payload={"archived": True, "superseded_by": point_id},
                     points=[sid],
                 )
-
-        if session is not None:
-            log = ProceduralKnowledgeLog(
-                workspace_id=uuid.UUID(workspace_id),
-                agent_id=uuid.UUID(agent_id),
-                domain=domain,
-                rule_text=rule,
-                vector_store_ref=point_id,
-            )
-            session.add(log)
-            await session.flush()
 
         return point_id
 

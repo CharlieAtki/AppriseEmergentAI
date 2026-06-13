@@ -43,7 +43,6 @@ async def startup(ctx: dict) -> None:
     from worker.handlers.agent_credit import AgentCreditHandler
     from worker.handlers.bidding import TaskBiddingHandler
     from worker.handlers.cfp import CfpHandler
-    from worker.handlers.episodic_memory import EpisodicMemoryHandler
     from worker.handlers.reflect_job import ReflectJobHandler
     from worker.handlers.rollup import RollupSubtaskHandler
     from worker.handlers.social_memory import SocialMemoryHandler
@@ -55,7 +54,6 @@ async def startup(ctx: dict) -> None:
         arq_queue=wctx.arq_queue,
         publish=wctx.event_bus.apublish,
     ))
-    wctx.event_bus.bind(TaskUpdatedEvent, EpisodicMemoryHandler(memory=wctx.memory))
     wctx.event_bus.bind(TaskUpdatedEvent, AgentCreditHandler())
     wctx.event_bus.bind(TaskUpdatedEvent, ReflectJobHandler(arq_queue=wctx.arq_queue))
     wctx.event_bus.bind(TaskUpdatedEvent, WebhookDeliveryHandler(arq_queue=wctx.arq_queue))

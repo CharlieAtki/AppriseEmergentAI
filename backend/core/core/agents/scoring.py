@@ -20,9 +20,9 @@ def _clamp01(x: float) -> float:
 def score_outcome(task: "Task", state: GraphState) -> float:
     """Return a deterministic quality score in [0.0, 1.0].
 
-    Deterministic baseline only — no LLM calls. When LLM-as-judge is ready, add it
-    in worker/jobs/reflect.py using CallType.SCORE_DOCUMENT and overwrite this score
-    on the TaskExecution row. This function stays pure and lives here regardless.
+    Deterministic baseline only — no LLM calls. This value is written to
+    ``TaskExecution.quality_score`` at execution time and is the authoritative
+    quality signal for the reflection pipeline. No LLM score overwrites it.
 
     Components:
         artifact presence  0.60  — did the graph produce output?
