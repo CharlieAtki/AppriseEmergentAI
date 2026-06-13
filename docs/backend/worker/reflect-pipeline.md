@@ -161,9 +161,9 @@ Gate: only runs when `rctx.full_reflect=True`. Returns immediately if `result.ru
 
 1. **Postgres first** — `ProceduralKnowledgeLog` is the durable audit trail. If Qdrant
    is unavailable, the rule is not lost.
-2. **Qdrant second** — `memory.store_procedure()` is called with `session=None` to
-   prevent it from writing its own `ProceduralKnowledgeLog` row (that would duplicate
-   the Postgres write above and violate write order).
+2. **Qdrant second** — `memory.store_procedure()` writes only to Qdrant; Postgres
+   persistence is owned by the caller to enforce dual-write order and idempotency.
+   (There is no implicit Postgres write inside AgentMemory.)
 
 `store_procedure` archives superseded rules in Qdrant by setting `archived=True` on each
 `superseded_ids` point. Archived entries are excluded from all future `_base_filter`
