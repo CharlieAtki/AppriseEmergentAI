@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 import uuid
+from collections.abc import Mapping
 from typing import TYPE_CHECKING, Any
 
 from core.config import settings
@@ -24,8 +25,8 @@ async def score_and_reserve(
     agents: list[Agent],
     task_id: uuid.UUID,
     workspace_id: uuid.UUID,
-    required_skills: dict[str, float] | None,
-    domain_tags: dict[str, Any] | None,
+    required_skills: Mapping[str, float] | None,
+    domain_tags: Mapping[str, Any] | None,
     redis: Redis,
     arq_queue: ArqRedis,
 ) -> None:
@@ -65,9 +66,15 @@ async def score_and_reserve(
         won = await attempt_reservation(redis, workspace_id_str, task_id_str, str(agent.id))
         if won:
             task = await session.get(Task, task_id)
-            if task and task.status == "open":
+            if task is None or task.status != "open":
+                observed = "missing" if task is None else task.status
+                logger.warning(
+                    "task %s won by agent %s but not biddable (status=%s, workspace=%s) — releasing reservation",
+                    task_id_str, agent.id, observed, workspace_id_str,
+                )
+                await redis.delete(f"reservation:{workspace_id_str}:{task_id_str}")
+            else:
                 TaskStateMachine.transition(task, "reserved")
-                session.add(task)
                 await arq_queue.enqueue_job(
                     "execute_task",
                     agent_id=str(agent.id),
