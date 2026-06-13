@@ -10,7 +10,7 @@ from worker.startup import shutdown, startup
 
 class WorkerSettings:
     functions   = [execute_task, reflect, deliver_webhook]
-    max_tries   = 3  # reflect uses reflect_completed_at idempotency guard — retries are safe
+    max_tries   = 3  # Global ARQ retry count; all jobs must be safe/idempotent across retries
     cron_jobs = [
         # decay cron removed — skill decay now applies in execute_task Phase 6 (per task completion)
         cron(sample_metrics, second={0, 15, 30, 45}),  # every 15 seconds
