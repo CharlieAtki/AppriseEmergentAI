@@ -9,7 +9,8 @@ from worker.jobs.deliver_webhook import deliver_webhook
 from worker.startup import shutdown, startup
 
 class WorkerSettings:
-    functions = [execute_task, reflect, deliver_webhook]
+    functions   = [execute_task, reflect, deliver_webhook]
+    max_tries   = 3  # reflect uses reflect_completed_at idempotency guard — retries are safe
     cron_jobs = [
         # decay cron removed — skill decay now applies in execute_task Phase 6 (per task completion)
         cron(sample_metrics, second={0, 15, 30, 45}),  # every 15 seconds

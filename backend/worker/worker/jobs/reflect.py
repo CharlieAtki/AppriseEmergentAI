@@ -2,14 +2,11 @@ from __future__ import annotations
 
 import logging
 import uuid
+from datetime import datetime, timezone
 
-from core.coordination.skills import apply_skill_delta
-from core.intelligence.call_types import CallType
-from core.intelligence.prompts import reflect as reflect_prompt
-from core.intelligence.prompts.reflect import ExistingRule, ResultContext, TaskContext
-from core.models.observability import ProceduralKnowledgeLog, SkillSnapshot
-from core.models.tasks import Task, TaskExecution
+from core.intelligence.reflection.types import ReflectContext
 from core.models.agents import Agent
+from core.models.tasks import Task, TaskExecution
 from worker.context import get_worker_context
 from worker.span import JobSpan
 
@@ -22,109 +19,100 @@ async def reflect(
     task_id: str,
     workspace_id: str,
     execution_id: str,
-    quality_score: float,
+    status: str,
 ) -> None:
-    """Post-execution reflection — enqueued by ReflectJobHandler after a self-execute path.
+    """ARQ job: post-execution reflection pipeline.
 
-    Extracts skill deltas and a generalised procedural rule from the completed execution.
-    Full reflection (rule extraction + supersession check) only runs when the task was
-    non-trivial: difficulty >= 3 or more than 3 graph steps.
+    Thin lifecycle wrapper with three responsibilities only — load, run, stamp:
+
+    1. Load: fetch Task, Agent, and TaskExecution from Postgres in a single session
+       that closes before any stage runs. All state is captured in a frozen
+       ``ReflectContext`` so stages never hold a live ORM reference.
+
+    2. Idempotency guard: if ``execution.reflect_completed_at`` is already set, the
+       pipeline has already run for this execution — return immediately. This makes
+       ARQ retries safe regardless of which stage failed or how far the pipeline got.
+
+    3. Run: delegate to ``WorkerContext.reflection_manager`` which sequences the
+       three stages (reflect → skills → rules). Per-stage failures are isolated —
+       a failing stage is logged and skipped, not a job failure.
+
+    4. Stamp: write ``reflect_completed_at`` after all stages complete. If the process
+       dies between run() and stamp, ARQ will retry and re-run all stages.
+
+    Enqueued by ``ReflectJobHandler`` (self-execute path) and ``RollupSubtaskHandler``
+    (decompose path) after a task reaches "completed" or "failed".
     """
     async with JobSpan(
         uuid.UUID(agent_id), uuid.UUID(task_id), uuid.UUID(workspace_id)
     ) as span:
+        # Load all state in one session. Session closes before any stage runs.
         async with span.session() as session:
-            task = await session.get(Task, uuid.UUID(task_id))
-            agent = await session.get(Agent, uuid.UUID(agent_id))
+            task      = await session.get(Task, uuid.UUID(task_id))
+            agent     = await session.get(Agent, uuid.UUID(agent_id))
             execution = await session.get(TaskExecution, uuid.UUID(execution_id))
 
         if not task or not agent or not execution:
             logger.warning(
-                "reflect: missing records — task=%s agent=%s execution=%s",
+                "reflect: missing records — task=%s agent=%s execution=%s — skipping",
                 task_id, agent_id, execution_id,
             )
             return
 
-        wctx = get_worker_context()
-        step_count = len(execution.tool_trace) if execution.tool_trace else 0
+        if status not in ("completed", "failed"):
+            logger.warning(
+                "reflect: invalid status=%r for execution=%s — skipping", status, execution_id
+            )
+            return
+
+        # Idempotency guard — safe on ARQ retry.
+        if execution.reflect_completed_at is not None:
+            logger.info(
+                "reflect: already completed for execution=%s — skipping", execution_id
+            )
+            return
+
+        step_count   = len(execution.tool_trace) if execution.tool_trace else 0
         full_reflect = (task.difficulty or 1.0) >= 3.0 or step_count > 3
 
-        await span.emit("agent.reflecting", {"full_reflect": full_reflect})
-
-        existing_rules: list[ExistingRule] = []
-        if full_reflect and task.task_type:
-            items = await wctx.memory.retrieve_procedures_for_domain(
-                agent_id, workspace_id, task.task_type
-            )
-            existing_rules = [
-                ExistingRule(
-                    id=item.id,
-                    domain=(item.payload or {}).get("domain", ""),
-                    text=item.text,
-                )
-                for item in items
-            ]
-
-        task_ctx = TaskContext(
-            title=task.title,
-            description=task.description,
+        rctx = ReflectContext(
+            task_id=task.id,
+            agent_id=agent.id,
+            execution_id=execution.id,
+            workspace_id=task.workspace_id,
+            organisation_id=agent.organisation_id,
+            task_title=task.title,
+            task_description=task.description,
             task_type=task.task_type,
             required_skills=task.required_skills or {},
             difficulty=task.difficulty,
-        )
-        result_ctx = ResultContext(
-            summary=execution.artifact or "",
-            tool_trace=execution.tool_trace or [],
+            domain_tags=task.domain_tags,
+            status=status,
+            artifact=execution.artifact,
+            error=execution.error,
+            tool_trace=tuple(execution.tool_trace or []),
+            heuristic_score=execution.quality_score or 0.0,
+            full_reflect=full_reflect,
+            step_count=step_count,
+            agent_skills=agent.skills or {},
         )
 
-        raw = await wctx.llm_router.complete(
-            reflect_prompt.build_prompt(
-                task_ctx,
-                result_ctx,
-                quality_score,
-                existing_rules=existing_rules if full_reflect else None,
-            ),
-            CallType.REFLECT,
-            json_mode=True,
-        )
-        response = reflect_prompt.parse(raw)
+        wctx   = get_worker_context()
+        result = await wctx.reflection_manager.run(rctx, span)
 
+        # Stamp completion — prevents duplicate runs on ARQ retry.
         async with span.session() as session:
-            if response.skill_deltas:
-                merged = {
-                    k: apply_skill_delta((agent.skills or {}).get(k, 0.0), delta)
-                    for k, delta in response.skill_deltas.items()
-                }
-                agent.skills = {**(agent.skills or {}), **merged}
-                session.add(agent)
-                session.add(SkillSnapshot(
-                    agent_id=agent.id,
-                    organisation_id=agent.organisation_id,
-                    workspace_id=agent.workspace_id,
-                    skills=agent.skills,
-                ))
+            exc = await session.get(TaskExecution, execution.id)
+            if exc is not None:
+                exc.reflect_completed_at = datetime.now(tz=timezone.utc)
+                session.add(exc)
 
-            if full_reflect and response.generalised_rule:
-                session.add(ProceduralKnowledgeLog(
-                    workspace_id=task.workspace_id,
-                    agent_id=agent.id,
-                    domain=task.task_type or "general",
-                    rule_text=response.generalised_rule,
-                ))
-
-        if full_reflect and response.generalised_rule:
-            await wctx.memory.store_procedure(
-                agent_id,
-                workspace_id,
-                rule=response.generalised_rule,
-                domain=task.task_type or "general",
-                verdict=response.verdict,
-                superseded_ids=response.superseded_ids,
-            )
-
-        await span.emit("job.completed", {})
+        await span.emit("job.completed", {
+            "quality_score":  rctx.heuristic_score,
+            "stages_run":     result.stages_run,
+            "stages_failed":  result.stages_failed,
+        })
         logger.info(
-            "reflect: agent=%s task=%s full_reflect=%s skill_deltas=%s",
-            agent_id, task_id, full_reflect,
-            list(response.skill_deltas.keys()) if response.skill_deltas else [],
+            "reflect: agent=%s task=%s stages_run=%s stages_failed=%s quality_score=%.3f",
+            agent_id, task_id, result.stages_run, result.stages_failed, rctx.heuristic_score,
         )

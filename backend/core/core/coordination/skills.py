@@ -1,12 +1,29 @@
 from __future__ import annotations
 
 
+def compute_delta_magnitude(
+    quality_score: float,
+    current_skill: float,
+    learning_rate: float = 0.08,
+) -> float:
+    """Compute how much a skill should change based on execution quality.
+
+    Positive when quality_score > current_skill (agent outperformed its current level);
+    negative when below. Pass the result to apply_skill_delta() to apply logistic
+    growth bounds.
+
+    Never ask the LLM for float deltas — this is the only source of delta magnitude
+    in the reflection pipeline.
+    """
+    return learning_rate * (quality_score - current_skill)
+
+
 def apply_skill_delta(current: float, delta: float) -> float:
     """Apply a skill delta using logistic growth (diminishing returns).
 
     Implements the Notion spec: "A skill at 0.3 grows faster than a skill at 0.8."
-    The same raw delta from the LLM produces a larger absolute change when the current
-    skill is low, and a smaller change when it is already high.
+    The same raw delta (from ``compute_delta_magnitude``) produces a larger absolute
+    change when the current skill is low, and a smaller change when it is already high.
 
     Two behaviours split by delta sign:
 

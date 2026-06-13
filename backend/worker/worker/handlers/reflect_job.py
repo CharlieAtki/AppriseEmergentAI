@@ -15,30 +15,28 @@ logger = logging.getLogger(__name__)
 
 @dataclass
 class ReflectJobHandler(EventHandler[TaskUpdatedEvent]):
-    """Enqueues a reflect ARQ job after a self-execute task completes.
+    """Enqueues a reflect ARQ job after a self-execute task completes or fails.
 
-    The reflect job runs an LLM call to extract generalised procedural knowledge
-    from the execution and apply skill deltas to the agent. It is deliberately
-    separate from execute_task — LLM reflection is not on the critical path of
-    task completion and should not add latency to the executing job.
+    Fires on both "completed" and "failed" — failure is the most informative learning
+    signal and must produce episodic records, skill penalties, and procedural rules.
 
-    Only fires for the self-execute path. Decompose and CFP executions have no
-    execution_path == "self_execute" on the snapshot, so no reflect job is enqueued.
+    Passes only IDs and status to the job. The job loads quality_score directly from
+    the TaskExecution row — passing it from the handler would be a SoC violation.
 
-    step_count is no longer passed as a parameter. reflect.py derives it from
-    TaskExecution.tool_trace by counting recorded tool invocations.
+    Only fires for the self-execute path. Decompose and CFP executions have
+    execution_path != "self_execute" on the snapshot, so no reflect job is enqueued.
     """
 
     arq_queue: ArqRedis
 
     async def handle(self, event: TaskUpdatedEvent) -> None:
-        if not event.changed("status") or event.state.status != "completed":
+        if not event.changed("status"):
+            return
+        if event.state.status not in {"completed", "failed"}:
             return
         if event.state.execution_path != "self_execute":
             return
-        if event.state.executing_agent_id is None or event.state.quality_score is None:
-            return
-        if event.state.execution_id is None:
+        if event.state.executing_agent_id is None or event.state.execution_id is None:
             return
 
         await self.arq_queue.enqueue_job(
@@ -47,9 +45,9 @@ class ReflectJobHandler(EventHandler[TaskUpdatedEvent]):
             task_id=str(event.state.id),
             workspace_id=str(event.state.workspace_id),
             execution_id=str(event.state.execution_id),
-            quality_score=event.state.quality_score,
+            status=event.state.status,
         )
         logger.debug(
-            "ReflectJobHandler: enqueued reflect for agent=%s task=%s",
-            event.state.executing_agent_id, event.state.id,
+            "ReflectJobHandler: enqueued reflect for agent=%s task=%s status=%s",
+            event.state.executing_agent_id, event.state.id, event.state.status,
         )

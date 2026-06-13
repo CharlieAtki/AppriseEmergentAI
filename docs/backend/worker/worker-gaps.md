@@ -267,9 +267,19 @@ prompt string, so emergence experiments can vary them without code changes.
 
 3. **No failure reflection.** Failed tasks produce no episodic record, no skill penalties, no procedural rule. Agents repeat failures without consequence.
 
-**Proposed solution:** Restructure `reflect` as a unified four-stage pipeline (judge → episodic write → skill deltas → procedural rule). Remove `EpisodicMemoryHandler` as a standalone handler. All post-execution memory and learning writes are owned by the reflect ARQ job. See the gap document for open design questions, constraints, and the full task list.
+**What was done:** Implemented as a unified four-stage pipeline (judge → episodic → skills → rules) under `worker/reflection/`. `EpisodicMemoryHandler` removed. All post-execution writes are owned by `ReflectionManager`. See [`reflect-pipeline-refactor.md`](./reflect-pipeline-refactor.md) for the full design.
 
-**Status:** Design under discussion — solution not yet finalised.
+- Gap 1 closed — `CallType.JUDGE` (Haiku) overwrites `execution.quality_score` with a semantic assessment of whether the output answers the task.
+- Gap 2 closed — episodic write now happens inside `_stage_episodic` after the judge has run, using the semantic score. `EpisodicMemoryHandler` deleted.
+- Gap 3 closed — `ReflectJobHandler` fires on `{"completed", "failed"}`; `_stage_episodic` and `_stage_rules` have explicit failure branches.
+
+**Remaining known limitation — episodic duplicate on retry.**
+
+`reflect_completed_at` is stamped after all stages complete. If the process dies between `ReflectionManager.run()` returning and the stamp commit, ARQ retries and all stages re-run. Qdrant has no deduplication on `execution_id`, so `_stage_episodic` writes a second near-identical entry. The values are identical (same execution record, same judge result). No data is corrupted — only duplicated.
+
+Fix if needed: add an `episodic_written_at` column to `TaskExecution`, stamp it at the end of `_stage_episodic`, and check it at stage entry before writing. This gives per-stage idempotency rather than whole-pipeline idempotency.
+
+**Status:** ✅ Closed — pipeline implemented. Episodic retry duplicate is a known, accepted limitation.
 
 ---
 
@@ -367,4 +377,4 @@ needed; current state (static dict) is not wrong, just inconsistent with the in-
 | Embedding model not pre-warmed at startup | ❌ Open — concurrent first-use races cause `NoSuchFile`; pre-warm in `WorkerContext.build()` |
 | Unbound tool calls crash the job | ❌ Open — `KeyError` in `_call_tool` kills the job; needs graceful tool-error response + startup map validation |
 | Runaway decomposition below difficulty threshold | ❌ Open — LLM ignores soft difficulty guideline; needs hard code-level guard + config threshold |
-| Reflection pipeline — heuristic quality, no failure reflection, episodic/reflect decoupling | 🔵 Design — solution under discussion; see [reflect-pipeline-gap.md](./reflect-pipeline-gap.md) |
+| Reflection pipeline — heuristic quality, no failure reflection, episodic/reflect decoupling | ✅ Closed — four-stage pipeline implemented; episodic retry duplicate is a known accepted limitation |

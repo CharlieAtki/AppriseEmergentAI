@@ -36,6 +36,7 @@ class SkillSnapshot(Base):
         nullable=False,
     )
     skills: Mapped[dict] = mapped_column(JSONB, nullable=False)
+    execution_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
     recorded_at: Mapped[datetime] = mapped_column(
         sa.DateTime(timezone=True),
         server_default=sa.func.now(),
@@ -44,6 +45,12 @@ class SkillSnapshot(Base):
 
     __table_args__ = (
         sa.Index("ix_skill_snapshots_agent_id_recorded_at", "agent_id", "recorded_at"),
+        sa.Index(
+            "uq_skill_snapshots_execution_id",
+            "execution_id",
+            unique=True,
+            postgresql_where=sa.text("execution_id IS NOT NULL"),
+        ),
     )
 
     agent: Mapped[Agent] = relationship()
@@ -182,10 +189,20 @@ class ProceduralKnowledgeLog(Base):
     domain: Mapped[str] = mapped_column(sa.Text, nullable=False)
     rule_text: Mapped[str] = mapped_column(sa.Text, nullable=False)
     vector_store_ref: Mapped[str | None] = mapped_column(sa.Text, nullable=True)
+    execution_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         sa.DateTime(timezone=True),
         server_default=sa.func.now(),
         nullable=False,
+    )
+
+    __table_args__ = (
+        sa.Index(
+            "uq_procedural_knowledge_logs_execution_id",
+            "execution_id",
+            unique=True,
+            postgresql_where=sa.text("execution_id IS NOT NULL"),
+        ),
     )
 
     workspace: Mapped[Workspace] = relationship()
