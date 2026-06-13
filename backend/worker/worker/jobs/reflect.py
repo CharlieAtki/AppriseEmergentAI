@@ -100,13 +100,6 @@ async def reflect(
         wctx   = get_worker_context()
         result = await wctx.reflection_manager.run(rctx, span)
 
-        # Stamp completion — prevents duplicate runs on ARQ retry.
-        async with span.session() as session:
-            exc = await session.get(TaskExecution, execution.id)
-            if exc is not None:
-                exc.reflect_completed_at = datetime.now(tz=timezone.utc)
-                session.add(exc)
-
         await span.emit("job.completed", {
             "quality_score":  rctx.heuristic_score,
             "stages_run":     result.stages_run,
@@ -116,3 +109,19 @@ async def reflect(
             "reflect: agent=%s task=%s stages_run=%s stages_failed=%s quality_score=%.3f",
             agent_id, task_id, result.stages_run, result.stages_failed, rctx.heuristic_score,
         )
+
+        if result.stages_failed:
+            # Raise so ARQ retries. Per-stage idempotency guards (SkillSnapshot check
+            # in _stage_skills, ProceduralKnowledgeLog/vector_store_ref in _stage_rules)
+            # prevent double-writes — only the failed stages will re-run.
+            raise RuntimeError(
+                f"reflect pipeline partial failure — stages_failed={result.stages_failed}"
+            )
+
+        # Stamp only after all stages pass. Prevents the idempotency guard at the top
+        # from short-circuiting ARQ retries when a previous attempt had partial failures.
+        async with span.session() as session:
+            exc = await session.get(TaskExecution, execution.id)
+            if exc is not None:
+                exc.reflect_completed_at = datetime.now(tz=timezone.utc)
+                session.add(exc)
