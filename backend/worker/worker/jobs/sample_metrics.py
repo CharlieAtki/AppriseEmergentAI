@@ -11,10 +11,8 @@ from core.models.observability import EmergenceEvent, WorkspaceMetricsSnapshot
 from core.models.agents import Agent
 from core.models.tenant import Workspace
 from core.config import settings
-from worker.context import get_worker_context
 
 logger = logging.getLogger(__name__)
-
 
 
 async def sample_metrics(ctx: dict[str, Any]) -> None:
@@ -22,13 +20,16 @@ async def sample_metrics(ctx: dict[str, Any]) -> None:
 
     For each active workspace: computes Gini coefficient over agent influence scores,
     specialisation index (mean pairwise skill vector distance), and detects hub agents.
-    Writes WorkspaceMetricsSnapshot and EmergenceEvent rows. Publishes a metrics_update
-    event to the bus so the dashboard reflects current state.
+    Writes WorkspaceMetricsSnapshot and EmergenceEvent rows to Postgres — those rows
+    are the source of truth for any dashboard or reporting consumer.
 
-    No LLM, no JobSpan, pure arithmetic.
+    No LLM, no JobSpan, no bus dependency — pure arithmetic and DB writes.
+
+    When a real-time dashboard consumer exists, add a WorkspaceMetricsUpdatedStreamEvent
+    to core/eventing/events/stream_events.py and a WorkspaceStreamLogger that receives
+    StreamPublishFn — following the same pattern as TaskStreamLogger. Do not call
+    wctx.bus.publish() directly from this function.
     """
-    wctx = get_worker_context()
-
     async with get_session() as session:
         workspaces = (await session.execute(
             select(Workspace).where(Workspace.status == "active")
@@ -80,7 +81,6 @@ async def sample_metrics(ctx: dict[str, Any]) -> None:
         # Single commit for all workspaces on context manager exit
 
     if snapshots_written:
-        await wctx.bus.publish("stream:workspace", {"event_type": "workspace.metrics_update"})
         logger.debug("sample_metrics: %d workspace snapshots written", snapshots_written)
 
 

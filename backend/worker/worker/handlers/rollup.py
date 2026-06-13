@@ -118,6 +118,7 @@ class RollupSubtaskHandler(EventHandler[TaskUpdatedEvent]):
         before = TaskSnapshot.from_domain(parent)
         any_failed = any(s.status == "failed" for s in siblings)
         TaskStateMachine.transition(parent, "failed" if any_failed else "completed")
+        session.add(parent)
 
         execution_id: uuid.UUID | None = (await session.execute(
             select(TaskExecution.id).where(

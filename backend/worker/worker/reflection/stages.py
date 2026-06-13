@@ -11,6 +11,7 @@ from core.intelligence.prompts.reflection import reflect as reflect_prompt
 from core.intelligence.prompts.reflection.reflect import ExistingRule, ResultContext, TaskContext
 from core.intelligence.reflection.types import PipelineResult, ReflectContext
 from core.memory.agent_memory import AgentMemory
+from core.memory.types import ProceduralRule
 from core.models.agents import Agent
 from core.models.observability import ProceduralKnowledgeLog, SkillSnapshot
 from core.intelligence.llm_router import LLMRouter
@@ -77,10 +78,11 @@ async def _stage_reflect(
             ):
                 if item.id not in seen_ids:
                     seen_ids.add(item.id)
+                    rule = ProceduralRule.from_item(item)
                     existing.append(ExistingRule(
-                        id=item.id,
-                        domain=(item.payload or {}).get("domain", ""),
-                        text=item.text,
+                        id=rule.id,
+                        domain=rule.domain,
+                        text=rule.text,
                     ))
 
     raw = await llm.complete(

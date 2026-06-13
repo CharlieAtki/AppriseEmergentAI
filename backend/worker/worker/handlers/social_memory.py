@@ -10,7 +10,6 @@ from core.database import get_session
 from core.eventing.bus.handlers import EventHandler
 from core.eventing.events.stream_events import TaskCompletedStreamEvent
 from core.memory.agent_memory import AgentMemory
-from core.models.agents import Agent
 
 logger = logging.getLogger(__name__)
 
@@ -49,13 +48,13 @@ class SocialMemoryHandler(EventHandler[TaskCompletedStreamEvent]):
             )).scalars().all()
 
         await asyncio.gather(*(
-            self._write_social(peer, completing_agent_id, workspace_id, event.quality_score, event.task_type)
+            self._write_social(str(peer.id), completing_agent_id, workspace_id, event.quality_score, event.task_type)
             for peer in peers
         ))
 
     async def _write_social(
         self,
-        peer: Agent,
+        peer_id: str,
         completing_agent_id: str,
         workspace_id: str,
         quality: float,
@@ -63,7 +62,7 @@ class SocialMemoryHandler(EventHandler[TaskCompletedStreamEvent]):
     ) -> None:
         try:
             await self.memory.store_social(
-                str(peer.id),
+                peer_id,
                 workspace_id,
                 {
                     "text": (
@@ -76,4 +75,4 @@ class SocialMemoryHandler(EventHandler[TaskCompletedStreamEvent]):
                 },
             )
         except Exception:
-            logger.exception("social memory write failed for peer %s", peer.id)
+            logger.exception("social memory write failed for peer %s", peer_id)

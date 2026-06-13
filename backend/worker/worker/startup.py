@@ -37,7 +37,7 @@ async def startup(ctx: dict[str, Any]) -> None:
     logger.info("worker startup: building context...")
     wctx = await WorkerContext.build(arq_queue)
     init_worker_context(wctx)
-    logger.info("worker startup: context ready, graphs compiled for 4 task types")
+    logger.info("worker startup: context ready, graphs compiled for %d task types", len(wctx.graphs))
 
     from core.eventing.events.stream_events import CfpIssuedStreamEvent, TaskCompletedStreamEvent, TaskCreatedStreamEvent
     from core.eventing.events.task_events import TaskUpdatedEvent

@@ -8,6 +8,7 @@ from sqlalchemy import select
 from core.database import get_session
 from core.intelligence.call_types import CallType
 from core.intelligence.prompts import curate as curate_prompt
+from core.memory.types import ProceduralRule
 from core.models.agents import Agent
 from worker.context import get_worker_context
 
@@ -42,18 +43,10 @@ async def curate_memory(ctx: dict[str, Any]) -> None:
         if not all_rules:
             continue
 
-        rule_dicts = [
-            {
-                "id":               item.id,
-                "domain":           (item.payload or {}).get("domain", ""),
-                "text":             item.text,
-                "last_accessed_at": (item.payload or {}).get("last_accessed_at", "unknown"),
-            }
-            for item in all_rules
-        ]
+        rules = [ProceduralRule.from_item(item) for item in all_rules]
 
         raw = await wctx.llm_router.complete(
-            curate_prompt.build_prompt(rule_dicts),
+            curate_prompt.build_prompt(rules),
             CallType.CURATE_MEMORY,
             json_mode=True,
         )

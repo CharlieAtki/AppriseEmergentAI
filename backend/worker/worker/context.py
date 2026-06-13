@@ -82,10 +82,11 @@ class WorkerContext:
         qdrant = ResilientQdrantClient(_raw_qdrant)
         memory = AgentMemory(qdrant)
 
-        # 5. Compile one graph per task type — expensive, done ONCE per process
+        # 5. Compile one graph per task type — expensive, done ONCE per process.
+        # Task types come from settings.worker.task_types — extend there, not here.
         model = llm_router.get_chat_model(CallType.EXECUTE)
         graphs: dict[str, CompiledStateGraph] = {}
-        for task_type in ["general", "code", "research", "coordination"]:
+        for task_type in settings.worker.task_types:
             tools = tool_registry.build_for_task_type(task_type, memory=memory)
             graphs[task_type] = build_graph(
                 model_with_tools=model.bind_tools(tools),

@@ -75,6 +75,7 @@ async def score_and_reserve(
                 await redis.delete(f"reservation:{workspace_id_str}:{task_id_str}")
             else:
                 TaskStateMachine.transition(task, "reserved")
+                session.add(task)
                 await arq_queue.enqueue_job(
                     "execute_task",
                     agent_id=str(agent.id),
