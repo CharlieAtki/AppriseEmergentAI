@@ -40,19 +40,18 @@ async def execute_task(
     task_id: str,
     workspace_id: str,
 ) -> None:
-    """Main execution job.
-
-    Phase 1 (read)            — load Agent + Task; session closes before any mutation.
-    Phase 2 (write exec row)  — create TaskExecution("executing"), task → "executing".
-    Phase 3 (LLM evaluate)    — decide: decompose / cfp / self-execute.
-    Phase 4 (act)             — branch on decision.
-    Phase 5 (self-execute)    — LangGraph graph; no open DB session.
-    Phase 6 (write results)   — single atomic commit for execution, agent, snapshots, task.
-    Phase 7 (events)          — episodic memory write, bus events, reflect job enqueue.
-
-    On any exception after Phase 2 commits: the except block writes task → "failed" and
-    execution → "failed" so the row is not left dangling. Re-raises for ARQ to record.
-    On retry: the terminal-state guard in Phase 1 returns early — retries are idempotent.
+    """
+    Orchestrates the end-to-end execution of a task by an agent, including evaluation, delegation, self-execution, result persistence, and downstream event publishing.
+    
+    Performs the following high-level steps:
+    - Loads Agent and Task state, enforcing a terminal-state idempotency guard.
+    - Creates or reuses a TaskExecution row and marks the task as executing.
+    - Asks the LLM to evaluate whether to decompose, issue a call-for-proposals (CFP), or self-execute.
+    - Acts on the decision: create subtasks for decomposition, release the task back to the pool for CFP, or run a LangGraph-based self-execution.
+    - If self-executing, runs the graph, scores the outcome, and atomically writes execution, agent, snapshot, and task updates.
+    - Publishes downstream events (stream events and job lifecycle events) and attempts a best-effort episodic memory write for completed executions.
+    
+    On any exception after the execution row is committed, writes failure state for the execution and transitions the task to "failed" (when appropriate) to avoid leaving dangling rows, logs failures, and re-raises the exception for the job system to record.
     """
     async with JobSpan(
         uuid.UUID(agent_id), uuid.UUID(task_id), uuid.UUID(workspace_id)
@@ -295,72 +294,12 @@ async def execute_task(
                         execution_id=execution.id if execution is not None else None,
                         execution_path="self_execute",
                     )
-                if execution is not None:
-                    try:
-                        await get_worker_context().memory.store_episode(
-                            str(agent.id),
-                            str(task.workspace_id),
-                            _build_episodic_entry(
-                                task, execution, "failed",
-                                execution.quality_score or 0.0,
-                            ),
-                        )
-                    except Exception:
-                        logger.exception(
-                            "execute_task: could not write failure episodic for task=%s", task_id
-                        )
             except Exception:
                 logger.exception(
                     "execute_task: could not write failure state for task=%s", task_id
                 )
             raise
 
-
-def _build_episodic_entry(
-    task: Task,
-    execution: TaskExecution,
-    status: str,
-    quality: float,
-) -> dict:
-    """Build the episodic memory payload for a self-execute task.
-
-    Pure function — no I/O. Called from Phase 7 (completed path) and the exception
-    handler (failed path). Task description truncated to 500 chars, artifact to 300 chars.
-
-    ``quality=0.0`` is valid for failures where ``score_outcome()`` never ran (e.g.
-    exception raised before Phase 5) — the entry is still useful for failure-driven
-    learning even without a meaningful quality signal.
-    """
-    domains = ", ".join(task.domain_tags.keys()) if task.domain_tags else "none"
-    desc = (task.description or "")[:500]
-
-    if status == "completed":
-        artifact_summary = (execution.artifact or "")[:300]
-        text = (
-            f"Completed {task.task_type or 'general'} task: {task.title}."
-            + (f" {desc}" if desc else "")
-            + (f" Output: {artifact_summary}" if artifact_summary else "")
-            + f" Domains: {domains}. Quality: {quality:.2f}."
-        )
-    else:
-        error_type = (execution.error or {}).get("type", "unknown")
-        step_count = len(execution.tool_trace) if execution.tool_trace else 0
-        text = (
-            f"Failed {task.task_type or 'general'} task: {task.title}."
-            + (f" {desc}" if desc else "")
-            + f" Domains: {domains}. Failed ({error_type}). Steps taken: {step_count}."
-        )
-
-    return {
-        "text":          text,
-        "task_id":       str(task.id),
-        "execution_id":  str(execution.id),
-        "task_type":     task.task_type,
-        "domain_tags":   task.domain_tags or {},
-        "difficulty":    task.difficulty,
-        "quality_score": quality,
-        "status":        status,
-    }
 
 
 async def _release_to_pool(

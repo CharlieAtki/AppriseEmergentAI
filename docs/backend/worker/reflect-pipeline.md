@@ -1,8 +1,8 @@
 # Reflection Pipeline
 
 Post-execution learning for self-execute tasks. After an agent completes or fails a task,
-the reflection pipeline updates its skill profile and extracts procedural knowledge for
-future retrieval.
+the reflection pipeline updates its skill profile, extracts procedural knowledge, and
+writes the factual episodic record — all in one place.
 
 ---
 
@@ -10,7 +10,8 @@ future retrieval.
 
 **One LLM call.** The pipeline makes a single `CallType.REFLECT` call. Everything else
 is algorithmic — skill delta magnitudes are computed from the quality score, episodic
-memory is assembled from data already in hand, and rule persistence is a straight DB write.
+memory is assembled from data already in `ReflectContext`, and rule persistence is a
+straight DB write.
 
 **The quality score is never overwritten.** `score_outcome()` runs at execution time and
 produces a deterministic value in `[0.0, 1.0]`. That value is the authoritative signal
@@ -20,6 +21,11 @@ throughout the pipeline. No LLM judge replaces it.
 domains were exercised and extract a reusable procedural rule. Float delta magnitudes
 are computed as `0.08 × (quality_score − current_skill)` — grounded in the quality
 signal, not the model's priors.
+
+**All memory writes belong to the pipeline.** `execute_task` owns execution. The reflect
+pipeline owns all memory writes: episodic (Stage 4), skills (Stage 2), rules (Stage 3).
+This keeps `execute_task` free of memory concerns and makes the memory write path a
+single, auditable location.
 
 ---
 
@@ -31,24 +37,6 @@ a `self_execute` task transitions to `"completed"` or `"failed"`, it enqueues an
 
 The reflect job is also enqueued by `RollupSubtaskHandler` when a decomposed parent task
 rolls up to completion.
-
----
-
-## Episodic write (before the reflect job)
-
-Before the reflect job is enqueued, `execute_task` Phase 7 writes an episodic memory
-entry directly to Qdrant's `mem_episodic` collection. This write is:
-
-- **No LLM.** Built from `task.*`, `execution.*`, and `quality` — all already in memory.
-- **Guarded.** Wrapped in `try/except` so Qdrant unavailability never marks a completed
-  task as failed.
-- **Factual.** Records task type, title, description excerpt, artifact excerpt, domain
-  tags, quality score, and status. Retrievable by future executions via semantic search.
-
-For failed tasks, the equivalent write happens in the `execute_task` exception handler,
-also guarded.
-
-**Source:** `worker/jobs/execute_task.py` — `_build_episodic_entry()`, Phase 7
 
 ---
 
@@ -65,9 +53,11 @@ also guarded.
 6. Stamp reflect_completed_at
 ```
 
-**Idempotency gap:** stages are not individually idempotent. If the process dies after
-the pipeline runs but before the stamp is written, ARQ retries will re-run all stages.
-Episodic writes (which happen in `execute_task`, not here) are not deduplicated.
+**Idempotency gap:** if the process dies after the pipeline runs but before the stamp
+is written, ARQ retries re-run all stages. Skills and rules are idempotent (SkillSnapshot
+guard; ProceduralKnowledgeLog/vector_store_ref guard). The episodic write (Stage 4) is
+not — a retry produces a near-duplicate Qdrant point. Full idempotency requires stamping
+a point ID on the execution row — deferred.
 
 ---
 
@@ -79,6 +69,7 @@ Episodic writes (which happen in `execute_task`, not here) are not deduplicated.
 Stage 1: reflect   — always runs
 Stage 2: skills    — always runs
 Stage 3: rules     — gated: only when full_reflect=True
+Stage 4: episodic  — gated: only when full_reflect=True (no-op for trivial tasks)
 ```
 
 Per-stage failures are caught and logged — a failing stage does not abort the pipeline.
@@ -94,11 +85,11 @@ call. Two paths:
 
 **Lightweight** (`full_reflect=False`):
 
-The prompt asks for:
+Asks for:
 - `skill_domains` — skill names from `required_skills` that were exercised
 - `new_skill_suggestions` — skill names *not* in `required_skills` that this task revealed
 
-Short prompt, no rule extraction. Haiku-class model is sufficient.
+Short prompt, no rule extraction.
 
 **Full** (`full_reflect=True`):
 
@@ -107,7 +98,7 @@ Before the LLM call, existing procedural rules are fetched from Qdrant:
 - Deduplicates by Qdrant point ID across all tag queries
 - Falls back to `task_type` when no domain tags exist
 
-The prompt additionally asks for:
+Additionally asks for:
 - `generalised_rule` — completed tasks: HOW-TO; failed tasks: WHAT-TO-AVOID.
   **Constraint:** must reference a specific tool, error type, code pattern, or domain
   artifact from the trace. Generic advice must return `null`.
@@ -174,6 +165,23 @@ Storage domain is `_primary_domain(rctx)`: `task_type` → "general".
 
 ---
 
+### Stage 4 — `_stage_episodic` (no LLM, gated)
+
+Gate: only runs when `rctx.full_reflect=True`. Trivial completions (difficulty < 3.0 and
+step_count ≤ 3) are skipped to prevent low-signal entries from polluting top-k retrieval.
+
+Builds a factual text entry directly from `ReflectContext` fields — no DB reads, no LLM.
+The entry records task type, title, description excerpt, artifact or error, tool names
+(up to 12), domain tags, quality score, and status. Branched on `rctx.status`:
+
+- `"completed"` path: includes artifact summary.
+- `"failed"` path: includes error type and step count.
+
+Writes to `mem_episodic` via `memory.store_episode()`. This is the **sole** episodic
+write for a self-execute task — `execute_task` makes no memory writes.
+
+---
+
 ## Data flow summary
 
 ```
@@ -182,8 +190,6 @@ execute_task Phase 6
   execution.quality_score = quality  ← written to DB, never overwritten
 
 execute_task Phase 7
-  _build_episodic_entry(task, execution, "completed", quality)
-    → memory.store_episode()  [guarded: Qdrant failure does not fail the task]
   stream_logger.task_completed()
     → ReflectJobHandler fires → enqueue_job("reflect", ...)
 
@@ -197,7 +203,7 @@ reflect job
     LLM: CallType.REFLECT → ReflectOutput
       skill_domains:         ["python", "api_design"]
       new_skill_suggestions: ["async_debugging"]
-      generalised_rule:      "..." or null
+      generalised_rule:      "..." or null   # full path only
       verdict:               "supersedes" | "complements" | "contradicts" | null
       superseded_ids:        ["qdrant-point-id", ...]
 
@@ -212,8 +218,12 @@ reflect job
 
   Stage 3 — _stage_rules [gate: full_reflect and result.rule is not None]
     Postgres: ProceduralKnowledgeLog inserted
-    Qdrant:   store_procedure(session=None)
+    Qdrant:   store_procedure()
               + archive superseded rules
+
+  Stage 4 — _stage_episodic [gate: full_reflect]
+    Qdrant:   store_episode() → mem_episodic
+              factual record built from rctx fields — no LLM, no DB reads
 
   stamp: execution.reflect_completed_at = now()
 ```
@@ -237,12 +247,12 @@ reflect job
 
 | Condition | Path |
 |---|---|
-| `difficulty < 3.0` and `step_count ≤ 3` | Lightweight: skill classification only |
-| `difficulty >= 3.0` or `step_count > 3` | Full: + rule extraction, supersession |
+| `difficulty < 3.0` and `step_count ≤ 3` | Lightweight: skill classification only; no episodic write |
+| `difficulty >= 3.0` or `step_count > 3` | Full: + rule extraction, supersession, episodic write |
 
 `step_count` is `len(execution.tool_trace)` at reflect job load time. Both conditions
-are evaluated in `reflect.py` and stored on `rctx.full_reflect`. The rules stage gate
-and the prompt path both read from this single field.
+are evaluated in `reflect.py` and stored on `rctx.full_reflect`. The rules stage gate,
+the episodic stage gate, and the prompt path all read from this single field.
 
 ---
 

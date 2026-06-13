@@ -102,8 +102,8 @@ async def _stage_reflect(
     result.superseded_ids        = output.superseded_ids if output.superseded_ids else None
 
     await span.emit("reflect.classified", {
-        "skill_domains": output.skill_domains,
-        "full_reflect":  rctx.full_reflect,
+        "skill_domains":  output.skill_domains,
+        "full_reflect":   rctx.full_reflect,
         "rule_extracted": output.generalised_rule is not None,
     })
     return result
@@ -258,4 +258,75 @@ async def _stage_rules(
             log.vector_store_ref = point_id
             session.add(log)
 
+    return result
+
+
+async def _stage_episodic(
+    rctx: ReflectContext,
+    result: PipelineResult,
+    _llm: LLMRouter,
+    memory: AgentMemory,
+    span: JobSpan,
+) -> PipelineResult:
+    """Stage 4 — write the factual execution record to episodic memory (no LLM call).
+
+    This is the sole episodic write for a self-execute task. ``execute_task`` owns
+    execution; the reflection pipeline owns all memory writes — episodic included.
+
+    Gated on ``rctx.full_reflect`` (difficulty >= 3.0 or step_count > 3) to keep
+    trivial completions out of top-k retrieval. Mirrors the text format used
+    historically in ``_build_episodic_entry``, reading directly from the frozen
+    ``ReflectContext`` rather than live ORM objects.
+
+    Qdrant unavailability is a stage failure — the manager logs it and appends to
+    ``result.stages_failed``, causing ARQ to retry. ``_stage_reflect``,
+    ``_stage_skills``, and ``_stage_rules`` are all idempotent on retry, so only
+    this stage re-runs. Known limitation: a retry produces a near-duplicate Qdrant
+    point (same text, different point ID). Full idempotency requires stamping a
+    point ID on the execution row — deferred.
+    """
+    if not rctx.full_reflect:
+        return result
+
+    domains = ", ".join(rctx.domain_tags.keys()) if rctx.domain_tags else "none"
+    desc = (rctx.task_description or "")[:500]
+    tool_names = ", ".join(
+        t.get("tool", "?") for t in list(rctx.tool_trace)[:12]
+    ) or "none"
+
+    if rctx.status == "completed":
+        artifact_summary = (rctx.artifact or "")[:300]
+        text = (
+            f"Completed {rctx.task_type or 'general'} task: {rctx.task_title}."
+            + (f" {desc}" if desc else "")
+            + (f" Output: {artifact_summary}" if artifact_summary else "")
+            + f" Tools: {tool_names}. Domains: {domains}. Quality: {rctx.heuristic_score:.2f}."
+        )
+    else:
+        error_type = (rctx.error or {}).get("type", "unknown")
+        text = (
+            f"Failed {rctx.task_type or 'general'} task: {rctx.task_title}."
+            + (f" {desc}" if desc else "")
+            + f" Tools: {tool_names}. Domains: {domains}."
+            + f" Failed ({error_type}). Steps taken: {rctx.step_count}."
+        )
+
+    await memory.store_episode(
+        str(rctx.agent_id),
+        str(rctx.workspace_id),
+        {
+            "text":          text,
+            "task_id":       str(rctx.task_id),
+            "execution_id":  str(rctx.execution_id),
+            "task_type":     rctx.task_type,
+            "domain_tags":   rctx.domain_tags or {},
+            "difficulty":    rctx.difficulty,
+            "quality_score": rctx.heuristic_score,
+            "status":        rctx.status,
+        },
+    )
+    await span.emit("reflect.episodic_written", {
+        "status":     rctx.status,
+        "step_count": rctx.step_count,
+    })
     return result
