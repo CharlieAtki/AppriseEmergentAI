@@ -273,8 +273,9 @@ async def _stage_episodic(
     This is the sole episodic write for a self-execute task. ``execute_task`` owns
     execution; the reflection pipeline owns all memory writes — episodic included.
 
-    Gated on ``rctx.full_reflect`` (difficulty >= 3.0 or step_count > 3) to keep
-    trivial completions out of top-k retrieval. Mirrors the text format used
+    Gated externally via ``PipelineStage(gate=lambda ctx: ctx.full_reflect)`` —
+    only runs when difficulty >= 3.0 or step_count > 3, keeping trivial completions
+    out of top-k retrieval. Mirrors the text format used
     historically in ``_build_episodic_entry``, reading directly from the frozen
     ``ReflectContext`` rather than live ORM objects.
 
@@ -285,9 +286,6 @@ async def _stage_episodic(
     point (same text, different point ID). Full idempotency requires stamping a
     point ID on the execution row — deferred.
     """
-    if not rctx.full_reflect:
-        return result
-
     domains = ", ".join(rctx.domain_tags.keys()) if rctx.domain_tags else "none"
     desc = (rctx.task_description or "")[:500]
     tool_names = ", ".join(

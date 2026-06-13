@@ -14,14 +14,13 @@ logger = logging.getLogger(__name__)
 
 # Execution order matters: reflect must run before skills (skill_domains) and rules
 # (result.rule). episodic runs last — it writes the factual execution record from
-# rctx, independently of the other stages. Running last means it always executes
-# even when rules is skipped (not full_reflect); its own full_reflect gate controls
-# whether it writes.
+# rctx, independently of the other stages. Both rules and episodic share the same
+# full_reflect gate so stages_run accurately reflects what actually executed.
 REFLECT_PIPELINE: tuple[PipelineStage, ...] = (
     PipelineStage("reflect",  fn=_stage_reflect),
     PipelineStage("skills",   fn=_stage_skills),
     PipelineStage("rules",    fn=_stage_rules,    gate=lambda ctx: ctx.full_reflect),
-    PipelineStage("episodic", fn=_stage_episodic),
+    PipelineStage("episodic", fn=_stage_episodic, gate=lambda ctx: ctx.full_reflect),
 )
 
 
