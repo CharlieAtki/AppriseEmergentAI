@@ -25,6 +25,20 @@ logger = logging.getLogger(__name__)
 
 @dataclass
 class RollupSubtaskHandler(EventHandler[TaskUpdatedEvent]):
+    """Promotes a parent task to terminal when all its subtasks reach a terminal state.
+
+    Fires on every ``TaskUpdatedEvent`` where ``status`` changed. Ignores events
+    for root tasks (``parent_task_id is None``) and non-terminal subtask statuses.
+
+    When the last sibling goes terminal, ``_evaluate_parent`` checks that ALL siblings
+    are terminal (concurrent-safe guard against double-rollup), transitions the parent
+    to "completed" or "failed" (failed wins), emits a ``TaskUpdatedEvent`` for the
+    parent, and enqueues a ``reflect`` job for the coordinator agent.
+
+    ``publish`` is the in-process ``EventBus.apublish`` callable used to fire the
+    parent's ``TaskUpdatedEvent`` — not the cross-process Redis Streams bus.
+    """
+
     arq_queue: ArqRedis
     publish: PublishFn
 
@@ -51,6 +65,8 @@ class RollupSubtaskHandler(EventHandler[TaskUpdatedEvent]):
                 await task_logger.updated(parent_before, parent_after)
 
             if reflect_agent_id is not None and reflect_execution_id is not None:
+                # Session is closed; scalar access is safe because SessionLocal uses
+                # expire_on_commit=False — attributes remain readable after commit.
                 parent_status = parent_after.status  # non-None: _evaluate_parent returns them together
                 await self.arq_queue.enqueue_job(
                     "reflect",

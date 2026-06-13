@@ -14,7 +14,7 @@ from core.memory.agent_memory import AgentMemory
 from core.models.agents import Agent
 from core.models.observability import ProceduralKnowledgeLog, SkillSnapshot
 from core.intelligence.llm_router import LLMRouter
-from worker.span import JobSpan
+from worker.span import current_span
 
 logger = logging.getLogger(__name__)
 
@@ -34,7 +34,6 @@ async def _stage_reflect(
     result: PipelineResult,
     llm: LLMRouter,
     memory: AgentMemory,
-    span: JobSpan,
 ) -> PipelineResult:
     """Stage 1 — unified LLM reflection (CallType.REFLECT).
 
@@ -51,6 +50,7 @@ async def _stage_reflect(
     Sets ``result.skill_domains``, ``result.new_skill_suggestions``, ``result.rule``,
     ``result.verdict``, and ``result.superseded_ids`` for downstream stages.
     """
+    span = current_span()
     task_ctx = TaskContext(
         title=rctx.task_title,
         description=rctx.task_description,
@@ -114,7 +114,6 @@ async def _stage_skills(
     result: PipelineResult,
     _llm: LLMRouter,
     _memory: AgentMemory,
-    span: JobSpan,
 ) -> PipelineResult:
     """Stage 2 — algorithmic skill update (no LLM call).
 
@@ -140,6 +139,7 @@ async def _stage_skills(
     if not result.skill_domains and not result.new_skill_suggestions:
         return result
 
+    span = current_span()
     async with span.session() as session:
         # Idempotency guard — if a SkillSnapshot for this execution already exists,
         # the delta was applied on a previous attempt. Skip to avoid double-counting.
@@ -198,7 +198,6 @@ async def _stage_rules(
     result: PipelineResult,
     _llm: LLMRouter,
     memory: AgentMemory,
-    span: JobSpan,
 ) -> PipelineResult:
     """Stage 3 — procedural rule persistence (no LLM call, gated by full_reflect).
 
@@ -220,6 +219,7 @@ async def _stage_rules(
     if not result.rule:
         return result
 
+    span = current_span()
     storage_domain = _primary_domain(rctx)
 
     # Phase 1: Postgres write — committed before Qdrant is touched.
@@ -273,7 +273,6 @@ async def _stage_episodic(
     result: PipelineResult,
     _llm: LLMRouter,
     memory: AgentMemory,
-    span: JobSpan,
 ) -> PipelineResult:
     """Stage 4 — write the factual execution record to episodic memory (no LLM call).
 
@@ -295,6 +294,7 @@ async def _stage_episodic(
     if not rctx.full_reflect:
         return result
 
+    span = current_span()
     domains = ", ".join(rctx.domain_tags.keys()) if rctx.domain_tags else "none"
     desc = (rctx.task_description or "")[:500]
     tool_names = ", ".join(

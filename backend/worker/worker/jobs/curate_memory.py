@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+from typing import Any
 
 from sqlalchemy import select
 
@@ -13,7 +14,7 @@ from worker.context import get_worker_context
 logger = logging.getLogger(__name__)
 
 
-async def curate_memory(ctx: dict) -> None:
+async def curate_memory(ctx: dict[str, Any]) -> None:
     """Cron job — runs nightly at midnight.
 
     For each active agent, loads all non-archived procedural rules from Qdrant,

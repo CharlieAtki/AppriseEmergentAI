@@ -2,19 +2,20 @@ from __future__ import annotations
 
 import logging
 import os
+from typing import Any
 
 from worker.context import WorkerContext, get_worker_context, init_worker_context
 
 logger = logging.getLogger(__name__)
 
 
-async def startup(ctx: dict) -> None:
+async def startup(ctx: dict[str, Any]) -> None:
     """ARQ startup hook — runs once when the worker process starts.
 
     Builds :class:`~worker.context.WorkerContext` (registers vendors/tools,
     syncs DB, compiles graphs, opens Redis connections), registers all event
     handlers on the in-process :class:`~core.eventing.bus.in_process_bus.EventBus`,
-    then starts the :class:`~worker.subscriber.TaskStreamSubscriber` which bridges
+    then starts :class:`~worker.subscriber.StreamSubscriber` instances that bridge
     Redis Streams into the in-process bus.
 
     Handler registration order:
@@ -23,7 +24,7 @@ async def startup(ctx: dict) -> None:
        (e.g. :class:`~worker.handlers.rollup.RollupSubtaskHandler` on
        ``TaskUpdatedEvent``).
     2. Stream handlers — respond to cross-process events arriving via Redis Streams,
-       deserialized by :class:`~worker.subscriber.TaskStreamSubscriber` into typed
+       deserialized by :class:`~worker.subscriber.StreamSubscriber` into typed
        stream events.
     3. Subscriber registration and start — must come after handlers are bound so the
        first deserialized event always finds its handlers registered.
@@ -47,7 +48,7 @@ async def startup(ctx: dict) -> None:
     from worker.handlers.rollup import RollupSubtaskHandler
     from worker.handlers.social_memory import SocialMemoryHandler
     from worker.handlers.webhook import WebhookDeliveryHandler
-    from worker.subscriber import CfpStreamSubscriber, TaskStreamSubscriber
+    from worker.subscriber import CFP_STREAM_REGISTRY, TASK_STREAM_REGISTRY, StreamSubscriber
 
     # In-process handlers: same-process side effects triggered by domain events
     wctx.event_bus.bind(TaskUpdatedEvent, RollupSubtaskHandler(
@@ -66,27 +67,35 @@ async def startup(ctx: dict) -> None:
     logger.info("worker startup: event bus handlers registered")
 
     # Bridge: Redis Streams → in-process EventBus
-    wctx.event_bus.subscribe(TaskStreamSubscriber(
+    wctx.event_bus.subscribe(StreamSubscriber(
         bus=wctx.bus,
-        event_bus=wctx.event_bus,
+        publish=wctx.event_bus.apublish,
+        stream="stream:task",
+        group="worker-group",
         consumer=f"worker-{os.getpid()}",
+        registry=TASK_STREAM_REGISTRY,
+        name="task",
     ))
-    wctx.event_bus.subscribe(CfpStreamSubscriber(
+    wctx.event_bus.subscribe(StreamSubscriber(
         bus=wctx.bus,
-        event_bus=wctx.event_bus,
+        publish=wctx.event_bus.apublish,
+        stream="stream:cfp",
+        group="cfp-group",
         consumer=f"cfp-worker-{os.getpid()}",
+        registry=CFP_STREAM_REGISTRY,
+        name="cfp",
     ))
     await wctx.event_bus.start_subscribers()
     logger.info("worker startup: task subscriber started")
 
 
-async def shutdown(ctx: dict) -> None:
+async def shutdown(ctx: dict[str, Any]) -> None:
     """ARQ shutdown hook — runs when the worker process stops.
 
     Shutdown order matters:
 
-    1. ``stop_subscribers`` — cancels :class:`~worker.subscriber.TaskStreamSubscriber`
-       cleanly. No new stream events will be published onto the in-process bus after this.
+    1. ``stop_subscribers`` — cancels all :class:`~worker.subscriber.StreamSubscriber`
+       instances cleanly. No new stream events will be published onto the in-process bus after this.
     2. ``drain_pending`` — awaits all in-flight fire-and-forget handler tasks (e.g. a
        :class:`~worker.handlers.rollup.RollupSubtaskHandler` mid-DB-write). Must run
        before Redis connections close because in-flight handlers may be querying the DB

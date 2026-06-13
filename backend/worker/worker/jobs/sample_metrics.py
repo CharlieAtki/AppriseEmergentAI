@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 import math
+from typing import Any
 
 from sqlalchemy import select
 
@@ -16,7 +17,7 @@ logger = logging.getLogger(__name__)
 
 
 
-async def sample_metrics(ctx: dict) -> None:
+async def sample_metrics(ctx: dict[str, Any]) -> None:
     """Cron job — runs every 15 seconds.
 
     For each active workspace: computes Gini coefficient over agent influence scores,

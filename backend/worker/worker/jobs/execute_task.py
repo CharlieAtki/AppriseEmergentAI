@@ -3,7 +3,7 @@ from __future__ import annotations
 import logging
 import uuid
 from datetime import datetime, timezone
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from sqlalchemy.orm import selectinload
 
@@ -26,16 +26,17 @@ from core.intelligence.prompts.evaluate import EvaluateResponse
 from core.models.agents import Agent
 from core.models.tasks import Task, TaskExecution
 from worker.context import get_worker_context
-from worker.span import JobSpan
+from worker.span import ArqJobMeta, JobSpan
 
 if TYPE_CHECKING:
+    from redis.asyncio import Redis
     from worker.context import WorkerContext
 
 logger = logging.getLogger(__name__)
 
 
 async def execute_task(
-    ctx: dict,
+    ctx: dict[str, Any],
     agent_id: str,
     task_id: str,
     workspace_id: str,
@@ -54,9 +55,11 @@ async def execute_task(
     On any exception after the execution row is committed, writes failure state for the execution and transitions the task to "failed" (when appropriate) to avoid leaving dangling rows, logs failures, and re-raises the exception for the job system to record.
     """
     wctx = get_worker_context()
+    meta = ArqJobMeta.from_ctx(ctx)
     async with JobSpan(
         uuid.UUID(agent_id), uuid.UUID(task_id), uuid.UUID(workspace_id),
         redis_publish=wctx.redis.publish,
+        meta=meta,
     ) as span:
 
         # ── Phase 1: READ ──────────────────────────────────────────────────────
@@ -193,7 +196,7 @@ async def execute_task(
             if decision.decision == "cfp":
                 await span.emit("agent.issuing_cfp", {"reasoning": decision.reasoning})
                 await issue_cfp(task, agent, stream_logger)
-                await _release_to_pool(span, execution, task, wctx, task_logger, stream_logger)
+                await _release_to_pool(span, execution, task, wctx.redis, task_logger, stream_logger)
                 return
 
             # ── Phase 5: SELF-EXECUTE via LangGraph ──────────────────────────────
@@ -293,7 +296,7 @@ async def _release_to_pool(
     span: JobSpan,
     execution: TaskExecution,
     task: Task,
-    wctx: WorkerContext,
+    redis: Redis,
     task_logger: TaskActivityLogger,
     stream_logger: TaskStreamLogger,
 ) -> None:
@@ -326,7 +329,7 @@ async def _release_to_pool(
         session.add(task)
     await task_logger.updated(before, task, executing_agent_id=execution.agent_id, execution_path="cfp")
 
-    await wctx.redis.delete(f"reservation:{task.workspace_id}:{task.id}")
+    await redis.delete(f"reservation:{task.workspace_id}:{task.id}")
 
     await stream_logger.task_created(task)
 

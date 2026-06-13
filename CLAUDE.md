@@ -32,6 +32,7 @@ Every structural question resolves from this. If you are writing an LLM call ins
 - Only ever invoked by an ARQ job → `worker/jobs/`
 - Pure logic with no dependency on ARQ, HTTP, or Redis Streams → `core/`
 - Serving, validating, or querying data for a customer → `api/`
+- Needed by multiple worker handlers but is worker-specific (calls `arq_queue`) → `worker/coordination/`
 
 ### Intelligence layer — six files, six jobs
 
@@ -100,6 +101,81 @@ registry.add_model("anthropic/claude-haiku-4-5-20251001", vendor="anthropic", ..
 ```
 
 Adding a vendor: create the package and add one import line to the lifespan hook. That is the complete change.
+
+### Parse external dicts at the boundary — never spelunk them downstream
+
+Any external system that hands you a raw `dict` (ARQ job context, webhook payload, Redis Stream message) must be parsed into a **frozen dataclass** at the entry point. No downstream code ever calls `.get("key")` on these dicts directly.
+
+```python
+# correct — one classmethod owns ARQ's dict keys; everything else uses typed fields
+@dataclass(frozen=True)
+class ArqJobMeta:
+    job_id:  str | None
+    job_try: int
+
+    @classmethod
+    def from_ctx(cls, ctx: dict[str, Any]) -> ArqJobMeta:
+        return cls(job_id=ctx.get("job_id"), job_try=ctx.get("job_try", 1))
+
+# wrong — dict-spelunking scattered through job functions
+job_id  = ctx.get("job_id")
+job_try = ctx.get("job_try", 1)
+```
+
+### Inject the minimum surface — not the full context
+
+When a class or function needs one thing from a larger object, accept only that thing — not the object. This applies equally to constructors and helper functions. It makes the dependency explicit, eliminates hidden globals, and makes the unit trivial to test.
+
+```python
+# correct — JobSpan only needs to publish; inject that one method
+class JobSpan:
+    def __init__(self, ..., redis_publish: Callable[[str, str], Awaitable[None]]) -> None: ...
+
+# wrong — JobSpan holds the whole WorkerContext just to call one method on it
+class JobSpan:
+    def __init__(self, ...) -> None:
+        self._wctx = get_worker_context()
+```
+
+The same rule applies to helper functions:
+
+```python
+# correct — function only needs redis.delete; accept that object
+async def _release_to_pool(span, execution, task, redis: Redis, ...) -> None:
+    await redis.delete(f"reservation:{task.workspace_id}:{task.id}")
+
+# wrong — receives full WorkerContext just to call one method
+async def _release_to_pool(span, execution, task, wctx: WorkerContext, ...) -> None:
+    await wctx.redis.delete(...)
+```
+
+The activity logger pattern is the canonical example: loggers receive `PublishFn`, not the bus.
+
+### ContextVar for ambient state — never thread it as a parameter
+
+Infrastructure that sets itself on a `ContextVar` at entry (e.g. `JobSpan`) must be retrieved via the accessor at the site that needs it. Never pass it as a function argument through intermediate layers — that defeats the ContextVar entirely.
+
+```python
+# correct — any async code in the same task retrieves the active span directly
+span = current_span()
+await span.emit(...)
+
+# wrong — span threaded through every layer despite being on a ContextVar
+result = await manager.run(rctx, span)
+result = await stage.fn(rctx, result, llm, memory, span)
+```
+
+### Stage and handler functions take domain objects only
+
+Stage functions, handler `handle()` methods, and coordination functions receive domain values (ORM objects, snapshots, scalars) — never infrastructure (span, session factory, bus, worker context). Infrastructure is resolved at the layer that owns it.
+
+```python
+# correct — domain objects only; span retrieved via ContextVar inside the stage
+async def _stage_reflect(rctx: ReflectContext, result: PipelineResult, llm: LLMRouter, memory: AgentMemory) -> PipelineResult: ...
+
+# wrong — infrastructure threaded in as an argument
+async def _stage_reflect(rctx, result, llm, memory, span: JobSpan) -> PipelineResult: ...
+```
 
 ### TYPE_CHECKING for circular avoidance
 
@@ -283,6 +359,89 @@ The caller (worker job) generates `subtask_specs` — either via LLM or heuristi
 ### Routers are thin
 
 API routers validate input and call a service function or write to the database. Business logic does not live in routers. If you are writing conditional agent logic in a router, it belongs in the worker.
+
+---
+
+## Typing
+
+### No bare container types — always parameterise
+
+`dict`, `tuple`, `list` are never acceptable as standalone annotations. Always supply type arguments.
+
+```python
+# correct
+ctx:    dict[str, Any]
+events: list[dict[str, object]]
+trace:  tuple[dict[str, Any], ...]
+
+# wrong
+ctx:    dict
+events: list
+trace:  tuple
+```
+
+### Use `collections.abc` for structural types
+
+Import `Callable`, `Awaitable`, `AsyncGenerator`, `AsyncIterator`, `Mapping` from `collections.abc`, not from `typing`. Both are legal but `collections.abc` is the canonical location in Python 3.9+.
+
+```python
+# correct
+from collections.abc import AsyncGenerator, Awaitable, Callable, Mapping
+
+# wrong
+from typing import Callable
+```
+
+### Read-only mappings typed as `Mapping`, not `dict`
+
+When a parameter or field is only ever read from (never mutated), use `Mapping[K, V]` from `collections.abc`. It makes the read-only contract explicit and lets callers pass any mapping type (dict, MappingProxyType, custom).
+
+```python
+# correct — registry is looked up, never written to
+registry: Mapping[str, type[StreamEvent]]
+TASK_STREAM_REGISTRY: Mapping[str, type[StreamEvent]] = {"task.created": TaskCreatedStreamEvent}
+
+# wrong — implies mutability that isn't needed or guaranteed
+registry: dict[str, type[StreamEvent]]
+```
+
+### Parameterise `Token` from `contextvars`
+
+`ContextVar.set()` returns `Token[T]`. Annotate the stored token with its full type so the checker can verify `reset()` is called with the right token.
+
+```python
+# correct
+_token: Token[JobSpan] | None = None
+
+# wrong — bare Token loses the type parameter
+_token: Token | None = None
+```
+
+### Named exceptions for distinguishable catch clauses
+
+Raise a named subclass rather than a bare `RuntimeError` when callers need to catch a specific failure mode without catching everything.
+
+```python
+# correct — callers can catch NoActiveSpanError specifically
+class NoActiveSpanError(RuntimeError): ...
+raise NoActiveSpanError("No active JobSpan — called outside a job context")
+
+# wrong — bare RuntimeError catches too broadly
+raise RuntimeError("No active span")
+```
+
+### Single source of truth for domain invariants
+
+Never redefine a constant that a domain class already owns. Use the class method.
+
+```python
+# correct
+TaskStateMachine.is_terminal(status)
+
+# wrong — duplicates the invariant and will drift
+TERMINAL_STATUSES = frozenset({"completed", "failed", "expired"})
+status in TERMINAL_STATUSES
+```
 
 ---
 

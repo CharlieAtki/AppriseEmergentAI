@@ -24,16 +24,15 @@ logger = logging.getLogger(__name__)
 class CfpHandler(EventHandler[CfpIssuedStreamEvent]):
     """Runs targeted bidding when a CFP event arrives on stream:cfp.
 
-    Excludes the initiating agent — they already decided to route. Scores all
-    other active agents in the workspace with compute_bid_score() (same pure
-    function as TaskBiddingHandler), sorts descending, and attempts
-    attempt_reservation() for the highest scorer. Winner gets execute_task
-    enqueued.
+    Identical to ``TaskBiddingHandler`` except the DB query excludes the initiating
+    agent (they already decided to route and must not bid on their own task).
+    Scoring, reservation, and job enqueue are handled by
+    :func:`~worker.coordination.bidding.score_and_reserve`.
 
-    Falls through silently if no agent qualifies or if another handler wins the
-    SETNX race first. The TaskCreatedStreamEvent published by _release_to_pool()
-    acts as a safety fallback: if this handler wins nothing, TaskBiddingHandler
-    picks up the task via the standard stream:task path.
+    Falls through silently if no agent qualifies or if another worker wins the
+    SETNX race first. ``_release_to_pool()`` also publishes a ``TaskCreatedStreamEvent``
+    as a safety fallback — if this handler wins nothing, ``TaskBiddingHandler`` picks
+    up the task via the standard stream:task path.
     """
 
     redis: Redis

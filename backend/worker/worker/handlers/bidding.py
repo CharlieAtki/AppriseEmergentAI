@@ -24,21 +24,17 @@ logger = logging.getLogger(__name__)
 class TaskBiddingHandler(EventHandler[TaskCreatedStreamEvent]):
     """Runs algorithmic bidding when a new task appears on Redis Streams.
 
-    Queries all active agents for the workspace, scores each one with
-    :func:`~core.coordination.contract_net.compute_bid_score` (a pure function
-    — no LLM, no extra DB reads beyond the initial agent roster), sorts
-    descending by score, and attempts a Redis reservation for the highest scorer.
-    The first agent to win the reservation lock has an ``execute_task`` job
-    enqueued for it.
+    Queries all active agents for the workspace, then delegates scoring,
+    reservation, and job enqueue to :func:`~worker.coordination.bidding.score_and_reserve`.
+    This handler is responsible only for the DB query; all bid logic lives in the
+    shared coordination module so ``CfpHandler`` can reuse it without coupling to this class.
 
-    Receives ``redis`` for the SETNX reservation lock and ``arq_queue`` to
-    enqueue the job. Each call opens a fresh DB session — the handler is
-    stateless beyond its constructor arguments.
+    Receives ``redis`` for the SETNX reservation lock and ``arq_queue`` to enqueue
+    ``execute_task``. Each call opens a fresh DB session — the handler is stateless
+    beyond its constructor arguments.
 
-    Only agents whose score meets or exceeds ``settings.BID_SCORE_THRESHOLD``
-    enter the sorted list. If no agent qualifies, the task stays in ``"open"``
-    and will be re-evaluated when the next ``task.created`` event arrives (e.g.
-    after a CFP re-release).
+    Falls through silently if no agent meets ``settings.BID_SCORE_THRESHOLD`` or if
+    another worker wins the reservation race first.
     """
 
     redis: Redis
