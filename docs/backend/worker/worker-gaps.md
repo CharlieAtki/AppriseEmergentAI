@@ -273,11 +273,11 @@ prompt string, so emergence experiments can vary them without code changes.
 - Gap 2 closed — episodic write now happens inside `_stage_episodic` after the judge has run, using the semantic score. `EpisodicMemoryHandler` deleted.
 - Gap 3 closed — `ReflectJobHandler` fires on `{"completed", "failed"}`; `_stage_episodic` and `_stage_rules` have explicit failure branches.
 
-**Remaining known limitation — episodic duplicate on retry.**
+**Remaining known limitation — Qdrant rule duplicate on retry.**
 
-`reflect_completed_at` is stamped after all stages complete. If the process dies between `ReflectionManager.run()` returning and the stamp commit, ARQ retries and all stages re-run. Qdrant has no deduplication on `execution_id`, so `_stage_episodic` writes a second near-identical entry. The values are identical (same execution record, same judge result). No data is corrupted — only duplicated.
+If the process dies after `_stage_rules` Phase 2 (Qdrant upsert) but before Phase 3 stamps `ProceduralKnowledgeLog.vector_store_ref`, an ARQ retry will upsert a second rule point for the same execution.
 
-Fix if needed: add an `episodic_written_at` column to `TaskExecution`, stamp it at the end of `_stage_episodic`, and check it at stage entry before writing. This gives per-stage idempotency rather than whole-pipeline idempotency.
+Fix if needed: use a stable Qdrant point ID derived from `execution_id`, or persist the generated `point_id` before upserting so retries can be deduplicated.
 
 **Status:** ✅ Closed — pipeline implemented. Episodic retry duplicate is a known, accepted limitation.
 
