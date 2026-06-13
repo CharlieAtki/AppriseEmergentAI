@@ -1,0 +1,46 @@
+language: "en-GB"
+
+reviews:
+  profile: "assertive"  # you want pushback, not chill nods
+  request_changes_workflow: true
+
+  path_instructions:
+    - path: "backend/agents/**"
+      instructions: |
+        This is the agent execution layer. Key invariants to enforce:
+        - ContractNet winner selection must ALWAYS be algorithmic — LLM role is justification text only, never bid outcome
+        - reflect() must produce exactly ONE LLM call (CallType.REFLECT) returning structured Pydantic output
+        - Episodic memory construction must be deterministic Python from GraphState data — never an LLM call
+        - Skill delta magnitudes must be computed from quality scores via learning rate formula, not LLM output
+        - Any new LLM call added to the hot path must be explicitly justified — flag all unreasoned additions
+
+    - path: "backend/workers/**"
+      instructions: |
+        ARQ worker layer. LangGraph graphs are compiled once at startup, invoked per job.
+        - SETNX distributed locking patterns must be present for any shared state mutation
+        - Auctioneer job pattern must handle bidding centrally — flag anything that could cause evaluation storms
+        - Redis pub/sub fan-out for WebSocket events — check for missed publishes on state transitions
+
+    - path: "backend/memory/**"
+      instructions: |
+        Three-tier Chroma memory system (episodic, procedural, social).
+        - Procedural rule extraction must reference specific tools, error types, or code patterns — reject generic platitudes
+        - Supersession logic must be present when new rules contradict existing ones
+        - Qdrant used for procedural rule retrieval — check query construction is scoped correctly
+
+    - path: "frontend/**"
+      instructions: |
+        Next.js 15 App Router. TanStack Query v5, Zustand, Orval-generated typed hooks, Tailwind v4.
+        - Data fetching must use Orval-generated hooks from OpenAPI spec — not raw fetch() calls
+        - Server components vs client components boundary must be respected
+        - Zustand slices should not duplicate TanStack Query server state
+
+  path_filters:
+    - "!**/*.lock"
+    - "!**/node_modules/**"
+    - "!**/__pycache__/**"
+    - "!**/migrations/**"  # unless you want schema reviewed
+
+knowledge_base:
+  learnings:
+    scope: auto  # learns from your comments and resolved threads over time

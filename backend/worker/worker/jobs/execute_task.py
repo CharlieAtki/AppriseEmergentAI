@@ -48,7 +48,7 @@ async def execute_task(
     Phase 4 (act)             — branch on decision.
     Phase 5 (self-execute)    — LangGraph graph; no open DB session.
     Phase 6 (write results)   — single atomic commit for execution, agent, snapshots, task.
-    Phase 7 (events)          — episodic memory write, bus events, reflect job enqueue.
+    Phase 7 (events)          — bus events, reflect job enqueue.
 
     On any exception after Phase 2 commits: the except block writes task → "failed" and
     execution → "failed" so the row is not left dangling. Re-raises for ARQ to record.
@@ -242,19 +242,6 @@ async def execute_task(
             )
 
             # ── Phase 7: DOWNSTREAM EVENTS ───────────────────────────────────────
-            # Episodic memory write — factual record of execution, no LLM.
-            # Guarded: Qdrant unavailability must not mark a completed task as failed.
-            try:
-                await wctx.memory.store_episode(
-                    str(agent.id),
-                    str(task.workspace_id),
-                    _build_episodic_entry(task, execution, "completed", quality),
-                )
-            except Exception:
-                logger.exception(
-                    "execute_task: could not write completed episodic for task=%s", task_id
-                )
-
             await stream_logger.task_completed(task, agent_id, quality)
 
             await span.emit("job.completed", {"quality_score": quality})
@@ -295,72 +282,12 @@ async def execute_task(
                         execution_id=execution.id if execution is not None else None,
                         execution_path="self_execute",
                     )
-                if execution is not None:
-                    try:
-                        await get_worker_context().memory.store_episode(
-                            str(agent.id),
-                            str(task.workspace_id),
-                            _build_episodic_entry(
-                                task, execution, "failed",
-                                execution.quality_score or 0.0,
-                            ),
-                        )
-                    except Exception:
-                        logger.exception(
-                            "execute_task: could not write failure episodic for task=%s", task_id
-                        )
             except Exception:
                 logger.exception(
                     "execute_task: could not write failure state for task=%s", task_id
                 )
             raise
 
-
-def _build_episodic_entry(
-    task: Task,
-    execution: TaskExecution,
-    status: str,
-    quality: float,
-) -> dict:
-    """Build the episodic memory payload for a self-execute task.
-
-    Pure function — no I/O. Called from Phase 7 (completed path) and the exception
-    handler (failed path). Task description truncated to 500 chars, artifact to 300 chars.
-
-    ``quality=0.0`` is valid for failures where ``score_outcome()`` never ran (e.g.
-    exception raised before Phase 5) — the entry is still useful for failure-driven
-    learning even without a meaningful quality signal.
-    """
-    domains = ", ".join(task.domain_tags.keys()) if task.domain_tags else "none"
-    desc = (task.description or "")[:500]
-
-    if status == "completed":
-        artifact_summary = (execution.artifact or "")[:300]
-        text = (
-            f"Completed {task.task_type or 'general'} task: {task.title}."
-            + (f" {desc}" if desc else "")
-            + (f" Output: {artifact_summary}" if artifact_summary else "")
-            + f" Domains: {domains}. Quality: {quality:.2f}."
-        )
-    else:
-        error_type = (execution.error or {}).get("type", "unknown")
-        step_count = len(execution.tool_trace) if execution.tool_trace else 0
-        text = (
-            f"Failed {task.task_type or 'general'} task: {task.title}."
-            + (f" {desc}" if desc else "")
-            + f" Domains: {domains}. Failed ({error_type}). Steps taken: {step_count}."
-        )
-
-    return {
-        "text":          text,
-        "task_id":       str(task.id),
-        "execution_id":  str(execution.id),
-        "task_type":     task.task_type,
-        "domain_tags":   task.domain_tags or {},
-        "difficulty":    task.difficulty,
-        "quality_score": quality,
-        "status":        status,
-    }
 
 
 async def _release_to_pool(

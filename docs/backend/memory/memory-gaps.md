@@ -6,19 +6,15 @@ Cross-cutting gaps (audit log, API→Redis bridge, test coverage) are tracked in
 
 ---
 
-## 1. Task `description` not available for memory writes
+## 1. Task `description` not available in `TaskSnapshot`
 
-**What:** `Task.description` is not included in `TaskSnapshot`. The episodic write text currently uses only `title`, `task_type`, and `domain_tags`. The reflect prompt uses `task.description` (loaded directly from the DB in `reflect.py`), but `EpisodicMemoryHandler` fires from a snapshot and has no access to it.
+**What:** `Task.description` is not included in `TaskSnapshot`. The episodic write text in `_build_episodic_entry` already includes `description` (read directly from the ORM), so the immediate retrieval gap is closed. The remaining issue is that event handlers receiving `TaskUpdatedEvent` do not have access to `description` from the snapshot alone.
 
-**Why it matters:** Description is the richest natural-language signal for semantic retrieval. An embedding built from `"Completed code task: Implement JWT auth. Domains: security."` is weaker than one that also encodes what the task actually required. This affects both episodic retrieval quality (agents surfacing relevant past experience mid-execution) and potentially UI display if episode records are ever surfaced to users.
+**Why it matters:** Handlers that need description must re-query the DB, adding a round-trip inside what should be a fire-and-forget handler.
 
-**Fix:** Add `description: str | None` to `TaskSnapshot` as a fourth synthetic field alongside `executing_agent_id`, `quality_score`, `execution_id`, and `execution_path`. Pass it from `execute_task` via `task_logger.updated()`. The episodic text becomes:
+**Fix:** Add `description: str | None` to `TaskSnapshot` as a synthetic field. Pass it from `execute_task` via `task_logger.updated()`. The episodic text already uses description — this change is about making it available to downstream event handlers without a DB read.
 
-```
-"Completed code task: Build JWT auth endpoint — validates tokens and returns user profile. Domains: security, api. Quality: 0.85."
-```
-
-**Deferred because:** Phase 1. Description can be long; embedding quality gains need to be validated against the added payload size in Qdrant.
+**Deferred because:** Phase 2. No current handler needs it; the retrieval quality gap (description in episodic text) is already resolved.
 
 ---
 
@@ -43,67 +39,31 @@ Cross-cutting gaps (audit log, API→Redis bridge, test coverage) are tracked in
 
 ---
 
-## 3. No episodic write on task failure
+## ~~3. No episodic write on task failure~~ ✅ Closed
 
-**What:** `EpisodicMemoryHandler` only fires when `event.state.status == "completed"`. Failed tasks produce no episodic record.
-
-**Why it matters:** Failure is informative. An agent that attempted a security task and failed should remember that — it informs future bid scoring and self-selection. "Attempted code task: Implement OAuth flow. Domains: security, api. Failed (quality: 0.0)" is signal, not noise.
-
-**Fix:** Lower the guard from `status == "completed"` to `status in {"completed", "failed"}`. For failed tasks, `quality_score` is `None` (the task never reached scoring), so the text needs a conditional branch:
-
-```python
-quality_str = f"Quality: {event.state.quality_score:.2f}." if event.state.quality_score is not None else "Failed."
-```
-
-The payload stores `quality_score: None` for failed episodes, which is already a valid Qdrant value.
-
-**Deferred because:** Phase 1. Requires verifying that failed-task snapshots carry sufficient metadata (they currently drop `execution_path` and other fields in the failure path of `execute_task`).
+Resolved in `execute_task.py` — both Phase 7 (success) and the exception handler (failure) call `_build_episodic_entry`, subject to the complexity gate (gap 5 below, also now closed).
 
 ---
 
-## 4. `tool_trace` not available for episodic enrichment
+## ~~4. `tool_trace` not available for episodic enrichment~~ ✅ Closed
 
-**What:** The episodic text could include a summary of tools the agent used (e.g. `"Tools: web_search, code_execute"`), giving future retrievals a stronger signal for tool-use similarity. `tool_trace` is on `TaskExecution` but not on `TaskSnapshot`.
-
-**Why it matters:** Two tasks with the same title but different tool use patterns represent genuinely different execution experiences. An agent searching for "how did I solve this last time" benefits from knowing whether the prior approach involved search, code execution, or direct LLM reasoning.
-
-**Fix (Option A):** Add `tool_names: tuple[str, ...] | None` as a synthetic field on `TaskSnapshot`, derived from `execution.tool_trace` and passed through `task_logger.updated()` from `execute_task` Phase 6 (where the execution object is still in memory).
-
-**Fix (Option B):** Add `execution_id` is already on the snapshot — `EpisodicMemoryHandler` could query `TaskExecution` for the tool trace. This adds one DB read back into a handler we just cleaned up, so Option A is preferred.
-
-**Deferred because:** Phase 1. Adds a snapshot field and a call-site change across `execute_task`, `_finalise_execution`, and the logger. Non-trivial for marginal Phase 1 gain.
+Resolved in `_build_episodic_entry` — tool names are now included in the episodic text for both completed and failed paths (`Tools: web_search, code_execute`). The `TaskSnapshot` gap (handlers needing `tool_trace` from an event) remains deferred (see gap 1 above).
 
 ---
 
-## 5. Episodic tier has no complexity gate — trivial tasks pollute retrieval
+## ~~5. Episodic tier has no complexity gate — trivial tasks pollute retrieval~~ ✅ Closed
 
-**What:** Every self-execute completion writes an episodic entry, regardless of task difficulty or step count. A difficulty-1 task completed in one step produces the same episodic footprint as a difficulty-4 multi-tool execution.
-
-**Why it matters:** Over many ticks, the episodic collection fills with low-signal entries. When an agent searches for relevant past experience on a complex task, the top-k results may be dominated by trivial completions that share domain tags but carry no actionable insight.
-
-**Fix:** Mirror the complexity gate already used in `reflect.py`: only write episodic entries for tasks where `difficulty >= 2` or `step_count > 1`. Trivial tasks contribute to skill score updates (via `InfluenceUpdateHandler`) but not to the memory tier.
-
-This requires `difficulty` on the snapshot (already there) but `step_count` is derived from `tool_trace` (see gap 4 above).
-
-**Deferred because:** Phase 1. The gate threshold needs calibration against real run data. Premature gating risks gaps in the episodic record that harm retrieval in ways that are hard to detect.
+Resolved in `execute_task.py` Phase 7 and the failure handler. Both paths gate the episodic write on `(difficulty or 1.0) >= 3.0 or step_count > 3`, mirroring the `full_reflect` threshold already used by the rules stage.
 
 ---
 
-## 6. Reflect job does not write to episodic — `key_learning` gap
+## ~~6. Reflect job does not write to episodic~~ ✅ Closed
 
-**What:** The Hermes analysis recommends that for non-trivial tasks, the reflect job extracts a `key_learning` — a one-sentence agent-perspective distillation of what the specific execution taught — and writes it to episodic memory. Currently `reflect.py` writes only to procedural (`store_procedure()`) and `ProceduralKnowledgeLog`.
+Resolved. `_stage_episodic` (stage 4 in `REFLECT_PIPELINE`) writes the factual execution record to `mem_episodic`. It builds the entry directly from `ReflectContext` fields — no LLM, no DB reads. This is the sole episodic write for a self-execute task; `execute_task` makes no memory writes.
 
-**The distinction:**
+Gated on `rctx.full_reflect` (same threshold as rules: difficulty ≥ 3.0 or step_count > 3). Covers both the completed and failed paths via `rctx.status` branch.
 
-| | Episodic entry (current) | Procedural entry (reflect) | Missing: key_learning |
-|---|---|---|---|
-| Content | Factual: what happened | Generalised: what to do in this domain | Specific insight: what *this* execution taught *this* agent |
-| Source | Snapshot fields (no LLM) | LLM reflection | LLM reflection |
-| Gate | All self-execute completions | `full_reflect` only (difficulty ≥ 3 or steps > 3) | `full_reflect` only |
-
-**Fix:** Add `key_learning: str` to `ReflectResponse`. Update `build_prompt()` to request it. In `reflect.py`, after parsing the response, call `wctx.memory.store_episode()` with `key_learning` as the text and `source: "reflect"` in the payload to distinguish it from the handler-written entry.
-
-**Deferred because:** Phase 1. The episodic enrichment (gap 1 above — adding description) should come first; richer factual entries may reduce the need for LLM-extracted insights at this stage.
+Known limitation: a retry produces a near-duplicate Qdrant point. Full idempotency requires stamping a point ID on the execution row — deferred.
 
 ---
 
@@ -124,12 +84,12 @@ This requires `difficulty` on the snapshot (already there) but `step_count` is d
 
 ## Summary
 
-| Gap | Impact | Phase |
-|-----|--------|-------|
-| Task `description` not in snapshot/episodic text | Medium — retrieval quality | Phase 2 |
-| `curate_memory` prompt quality & audit trail | High — procedural tier health over long runs | Phase 2 |
-| No episodic write on failure | Medium — agent self-awareness | Phase 2 |
-| `tool_trace` not available for episodic enrichment | Low–Medium | Phase 2 |
-| Episodic complexity gate missing | Low — Phase 1 scale | Phase 3 |
-| `key_learning` from reflect → episodic | Medium — richer retrieval | Phase 2 |
-| Social memory fan-out at scale | Low — Phase 1 scale | Phase 3 |
+| Gap | Impact | Phase | Status |
+|-----|--------|-------|--------|
+| Task `description` not in `TaskSnapshot` (handlers) | Low — no handler needs it yet | Phase 2 | Open |
+| `curate_memory` prompt quality & audit trail | High — procedural tier health over long runs | Phase 2 | Open |
+| No episodic write on failure | Medium — agent self-awareness | Phase 1 | ✅ Closed |
+| `tool_trace` not available for episodic enrichment | Low–Medium | Phase 1 | ✅ Closed |
+| Episodic complexity gate missing | Low — Phase 1 scale | Phase 1 | ✅ Closed |
+| `key_learning` from reflect → episodic | Medium — richer retrieval | Phase 1 | ✅ Closed |
+| Social memory fan-out at scale | Low — Phase 1 scale | Phase 3 | Open |

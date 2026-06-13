@@ -7,18 +7,21 @@ from core.intelligence.reflection.pipeline import PipelineStage
 from core.intelligence.reflection.types import PipelineResult, ReflectContext
 from core.intelligence.llm_router import LLMRouter
 from core.memory.agent_memory import AgentMemory
-from worker.reflection.stages import _stage_reflect, _stage_rules, _stage_skills
+from worker.reflection.stages import _stage_episodic, _stage_reflect, _stage_rules, _stage_skills
 from worker.span import JobSpan
 
 logger = logging.getLogger(__name__)
 
-# Execution order matters: reflect must run before skills (skills reads skill_domains
-# set by reflect) and before rules (rules persists result.rule set by reflect).
-# The rules stage is gated — it only runs on non-trivial executions.
+# Execution order matters: reflect must run before skills (skill_domains) and rules
+# (result.rule). episodic runs last — it writes the factual execution record from
+# rctx, independently of the other stages. Running last means it always executes
+# even when rules is skipped (not full_reflect); its own full_reflect gate controls
+# whether it writes.
 REFLECT_PIPELINE: tuple[PipelineStage, ...] = (
-    PipelineStage("reflect", fn=_stage_reflect),
-    PipelineStage("skills",  fn=_stage_skills),
-    PipelineStage("rules",   fn=_stage_rules, gate=lambda ctx: ctx.full_reflect),
+    PipelineStage("reflect",  fn=_stage_reflect),
+    PipelineStage("skills",   fn=_stage_skills),
+    PipelineStage("rules",    fn=_stage_rules,    gate=lambda ctx: ctx.full_reflect),
+    PipelineStage("episodic", fn=_stage_episodic),
 )
 
 
