@@ -233,3 +233,6 @@ dist/
 
 # Docker
 *.override.yml
+
+# Claude local files
+.claude

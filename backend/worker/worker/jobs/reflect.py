@@ -43,8 +43,10 @@ async def reflect(
     Enqueued by ``ReflectJobHandler`` (self-execute path) and ``RollupSubtaskHandler``
     (decompose path) after a task reaches "completed" or "failed".
     """
+    wctx = get_worker_context()
     async with JobSpan(
-        uuid.UUID(agent_id), uuid.UUID(task_id), uuid.UUID(workspace_id)
+        uuid.UUID(agent_id), uuid.UUID(task_id), uuid.UUID(workspace_id),
+        redis_publish=wctx.redis.publish,
     ) as span:
         # Load all state in one session. Session closes before any stage runs.
         async with span.session() as session:
@@ -97,7 +99,6 @@ async def reflect(
             agent_skills=agent.skills or {},
         )
 
-        wctx   = get_worker_context()
         result = await wctx.reflection_manager.run(rctx, span)
 
         await span.emit("job.completed", {

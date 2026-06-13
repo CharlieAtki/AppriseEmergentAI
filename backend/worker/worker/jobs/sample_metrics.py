@@ -98,7 +98,7 @@ def _gini(values: list[float]) -> float:
     return cumulative / (n * total)
 
 
-def _specialisation_index(skills_list: list[dict]) -> float:
+def _specialisation_index(skills_list: list[dict[str, float]]) -> float:
     """Mean pairwise cosine distance between agent skill vectors.
 
     Returns 0.0 (all identical) to 1.0 (completely orthogonal specialisations).

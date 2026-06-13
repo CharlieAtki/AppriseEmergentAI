@@ -22,8 +22,6 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
-TERMINAL_STATUSES: frozenset[str] = frozenset({"completed", "failed", "expired"})
-
 
 @dataclass
 class RollupSubtaskHandler(EventHandler[TaskUpdatedEvent]):
@@ -33,7 +31,7 @@ class RollupSubtaskHandler(EventHandler[TaskUpdatedEvent]):
     async def handle(self, event: TaskUpdatedEvent) -> None:
         if not event.changed("status"):
             return
-        if event.state.status not in TERMINAL_STATUSES:
+        if not TaskStateMachine.is_terminal(event.state.status):
             return
         if event.state.parent_task_id is None:
             return
@@ -53,7 +51,7 @@ class RollupSubtaskHandler(EventHandler[TaskUpdatedEvent]):
                 await task_logger.updated(parent_before, parent_after)
 
             if reflect_agent_id is not None and reflect_execution_id is not None:
-                parent_status = parent_after.status if parent_after else "completed"
+                parent_status = parent_after.status  # non-None: _evaluate_parent returns them together
                 await self.arq_queue.enqueue_job(
                     "reflect",
                     agent_id=str(reflect_agent_id),
@@ -94,11 +92,11 @@ class RollupSubtaskHandler(EventHandler[TaskUpdatedEvent]):
 
         if not siblings:
             return None, None, None, None
-        if not {s.status for s in siblings}.issubset(TERMINAL_STATUSES):
+        if not all(TaskStateMachine.is_terminal(s.status) for s in siblings):
             return None, None, None, None
 
         parent = await session.get(Task, parent_id)
-        if parent is None or parent.status in TERMINAL_STATUSES:
+        if parent is None or TaskStateMachine.is_terminal(parent.status):
             return None, None, None, None  # already resolved — concurrent rollup guard
 
         before = TaskSnapshot.from_domain(parent)

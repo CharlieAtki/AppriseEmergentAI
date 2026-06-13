@@ -2,14 +2,13 @@ from __future__ import annotations
 
 import json
 import uuid
-from collections.abc import AsyncGenerator
+from collections.abc import AsyncGenerator, Awaitable
 from contextlib import asynccontextmanager
 from contextvars import ContextVar, Token
 from datetime import datetime, timezone
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Callable
 
 from core.database import get_session
-from worker.context import get_worker_context
 
 if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession
@@ -44,23 +43,24 @@ class JobSpan:
         task_id: uuid.UUID,
         workspace_id: uuid.UUID,
         *,
+        redis_publish: Callable[[str, str], Awaitable[None]],
         job_id: str | None = None,
         job_try: int = 1,
     ) -> None:
-        self._wctx        = get_worker_context()
-        self.agent_id     = agent_id
-        self.task_id      = task_id
+        self._publish    = redis_publish
+        self.agent_id    = agent_id
+        self.task_id     = task_id
         self.workspace_id = workspace_id
-        self.job_id       = job_id    # ARQ-assigned job ID — stable across retries
-        self.job_try      = job_try   # retry attempt number — 1 on first run
-        self._events: list[dict] = []
+        self.job_id      = job_id    # ARQ-assigned job ID — stable across retries
+        self.job_try     = job_try   # retry attempt number — 1 on first run
+        self._events: list[dict[str, object]] = []
         self._token: Token | None = None
 
     async def __aenter__(self) -> JobSpan:
         self._token = _current_span.set(self)
         return self
 
-    async def __aexit__(self, exc_type: object, exc_val: object, exc_tb: object) -> None:
+    async def __aexit__(self, _exc_type: object, _exc_val: object, _exc_tb: object) -> None:
         if self._token is not None:
             _current_span.reset(self._token)
         # Never suppress exceptions — let them propagate to ARQ for retry logic.
@@ -75,14 +75,14 @@ class JobSpan:
         async with get_session() as s:
             yield s
 
-    async def emit(self, event_type: str, data: dict | None = None) -> None:
+    async def emit(self, event_type: str, data: dict[str, object] | None = None) -> None:
         """Publish a structured event immediately to Redis Pub/Sub.
 
         The API WebSocket endpoint subscribes to workspace:{id}:events and forwards
         events to connected browsers in real time. Events also accumulate in self._events
         for storage in TaskExecution.tool_trace after the job completes.
         """
-        event: dict = {
+        event: dict[str, object] = {
             "type":         event_type,
             "agent_id":     str(self.agent_id),
             "task_id":      str(self.task_id),
@@ -93,12 +93,12 @@ class JobSpan:
             **(data or {}),
         }
         self._events.append(event)
-        await self._wctx.redis.publish(
+        await self._publish(
             f"workspace:{self.workspace_id}:events",
             json.dumps(event),
         )
 
     @property
-    def events(self) -> list[dict]:
+    def events(self) -> list[dict[str, object]]:
         """Accumulated events — written to TaskExecution.tool_trace on completion."""
         return list(self._events)

@@ -29,7 +29,7 @@ from worker.context import get_worker_context
 from worker.span import JobSpan
 
 if TYPE_CHECKING:
-    pass
+    from worker.context import WorkerContext
 
 logger = logging.getLogger(__name__)
 
@@ -53,8 +53,10 @@ async def execute_task(
 
     On any exception after the execution row is committed, writes failure state for the execution and transitions the task to "failed" (when appropriate) to avoid leaving dangling rows, logs failures, and re-raises the exception for the job system to record.
     """
+    wctx = get_worker_context()
     async with JobSpan(
-        uuid.UUID(agent_id), uuid.UUID(task_id), uuid.UUID(workspace_id)
+        uuid.UUID(agent_id), uuid.UUID(task_id), uuid.UUID(workspace_id),
+        redis_publish=wctx.redis.publish,
     ) as span:
 
         # ── Phase 1: READ ──────────────────────────────────────────────────────
@@ -88,7 +90,6 @@ async def execute_task(
         provenance = TaskContext.from_task(task)
         depth_exceeded = provenance.delegation_depth >= MAX_DELEGATION_DEPTH
 
-        wctx = get_worker_context()
         # task_logger   — in-process EventBus; fires typed DomainEvents to same-process
         #                 handlers (RollupSubtaskHandler, etc.). Does not cross process boundary.
         # stream_logger — Redis Streams; fires typed StreamEvents consumed by
@@ -278,7 +279,7 @@ async def execute_task(
                         before_failed, task,
                         executing_agent_id=agent.id if execution is not None else None,
                         execution_id=execution.id if execution is not None else None,
-                        execution_path="self_execute",
+                        execution_path=execution.execution_path if execution is not None else None,
                     )
             except Exception:
                 logger.exception(
@@ -292,7 +293,7 @@ async def _release_to_pool(
     span: JobSpan,
     execution: TaskExecution,
     task: Task,
-    wctx,
+    wctx: WorkerContext,
     task_logger: TaskActivityLogger,
     stream_logger: TaskStreamLogger,
 ) -> None:

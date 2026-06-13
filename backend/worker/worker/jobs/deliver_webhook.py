@@ -14,6 +14,7 @@ from sqlalchemy import select
 from core.database import get_session
 from core.models.tasks import Task, TaskExecution, WebhookDelivery
 from core.models.tenant import Workspace
+from worker.context import get_worker_context
 
 logger = logging.getLogger(__name__)
 
@@ -36,7 +37,7 @@ class _WebhookPayload(BaseModel):
 
 
 async def deliver_webhook(
-    ctx,
+    ctx: dict,
     execution_id: str,
     workspace_id: str,
     delivery_id: str | None = None,
@@ -149,8 +150,7 @@ async def deliver_webhook(
             if idx < len(_RETRY_DELAYS):
                 delay = _RETRY_DELAYS[idx]
                 record.next_attempt_at = datetime.now(timezone.utc) + timedelta(seconds=delay)
-                arq_queue = ctx["redis"]
-                await arq_queue.enqueue_job(
+                await get_worker_context().arq_queue.enqueue_job(
                     "deliver_webhook",
                     execution_id=execution_id,
                     workspace_id=workspace_id,
