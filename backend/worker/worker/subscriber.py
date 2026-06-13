@@ -105,7 +105,7 @@ class StreamSubscriber(ExternalEventSubscriber):
     registry: Mapping[str, type[StreamEvent]]
     name:     str  # used for task naming and log messages
 
-    _task: asyncio.Task | None = field(default=None, init=False, repr=False)
+    _task: asyncio.Task[None] | None = field(default=None, init=False, repr=False)
 
     async def start(self) -> None:
         self._task = asyncio.create_task(self._run(), name=f"{self.name}-subscriber")

@@ -382,7 +382,7 @@ trace:  tuple
 
 ### Use `collections.abc` for structural types
 
-Import `Callable`, `Awaitable`, `AsyncGenerator`, `AsyncIterator`, `Mapping` from `collections.abc`, not from `typing`. Both are legal but `collections.abc` is the canonical location in Python 3.9+.
+Import `Callable`, `Awaitable`, `AsyncGenerator`, `AsyncIterator`, `Mapping` from `collections.abc`, but not from `typing`. Both are legal but `collections.abc` is the canonical location in Python 3.9+.
 
 ```python
 # correct
@@ -407,7 +407,7 @@ registry: dict[str, type[StreamEvent]]
 
 ### Parameterise `Token` from `contextvars`
 
-`ContextVar.set()` returns `Token[T]`. Annotate the stored token with its full type so the checker can verify `reset()` is called with the right token.
+`ContextVar.set()` returns `Token[T]`. Annotate the stored token with its full type, so the checker can verify `reset()` is called with the right token.
 
 ```python
 # correct

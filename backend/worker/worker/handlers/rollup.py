@@ -64,10 +64,10 @@ class RollupSubtaskHandler(EventHandler[TaskUpdatedEvent]):
                 task_logger = TaskActivityLogger(self.publish)
                 await task_logger.updated(parent_before, parent_after)
 
-            if reflect_agent_id is not None and reflect_execution_id is not None:
+            if reflect_agent_id is not None and reflect_execution_id is not None and parent_after is not None:
                 # Session is closed; scalar access is safe because SessionLocal uses
                 # expire_on_commit=False — attributes remain readable after commit.
-                parent_status = parent_after.status  # non-None: _evaluate_parent returns them together
+                parent_status = parent_after.status
                 await self.arq_queue.enqueue_job(
                     "reflect",
                     agent_id=str(reflect_agent_id),

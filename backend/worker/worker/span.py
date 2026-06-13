@@ -46,8 +46,8 @@ def current_span() -> JobSpan:
     """Access the active JobSpan from anywhere in the job call stack via ContextVar."""
     try:
         return _current_span.get()
-    except LookupError:
-        raise NoActiveSpanError("No active JobSpan — called outside a job context")
+    except LookupError as err:
+        raise NoActiveSpanError("No active JobSpan — called outside a job context") from err
 
 
 class JobSpan:
