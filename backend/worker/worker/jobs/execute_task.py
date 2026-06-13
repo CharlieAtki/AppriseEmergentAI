@@ -242,6 +242,19 @@ async def execute_task(
             )
 
             # ── Phase 7: DOWNSTREAM EVENTS ───────────────────────────────────────
+            # Episodic memory write — factual record of execution, no LLM.
+            # Guarded: Qdrant unavailability must not mark a completed task as failed.
+            try:
+                await wctx.memory.store_episode(
+                    str(agent.id),
+                    str(task.workspace_id),
+                    _build_episodic_entry(task, execution, "completed", quality),
+                )
+            except Exception:
+                logger.exception(
+                    "execute_task: could not write completed episodic for task=%s", task_id
+                )
+
             await stream_logger.task_completed(task, agent_id, quality)
 
             await span.emit("job.completed", {"quality_score": quality})
