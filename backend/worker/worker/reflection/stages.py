@@ -144,7 +144,10 @@ async def _stage_skills(
         # Idempotency guard — if a SkillSnapshot for this execution already exists,
         # the delta was applied on a previous attempt. Skip to avoid double-counting.
         existing = await session.scalar(
-            select(SkillSnapshot).where(SkillSnapshot.execution_id == rctx.execution_id)
+            select(SkillSnapshot).where(
+                SkillSnapshot.execution_id == rctx.execution_id,
+                SkillSnapshot.agent_id == rctx.agent_id,
+            )
         )
         if existing is not None:
             return result
@@ -167,6 +170,10 @@ async def _stage_skills(
 
         filtered_out = [s for s in result.skill_domains if s not in rctx.required_skills]
         if filtered_out:
+            logger.warning(
+                "reflect _stage_skills: LLM named skills outside required set — dropped=%s execution=%s",
+                filtered_out, rctx.execution_id,
+            )
             await span.emit("skills.filtered", {"dropped": filtered_out})
 
         for skill_name in result.new_skill_suggestions:

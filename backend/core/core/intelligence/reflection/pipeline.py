@@ -1,10 +1,10 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any, Awaitable, Callable
+from typing import TYPE_CHECKING, Awaitable, Callable
 
 if TYPE_CHECKING:
-    from core.intelligence.reflection.types import ReflectContext
+    from core.intelligence.reflection.types import PipelineResult, ReflectContext
 
 
 @dataclass(frozen=True)
@@ -28,5 +28,5 @@ class PipelineStage:
     """
 
     name: str
-    fn:   Callable[..., Awaitable[Any]]
+    fn:   Callable[..., Awaitable[PipelineResult]]
     gate: Callable[[ReflectContext], bool] | None = None

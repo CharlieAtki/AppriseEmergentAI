@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
-from typing import Literal
+from typing import Any, Literal
 
 from pydantic import BaseModel
 
@@ -26,8 +26,8 @@ class TaskContext:
 class ResultContext:
     """Execution output passed to prompt builders. Extracted from ReflectContext."""
 
-    summary:    str    # artifact text on success; error message on failure
-    tool_trace: tuple  # sequence of tool call dicts from the graph execution
+    summary:    str                        # artifact text on success; error message on failure
+    tool_trace: tuple[dict[str, Any], ...]  # sequence of tool call dicts from the graph execution
 
 
 @dataclass(frozen=True)

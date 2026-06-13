@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import uuid
 from dataclasses import dataclass, field
-from typing import Literal
+from typing import Any, Literal
 
 
 @dataclass(frozen=True)
@@ -53,13 +53,13 @@ class ReflectContext:
     task_type:        str | None
     required_skills:  dict[str, float]
     difficulty:       float | None
-    domain_tags:      dict | None
+    domain_tags:      dict[str, Any] | None
     status:           Literal["completed", "failed"]
     artifact:         str | None
-    error:            dict | None
-    tool_trace:       tuple          # immutable — stages must not mutate shared context
-    heuristic_score:  float          # authoritative quality signal — score_outcome() result
-    full_reflect:     bool           # difficulty >= 3.0 or step_count > 3
+    error:            dict[str, Any] | None
+    tool_trace:       tuple[dict[str, Any], ...]  # immutable — stages must not mutate shared context
+    heuristic_score:  float                        # authoritative quality signal — score_outcome() result
+    full_reflect:     bool                         # difficulty >= 3.0 or step_count > 3
     step_count:       int
     agent_skills:     dict[str, float]
 
@@ -93,7 +93,7 @@ class PipelineResult:
     skill_domains:         list[str]        = field(default_factory=list)
     new_skill_suggestions: list[str]        = field(default_factory=list)
     rule:                  str | None       = None
-    verdict:               str | None       = None
+    verdict:               Literal["supersedes", "complements", "contradicts"] | None = None
     superseded_ids:        list[str] | None = None
     stages_run:            list[str]        = field(default_factory=list)
     stages_failed:         list[str]        = field(default_factory=list)

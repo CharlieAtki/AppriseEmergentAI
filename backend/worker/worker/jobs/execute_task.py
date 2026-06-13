@@ -49,8 +49,8 @@ async def execute_task(
     - Asks the LLM to evaluate whether to decompose, issue a call-for-proposals (CFP), or self-execute.
     - Acts on the decision: create subtasks for decomposition, release the task back to the pool for CFP, or run a LangGraph-based self-execution.
     - If self-executing, runs the graph, scores the outcome, and atomically writes execution, agent, snapshot, and task updates.
-    - Publishes downstream events (stream events and job lifecycle events) and attempts a best-effort episodic memory write for completed executions.
-    
+    - Publishes downstream events (stream events and job lifecycle events).
+
     On any exception after the execution row is committed, writes failure state for the execution and transitions the task to "failed" (when appropriate) to avoid leaving dangling rows, logs failures, and re-raises the exception for the job system to record.
     """
     async with JobSpan(
@@ -239,20 +239,6 @@ async def execute_task(
                 execution_id=execution.id,
                 execution_path="self_execute",
             )
-
-            # ── Phase 7: DOWNSTREAM EVENTS ───────────────────────────────────────
-            # Episodic memory write — factual record of execution, no LLM.
-            # Guarded: Qdrant unavailability must not mark a completed task as failed.
-            try:
-                await wctx.memory.store_episode(
-                    str(agent.id),
-                    str(task.workspace_id),
-                    _build_episodic_entry(task, execution, "completed", quality),
-                )
-            except Exception:
-                logger.exception(
-                    "execute_task: could not write completed episodic for task=%s", task_id
-                )
 
             await stream_logger.task_completed(task, agent_id, quality)
 
