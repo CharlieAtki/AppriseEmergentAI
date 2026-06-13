@@ -40,19 +40,18 @@ async def execute_task(
     task_id: str,
     workspace_id: str,
 ) -> None:
-    """Main execution job.
-
-    Phase 1 (read)            — load Agent + Task; session closes before any mutation.
-    Phase 2 (write exec row)  — create TaskExecution("executing"), task → "executing".
-    Phase 3 (LLM evaluate)    — decide: decompose / cfp / self-execute.
-    Phase 4 (act)             — branch on decision.
-    Phase 5 (self-execute)    — LangGraph graph; no open DB session.
-    Phase 6 (write results)   — single atomic commit for execution, agent, snapshots, task.
-    Phase 7 (events)          — bus events, reflect job enqueue.
-
-    On any exception after Phase 2 commits: the except block writes task → "failed" and
-    execution → "failed" so the row is not left dangling. Re-raises for ARQ to record.
-    On retry: the terminal-state guard in Phase 1 returns early — retries are idempotent.
+    """
+    Orchestrates the end-to-end execution of a task by an agent, including evaluation, delegation, self-execution, result persistence, and downstream event publishing.
+    
+    Performs the following high-level steps:
+    - Loads Agent and Task state, enforcing a terminal-state idempotency guard.
+    - Creates or reuses a TaskExecution row and marks the task as executing.
+    - Asks the LLM to evaluate whether to decompose, issue a call-for-proposals (CFP), or self-execute.
+    - Acts on the decision: create subtasks for decomposition, release the task back to the pool for CFP, or run a LangGraph-based self-execution.
+    - If self-executing, runs the graph, scores the outcome, and atomically writes execution, agent, snapshot, and task updates.
+    - Publishes downstream events (stream events and job lifecycle events) and attempts a best-effort episodic memory write for completed executions.
+    
+    On any exception after the execution row is committed, writes failure state for the execution and transitions the task to "failed" (when appropriate) to avoid leaving dangling rows, logs failures, and re-raises the exception for the job system to record.
     """
     async with JobSpan(
         uuid.UUID(agent_id), uuid.UUID(task_id), uuid.UUID(workspace_id)

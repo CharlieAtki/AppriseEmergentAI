@@ -36,20 +36,18 @@ async def _stage_reflect(
     memory: AgentMemory,
     span: JobSpan,
 ) -> PipelineResult:
-    """Stage 1 — unified LLM reflection (CallType.REFLECT).
-
-    Lightweight path (``not rctx.full_reflect``): classifies which skills from the
-    required skill set were exercised and suggests new skills to seed. One call,
-    short prompt, no rule extraction.
-
-    Full path (``rctx.full_reflect``): additionally loads existing procedural rules
-    from Qdrant across ``domain_tags`` keys (deduplicated by point ID), then asks
-    for a generalised rule with a supersession verdict. The rule is constrained to
-    reference a specific tool/pattern/artifact from the trace — generic rules are
-    rejected at the prompt level and return None.
-
-    Sets ``result.skill_domains``, ``result.new_skill_suggestions``, ``result.rule``,
-    ``result.verdict``, and ``result.superseded_ids`` for downstream stages.
+    """
+    Perform unified LLM-based reflection to classify exercised skills and, when requested, extract or update a procedural rule.
+    
+    If rctx.full_reflect is false the function classifies which required skills were exercised and suggests new skills to seed. If rctx.full_reflect is true it additionally retrieves existing procedural rules for relevant domains to inform a generalised rule extraction and supersession decision. The function writes its findings into the provided PipelineResult.
+    
+    Returns:
+    	PipelineResult: the same `result` object with updated fields:
+    		- skill_domains: list of detected skill domain names
+    		- new_skill_suggestions: list of suggested new skill names to seed
+    		- rule: extracted generalised procedural rule text or None
+    		- verdict: supersession verdict associated with the rule
+    		- superseded_ids: list of superseded rule IDs or None
     """
     task_ctx = TaskContext(
         title=rctx.task_title,
@@ -268,22 +266,10 @@ async def _stage_episodic(
     memory: AgentMemory,
     span: JobSpan,
 ) -> PipelineResult:
-    """Stage 4 — write the factual execution record to episodic memory (no LLM call).
-
-    This is the sole episodic write for a self-execute task. ``execute_task`` owns
-    execution; the reflection pipeline owns all memory writes — episodic included.
-
-    Gated on ``rctx.full_reflect`` (difficulty >= 3.0 or step_count > 3) to keep
-    trivial completions out of top-k retrieval. Mirrors the text format used
-    historically in ``_build_episodic_entry``, reading directly from the frozen
-    ``ReflectContext`` rather than live ORM objects.
-
-    Qdrant unavailability is a stage failure — the manager logs it and appends to
-    ``result.stages_failed``, causing ARQ to retry. ``_stage_reflect``,
-    ``_stage_skills``, and ``_stage_rules`` are all idempotent on retry, so only
-    this stage re-runs. Known limitation: a retry produces a near-duplicate Qdrant
-    point (same text, different point ID). Full idempotency requires stamping a
-    point ID on the execution row — deferred.
+    """
+    Write a single episodic memory record for a self-execute task when full reflection is enabled.
+    
+    When `rctx.full_reflect` is true, constructs a concise textual episode (completed tasks include task type/title, truncated description, artifact summary, used tools, domains, and quality score; failed tasks include failure type and step count) and stores it in episodic memory via the agent memory backend, then emits a "reflect.episodic_written" span event. Failures from the memory backend cause the stage to fail and be retried; retries may create near-duplicate stored points.
     """
     if not rctx.full_reflect:
         return result
