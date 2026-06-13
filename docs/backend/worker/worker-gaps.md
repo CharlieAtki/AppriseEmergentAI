@@ -377,4 +377,4 @@ needed; current state (static dict) is not wrong, just inconsistent with the in-
 | Embedding model not pre-warmed at startup | ❌ Open — concurrent first-use races cause `NoSuchFile`; pre-warm in `WorkerContext.build()` |
 | Unbound tool calls crash the job | ❌ Open — `KeyError` in `_call_tool` kills the job; needs graceful tool-error response + startup map validation |
 | Runaway decomposition below difficulty threshold | ❌ Open — LLM ignores soft difficulty guideline; needs hard code-level guard + config threshold |
-| Reflection pipeline — heuristic quality, no failure reflection, episodic/reflect decoupling | ✅ Closed — four-stage pipeline implemented; episodic retry duplicate is a known accepted limitation |
+| Reflection pipeline — heuristic quality, no failure reflection, episodic/reflect decoupling | ✅ Closed — reflect→skills→rules pipeline implemented; episodic entries now written in `execute_task` for completed + failed tasks |
