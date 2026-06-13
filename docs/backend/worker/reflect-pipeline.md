@@ -169,8 +169,8 @@ Gate: only runs when `rctx.full_reflect=True`. Returns immediately if `result.ru
 `superseded_ids` point. Archived entries are excluded from all future `_base_filter`
 retrievals.
 
-Storage domain is `_primary_domain(rctx)`: first `domain_tags` key → `task_type` →
-`"general"`.
+Storage domain is `_primary_domain(rctx)`: `task_type` → "general".
+(`domain_tags` are used only for multi-domain retrieval in Stage 1.)
 
 ---
 
