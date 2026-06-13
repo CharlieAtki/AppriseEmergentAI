@@ -267,11 +267,11 @@ prompt string, so emergence experiments can vary them without code changes.
 
 3. **No failure reflection.** Failed tasks produce no episodic record, no skill penalties, no procedural rule. Agents repeat failures without consequence.
 
-**What was done:** Implemented as a unified four-stage pipeline (judge → episodic → skills → rules) under `worker/reflection/`. `EpisodicMemoryHandler` removed. All post-execution writes are owned by `ReflectionManager`. See [`reflect-pipeline-refactor.md`](./reflect-pipeline-refactor.md) for the full design.
+**What was done:** Implemented as a unified three-stage pipeline (reflect → skills → rules) under `worker/reflection/`. `EpisodicMemoryHandler` removed, but episodic writes remain in `execute_task` Phase 7. `execution.quality_score` remains the heuristic signal from `score_outcome()` (no `CallType.JUDGE` overwrite). See [`reflect-pipeline-refactor.md`](./reflect-pipeline-refactor.md) for the full design.
 
-- Gap 1 closed — `CallType.JUDGE` (Haiku) overwrites `execution.quality_score` with a semantic assessment of whether the output answers the task.
-- Gap 2 closed — episodic write now happens inside `_stage_episodic` after the judge has run, using the semantic score. `EpisodicMemoryHandler` deleted.
-- Gap 3 closed — `ReflectJobHandler` fires on `{"completed", "failed"}`; `_stage_episodic` and `_stage_rules` have explicit failure branches.
+- Pipeline refactor completed — `ReflectionManager` now sequences `_stage_reflect`, `_stage_skills`, and `_stage_rules`.
+- Heuristic score retained — reflection reads persisted `execution.quality_score`; there is no `_stage_episodic` or `CallType.JUDGE`.
+- Failure reflection enabled — `ReflectJobHandler` fires on `{"completed", "failed"}` and `execute_task` writes failure episodic entries in Phase 7.
 
 **Remaining known limitation — Qdrant rule duplicate on retry.**
 
