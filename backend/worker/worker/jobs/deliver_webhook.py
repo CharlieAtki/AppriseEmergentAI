@@ -125,6 +125,17 @@ async def deliver_webhook(
             if task:
                 external_ref = task.external_ref
 
+        if delivery_id is not None:
+            existing = (await session.execute(
+                select(WebhookDelivery).where(WebhookDelivery.delivery_id == delivery_id)
+            )).scalar_one_or_none()
+            if existing is not None and existing.status in ("sent", "failed"):
+                logger.info(
+                    "deliver_webhook: delivery=%s already terminal (status=%s), skipping",
+                    delivery_id, existing.status,
+                )
+                return
+
         if delivery_id is None:
             delivery_id = f"dlv_{uuid.uuid4().hex}"
             delivery = WebhookDelivery(
@@ -169,35 +180,40 @@ async def deliver_webhook(
         last_error = str(exc)
         logger.exception("deliver_webhook: HTTP POST failed for delivery=%s", delivery_id)
 
-    async with get_session() as session:
-        result = await session.execute(
-            select(WebhookDelivery).where(WebhookDelivery.delivery_id == delivery_id)
-        )
-        record = result.scalar_one_or_none()
-        if record is None:
-            return
+    try:
+        async with get_session() as session:
+            result = await session.execute(
+                select(WebhookDelivery).where(WebhookDelivery.delivery_id == delivery_id)
+            )
+            record = result.scalar_one_or_none()
+            if record is None:
+                return
 
-        record.attempt_count += 1
-        record.last_attempt_at = datetime.now(timezone.utc)
-        record.last_http_status = http_status
-        record.last_error = last_error
+            record.attempt_count += 1
+            record.last_attempt_at = datetime.now(timezone.utc)
+            record.last_http_status = http_status
+            record.last_error = last_error
 
-        if success:
-            record.status = "sent"
-        else:
-            idx = record.attempt_count - 1
-            if idx < len(_RETRY_DELAYS):
-                delay = _RETRY_DELAYS[idx]
-                record.next_attempt_at = datetime.now(timezone.utc) + timedelta(seconds=delay)
-                await wctx.arq_queue.enqueue_job(
-                    "deliver_webhook",
-                    execution_id=execution_id,
-                    workspace_id=workspace_id,
-                    delivery_id=delivery_id,
-                    _defer_by=timedelta(seconds=delay),
-                )
+            if success:
+                record.status = "sent"
             else:
-                record.status = "failed"
-                logger.warning(
-                    "deliver_webhook: all retries exhausted for delivery=%s", delivery_id,
-                )
+                idx = record.attempt_count - 1
+                if idx < len(_RETRY_DELAYS):
+                    delay = _RETRY_DELAYS[idx]
+                    record.next_attempt_at = datetime.now(timezone.utc) + timedelta(seconds=delay)
+                    await wctx.arq_queue.enqueue_job(
+                        "deliver_webhook",
+                        execution_id=execution_id,
+                        workspace_id=workspace_id,
+                        delivery_id=delivery_id,
+                        _defer_by=timedelta(seconds=delay),
+                    )
+                else:
+                    record.status = "failed"
+                    logger.warning(
+                        "deliver_webhook: all retries exhausted for delivery=%s", delivery_id,
+                    )
+    except Exception:
+        logger.exception(
+            "deliver_webhook: failed to record outcome for delivery=%s", delivery_id,
+        )

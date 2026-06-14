@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from sqlalchemy import select
 
 from core.database import get_session
+from core.models.agents import Agent
 from core.eventing.bus.handlers import EventHandler
 from core.eventing.events.stream_events import TaskCompletedStreamEvent
 from core.memory.agent_memory import AgentMemory

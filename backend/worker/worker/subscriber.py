@@ -72,7 +72,8 @@ class StreamSubscriber(ExternalEventSubscriber):
 
     ``publish`` is ``EventBus.apublish`` — injected as a narrow callable rather
     than the full ``EventBus`` so the subscriber has no dependency on the bus
-    implementation.
+    implementation. The returned tasks are awaited before the stream message is
+    acked, ensuring handlers have finished before the PEL entry is removed.
 
     ``registry`` maps the ``event_type`` discriminator field to the
     ``StreamEvent`` subclass responsible for deserialising that message. Add new
@@ -124,10 +125,10 @@ class StreamSubscriber(ExternalEventSubscriber):
             try:
                 event = _parse_stream_event(payload, self.registry)
                 if event is not None:
-                    await self.publish(event)
+                    tasks = await self.publish(event)
+                    await asyncio.gather(*tasks)
+                await self.bus.ack(self.stream, self.group, msg_id)
             except Exception:
                 logger.exception(
                     "%s subscriber error on message %s: %r", self.name, msg_id, payload
                 )
-            finally:
-                await self.bus.ack(self.stream, self.group, msg_id)

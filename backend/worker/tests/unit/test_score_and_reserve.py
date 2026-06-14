@@ -148,7 +148,7 @@ async def test_setnx_win_task_missing_releases_reservation():
     )
 
     arq_queue.enqueue_job.assert_not_called()
-    redis.delete.assert_called_once()
+    redis.delete.assert_called_once_with(f"reservation:{ws_id}:{task_id}")
 
 
 # ── SETNX loss ────────────────────────────────────────────────────────────────
@@ -202,3 +202,31 @@ async def test_setnx_loss_on_first_win_on_second(make_task):
         task_id=str(task_id),
         workspace_id=str(ws_id),
     )
+
+
+# ── Enqueue failure compensation ──────────────────────────────────────────────
+
+async def test_enqueue_failure_releases_reservation(make_task):
+    """If enqueue_job raises, the Redis reservation key must be deleted."""
+    session, redis, arq_queue = _make_deps()
+
+    task_id = uuid.uuid4()
+    ws_id = uuid.uuid4()
+    task = make_task(status="open", id=task_id, workspace_id=ws_id)
+
+    redis.set = AsyncMock(return_value=b"OK")
+    session.get = AsyncMock(return_value=task)
+    arq_queue.enqueue_job = AsyncMock(side_effect=RuntimeError("arq unavailable"))
+
+    agent = _agent(skills={"python": 1.0})
+
+    with pytest.raises(RuntimeError, match="arq unavailable"):
+        await score_and_reserve(
+            session=session, agents=[agent],
+            task_id=task_id, workspace_id=ws_id,
+            required_skills={"python": 1.0},
+            domain_tags=None,
+            redis=redis, arq_queue=arq_queue,
+        )
+
+    redis.delete.assert_called_once_with(f"reservation:{ws_id}:{task_id}")

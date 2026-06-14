@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 import os
+import socket
 from typing import Any
 
 from worker.context import WorkerContext, get_worker_context, init_worker_context
@@ -72,7 +73,7 @@ async def startup(ctx: dict[str, Any]) -> None:
         publish=wctx.event_bus.apublish,
         stream="stream:task",
         group="worker-group",
-        consumer=f"worker-{os.getpid()}",
+        consumer=f"worker-{socket.gethostname()}-{os.getpid()}",
         registry=TASK_STREAM_REGISTRY,
         name="task",
     ))
@@ -81,7 +82,7 @@ async def startup(ctx: dict[str, Any]) -> None:
         publish=wctx.event_bus.apublish,
         stream="stream:cfp",
         group="cfp-group",
-        consumer=f"cfp-worker-{os.getpid()}",
+        consumer=f"cfp-worker-{socket.gethostname()}-{os.getpid()}",
         registry=CFP_STREAM_REGISTRY,
         name="cfp",
     ))

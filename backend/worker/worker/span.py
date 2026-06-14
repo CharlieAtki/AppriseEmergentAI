@@ -115,6 +115,14 @@ class JobSpan:
         ``default=str`` in json.dumps guards against non-serialisable values that
         callers may pass in ``data`` (e.g. UUID, datetime, Decimal).
         """
+        reserved = {"type", "agent_id", "task_id", "workspace_id", "job_id", "job_try", "ts"}
+        extra: dict[str, object] = {}
+        if data:
+            collision = reserved.intersection(data)
+            if collision:
+                raise ValueError(f"emit() payload contains reserved keys: {sorted(collision)}")
+            extra = dict(data)
+
         event: dict[str, object] = {
             "type":         event_type,
             "agent_id":     str(self.agent_id),
@@ -123,7 +131,7 @@ class JobSpan:
             "job_id":       self.meta.job_id,
             "job_try":      self.meta.job_try,
             "ts":           datetime.now(timezone.utc).isoformat(),
-            **(data or {}),
+            **extra,
         }
         self._events.append(event)
         await self._publish(

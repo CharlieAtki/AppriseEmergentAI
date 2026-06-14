@@ -16,9 +16,10 @@ DomainEvent for in-process, StreamEvent for cross-process.
 """
 from __future__ import annotations
 
+import asyncio
 from collections.abc import Awaitable, Callable
 
 from core.eventing.bus.common import DomainEvent, StreamEvent
 
-PublishFn = Callable[[DomainEvent], Awaitable[None]]
+PublishFn = Callable[[DomainEvent], Awaitable[list[asyncio.Task[None]]]]
 StreamPublishFn = Callable[[StreamEvent], Awaitable[None]]

@@ -30,12 +30,12 @@ async def test_delegation_credits_decompose_full_signal():
     session = AsyncMock()
     session.execute = AsyncMock(return_value=result_mock)
 
-    credits = await compute_delegation_credits(
+    credits_entries = await compute_delegation_credits(
         task_id=uuid.uuid4(), workspace_id=uuid.uuid4(),
         quality=quality, session=session,
     )
 
-    assert credits == [(agent_id, quality)]
+    assert credits_entries == [(agent_id, quality)]
 
 
 async def test_delegation_credits_cfp_partial_signal():
@@ -168,9 +168,14 @@ async def test_executor_credit_updates_influence(make_updated_event, mocker):
 
 async def test_executor_credit_adds_influence_snapshot(make_updated_event, mocker):
     """An InfluenceSnapshot must be session.add()'d for the audit trail."""
+    from worker.handlers import agent_credit as agent_credit_module
+
     _, session = await _run_executor_credit(make_updated_event, mocker)
-    # session.add should be called (at minimum for the agent and snapshot)
-    assert session.add.called
+    added_objects = [call.args[0] for call in session.add.call_args_list]
+    assert any(
+        isinstance(obj, agent_credit_module.InfluenceSnapshot)
+        for obj in added_objects
+    )
 
 
 async def test_non_self_execute_skips_executor_credit(make_updated_event, mocker):

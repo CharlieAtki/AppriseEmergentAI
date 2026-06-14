@@ -12,6 +12,18 @@ _w = core_settings.worker
 # Build cron schedule from config so frequencies are tunable per environment.
 # WORKER__METRICS_SAMPLE_INTERVAL_SECONDS, WORKER__SWEEP_INTERVAL_MINUTES,
 # WORKER__CURATE_MEMORY_HOUR control these without a code change.
+if _w.metrics_sample_interval_seconds < 1:
+    raise ValueError(
+        f"WORKER__METRICS_SAMPLE_INTERVAL_SECONDS must be >= 1, got {_w.metrics_sample_interval_seconds}"
+    )
+if _w.sweep_interval_minutes < 1:
+    raise ValueError(
+        f"WORKER__SWEEP_INTERVAL_MINUTES must be >= 1, got {_w.sweep_interval_minutes}"
+    )
+if not 0 <= _w.curate_memory_hour <= 23:
+    raise ValueError(
+        f"WORKER__CURATE_MEMORY_HOUR must be 0-23, got {_w.curate_memory_hour}"
+    )
 _metrics_seconds = set(range(0, 60, _w.metrics_sample_interval_seconds))
 _sweep_minutes   = set(range(0, 60, _w.sweep_interval_minutes))
 
