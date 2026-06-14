@@ -222,7 +222,7 @@ async def execute_task(
             graph_key = task.task_type if task.task_type in wctx.graphs else "general"
             final_state: GraphState = await wctx.graphs[graph_key].ainvoke(initial_state)
 
-            quality = score_outcome(task, final_state)
+            quality = score_outcome(final_state)
             await span.emit("agent.scored", {"quality_score": quality})
 
             # ── Phase 6: WRITE RESULTS (single atomic commit) ────────────────────

@@ -4,6 +4,7 @@ from typing import TYPE_CHECKING
 
 from langchain_core.tools import tool
 
+from core.agents.tools._utils import _format_memory_items
 from core.agents.tools.registry import tool_registry
 
 if TYPE_CHECKING:
@@ -29,7 +30,7 @@ def _factory(*, memory: AgentMemory) -> object:
 
         if not items:
             return "No procedural rules found for this domain."
-        return "\n\n".join(f"[relevance {item.score:.2f}] {item.text}" for item in items)
+        return _format_memory_items(items)
 
     return search_procedural_memory
 

@@ -4,6 +4,7 @@ from typing import TYPE_CHECKING
 
 from langchain_core.tools import tool
 
+from core.agents.tools._utils import _format_memory_items
 from core.agents.tools.registry import tool_registry
 
 if TYPE_CHECKING:
@@ -24,10 +25,8 @@ def _factory(*, memory: AgentMemory) -> object:
             workspace_id,
             f"observations about agent {peer_agent_id}",
         )
-        items = [ep for ep in ctx.social]
-        if not items:
-            return f"No observations recorded about agent {peer_agent_id}."
-        return "\n\n".join(f"[relevance {item.score:.2f}] {item.text}" for item in items)
+
+        return _format_memory_items(ctx.social)
 
     return search_social_memory
 

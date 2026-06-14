@@ -4,6 +4,7 @@ from typing import TYPE_CHECKING
 
 from langchain_core.tools import tool
 
+from core.agents.tools._utils import _format_memory_items
 from core.agents.tools.registry import tool_registry
 
 if TYPE_CHECKING:
@@ -21,7 +22,7 @@ def _factory(*, memory: AgentMemory) -> object:
         ctx = await memory.retrieve_for_task(agent_id, workspace_id, query)
         if not ctx.episodes:
             return "No relevant past experiences found."
-        return "\n\n".join(f"[relevance {ep.score:.2f}] {ep.text}" for ep in ctx.episodes)
+        return _format_memory_items(ctx.episodes)
 
     return search_episodic_memory
 
