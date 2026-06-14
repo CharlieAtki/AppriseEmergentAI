@@ -10,7 +10,7 @@ if TYPE_CHECKING:
     from core.memory.agent_memory import AgentMemory
 
 
-def _factory(*, memory: "AgentMemory") -> object:
+def _factory(*, memory: AgentMemory) -> object:
     @tool
     async def search_procedural_memory(
         agent_id: str, workspace_id: str, domain: str, query: str

@@ -4,9 +4,8 @@ This is the highest-leverage guard in the system. A task that escapes the
 state machine into an illegal status silently corrupts execution history.
 Every transition pair is parameterised so coverage doesn't require thought.
 """
-from __future__ import annotations
 
-from unittest.mock import MagicMock
+from __future__ import annotations
 
 import pytest
 
@@ -23,18 +22,22 @@ class _SimpleTask:
 
 # ── Legal transitions ─────────────────────────────────────────────────────────
 
-@pytest.mark.parametrize("from_status,to_status", [
-    ("pending",   "enriching"),
-    ("enriching", "open"),
-    ("open",      "reserved"),
-    ("open",      "expired"),
-    ("reserved",  "executing"),
-    ("reserved",  "open"),
-    ("executing", "completed"),
-    ("executing", "failed"),
-    ("executing", "expired"),
-    ("executing", "open"),
-])
+
+@pytest.mark.parametrize(
+    "from_status,to_status",
+    [
+        ("pending", "enriching"),
+        ("enriching", "open"),
+        ("open", "reserved"),
+        ("open", "expired"),
+        ("reserved", "executing"),
+        ("reserved", "open"),
+        ("executing", "completed"),
+        ("executing", "failed"),
+        ("executing", "expired"),
+        ("executing", "open"),
+    ],
+)
 def test_legal_transition_succeeds(from_status, to_status):
     task = _SimpleTask(from_status)
     TaskStateMachine.transition(task, to_status)
@@ -50,20 +53,24 @@ def test_transition_mutates_status_in_place():
 
 # ── Illegal transitions ───────────────────────────────────────────────────────
 
-@pytest.mark.parametrize("from_status,to_status", [
-    ("pending",   "executing"),
-    ("pending",   "completed"),
-    ("enriching", "executing"),
-    ("open",      "completed"),
-    ("open",      "failed"),
-    ("completed", "open"),
-    ("completed", "executing"),
-    ("failed",    "executing"),
-    ("failed",    "open"),
-    ("expired",   "reserved"),
-    ("expired",   "open"),
-    ("executing", "pending"),
-])
+
+@pytest.mark.parametrize(
+    "from_status,to_status",
+    [
+        ("pending", "executing"),
+        ("pending", "completed"),
+        ("enriching", "executing"),
+        ("open", "completed"),
+        ("open", "failed"),
+        ("completed", "open"),
+        ("completed", "executing"),
+        ("failed", "executing"),
+        ("failed", "open"),
+        ("expired", "reserved"),
+        ("expired", "open"),
+        ("executing", "pending"),
+    ],
+)
 def test_illegal_transition_raises(from_status, to_status):
     task = _SimpleTask(from_status)
     with pytest.raises(InvalidTaskTransition):
@@ -79,6 +86,7 @@ def test_illegal_transition_does_not_mutate_status():
 
 
 # ── is_terminal ───────────────────────────────────────────────────────────────
+
 
 @pytest.mark.parametrize("status", ["completed", "failed", "expired"])
 def test_is_terminal_true_for_terminal_statuses(status):

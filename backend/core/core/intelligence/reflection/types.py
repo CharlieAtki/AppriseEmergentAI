@@ -43,25 +43,25 @@ class ReflectContext:
             Stages that write skills load the Agent fresh from DB for atomic writes.
     """
 
-    task_id:          uuid.UUID
-    agent_id:         uuid.UUID
-    execution_id:     uuid.UUID
-    workspace_id:     uuid.UUID
-    organisation_id:  uuid.UUID
-    task_title:       str
+    task_id: uuid.UUID
+    agent_id: uuid.UUID
+    execution_id: uuid.UUID
+    workspace_id: uuid.UUID
+    organisation_id: uuid.UUID
+    task_title: str
     task_description: str | None
-    task_type:        str | None
-    required_skills:  dict[str, float]
-    difficulty:       float | None
-    domain_tags:      dict[str, Any] | None
-    status:           Literal["completed", "failed"]
-    artifact:         str | None
-    error:            dict[str, Any] | None
-    tool_trace:       tuple[dict[str, Any], ...]  # immutable — stages must not mutate shared context
-    heuristic_score:  float                        # authoritative quality signal — score_outcome() result
-    full_reflect:     bool                         # difficulty >= 3.0 or step_count > 3
-    step_count:       int
-    agent_skills:     dict[str, float]
+    task_type: str | None
+    required_skills: dict[str, float]
+    difficulty: float | None
+    domain_tags: dict[str, Any] | None
+    status: Literal["completed", "failed"]
+    artifact: str | None
+    error: dict[str, Any] | None
+    tool_trace: tuple[dict[str, Any], ...]  # immutable — stages must not mutate shared context
+    heuristic_score: float  # authoritative quality signal — score_outcome() result
+    full_reflect: bool  # difficulty >= 3.0 or step_count > 3
+    step_count: int
+    agent_skills: dict[str, float]
 
 
 @dataclass
@@ -90,10 +90,10 @@ class PipelineResult:
         stages_failed:          Names of stages that raised an exception.
     """
 
-    skill_domains:         list[str]        = field(default_factory=list)
-    new_skill_suggestions: list[str]        = field(default_factory=list)
-    rule:                  str | None       = None
-    verdict:               Literal["supersedes", "complements", "contradicts"] | None = None
-    superseded_ids:        list[str] | None = None
-    stages_run:            list[str]        = field(default_factory=list)
-    stages_failed:         list[str]        = field(default_factory=list)
+    skill_domains: list[str] = field(default_factory=list)
+    new_skill_suggestions: list[str] = field(default_factory=list)
+    rule: str | None = None
+    verdict: Literal["supersedes", "complements", "contradicts"] | None = None
+    superseded_ids: list[str] | None = None
+    stages_run: list[str] = field(default_factory=list)
+    stages_failed: list[str] = field(default_factory=list)

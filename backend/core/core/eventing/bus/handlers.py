@@ -93,7 +93,7 @@ class Retry[E](EventHandler[E]):
             except self._retry_on:
                 if attempt == self._max_attempts - 1:
                     raise
-                await asyncio.sleep(self._backoff * (2 ** attempt))
+                await asyncio.sleep(self._backoff * (2**attempt))
 
     def __repr__(self) -> str:
         return f"Retry({self._handler!r}, max={self._max_attempts})"

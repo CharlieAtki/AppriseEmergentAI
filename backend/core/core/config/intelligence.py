@@ -16,11 +16,11 @@ class IntelligenceConfig(BaseSettings):
     hub_influence_threshold: float = 0.7
     routing: dict[str, str] = Field(
         default_factory=lambda: {
-            "evaluate":       "anthropic/claude-haiku-4-5-20251001",
-            "reflect":        "anthropic/claude-sonnet-4-6",
-            "decompose":      "anthropic/claude-sonnet-4-5",
-            "enrich":         "anthropic/claude-haiku-4-5-20251001",
-            "curate_memory":  "anthropic/claude-haiku-4-5-20251001",
-            "execute":        "anthropic/claude-sonnet-4-5",
+            "evaluate": "anthropic/claude-haiku-4-5-20251001",
+            "reflect": "anthropic/claude-sonnet-4-6",
+            "decompose": "anthropic/claude-sonnet-4-5",
+            "enrich": "anthropic/claude-haiku-4-5-20251001",
+            "curate_memory": "anthropic/claude-haiku-4-5-20251001",
+            "execute": "anthropic/claude-sonnet-4-5",
         }
     )

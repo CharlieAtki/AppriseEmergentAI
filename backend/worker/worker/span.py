@@ -6,7 +6,7 @@ from collections.abc import AsyncGenerator, Awaitable, Callable, Mapping
 from contextlib import asynccontextmanager
 from contextvars import ContextVar, Token
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
 from core.database import get_session
@@ -24,8 +24,8 @@ class ArqJobMeta:
     dict directly — the rest of the call stack works with typed values.
     """
 
-    job_id:  str | None  # ARQ-assigned ID, stable across retries
-    job_try: int          # 1 on first attempt, increments on each ARQ retry
+    job_id: str | None  # ARQ-assigned ID, stable across retries
+    job_try: int  # 1 on first attempt, increments on each ARQ retry
 
     @classmethod
     def from_ctx(cls, ctx: Mapping[str, Any]) -> ArqJobMeta:
@@ -78,10 +78,10 @@ class JobSpan:
         redis_publish: Callable[[str, str], Awaitable[None]],
         meta: ArqJobMeta,
     ) -> None:
-        self._publish     = redis_publish
-        self.meta         = meta
-        self.agent_id     = agent_id
-        self.task_id      = task_id
+        self._publish = redis_publish
+        self.meta = meta
+        self.agent_id = agent_id
+        self.task_id = task_id
         self.workspace_id = workspace_id
         self._events: list[dict[str, object]] = []
         self._token: Token[JobSpan] | None = None
@@ -96,7 +96,7 @@ class JobSpan:
         # Never suppress exceptions — let them propagate to ARQ for retry logic.
 
     @asynccontextmanager
-    async def session(self) -> AsyncGenerator[AsyncSession, None]:
+    async def session(self) -> AsyncGenerator[AsyncSession]:
         """Open a DB session for one phase (read or write).
 
         Auto-commits on clean exit, rolls back on exception — from core.database.get_session().
@@ -124,13 +124,13 @@ class JobSpan:
             extra = dict(data)
 
         event: dict[str, object] = {
-            "type":         event_type,
-            "agent_id":     str(self.agent_id),
-            "task_id":      str(self.task_id),
+            "type": event_type,
+            "agent_id": str(self.agent_id),
+            "task_id": str(self.task_id),
             "workspace_id": str(self.workspace_id),
-            "job_id":       self.meta.job_id,
-            "job_try":      self.meta.job_try,
-            "ts":           datetime.now(timezone.utc).isoformat(),
+            "job_id": self.meta.job_id,
+            "job_try": self.meta.job_try,
+            "ts": datetime.now(UTC).isoformat(),
             **extra,
         }
         self._events.append(event)

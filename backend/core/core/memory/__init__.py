@@ -4,9 +4,9 @@ from core.memory.types import MemoryContext, MemoryItem, MemoryTier, Supersessio
 
 __all__ = [
     "AgentMemory",
-    "ensure_collections",
     "MemoryContext",
     "MemoryItem",
     "MemoryTier",
     "SupersessionVerdict",
+    "ensure_collections",
 ]

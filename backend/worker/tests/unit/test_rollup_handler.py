@@ -4,15 +4,13 @@ The rollup handler promotes a parent task when all its subtasks reach terminal
 status. Bugs here either block parent completion forever or promote prematurely.
 The concurrent guard and failed-wins logic are especially regression-sensitive.
 """
+
 from __future__ import annotations
 
 import uuid
 from contextlib import asynccontextmanager
 from unittest.mock import AsyncMock, MagicMock
 
-import pytest
-
-from core.eventing.events.task_events import TaskSnapshot, TaskUpdatedEvent
 from worker.handlers.rollup import RollupSubtaskHandler
 
 
@@ -29,6 +27,7 @@ def _make_handler(arq_mock) -> tuple[RollupSubtaskHandler, AsyncMock]:
 
 
 # ── Early gates (no DB call needed) ──────────────────────────────────────────
+
 
 async def test_no_status_change_returns_early(make_updated_event, arq_mock, mocker):
     """If status did not change, handle() must return before touching the DB."""
@@ -60,6 +59,7 @@ async def test_no_parent_task_id_returns_early(make_updated_event, arq_mock, moc
 
 # ── DB path: siblings not all terminal ───────────────────────────────────────
 
+
 async def test_sibling_still_running_no_enqueue(make_updated_event, arq_mock, mocker):
     """If any sibling is still executing, do not promote parent."""
     parent_id = uuid.uuid4()
@@ -79,8 +79,10 @@ async def test_sibling_still_running_no_enqueue(make_updated_event, arq_mock, mo
     mocker.patch("worker.handlers.rollup.get_session", _gs)
 
     event = make_updated_event(
-        "executing", "completed",
-        parent_task_id=parent_id, workspace_id=ws_id,
+        "executing",
+        "completed",
+        parent_task_id=parent_id,
+        workspace_id=ws_id,
     )
     handler, publish = _make_handler(arq_mock)
     await handler.handle(event)
@@ -90,6 +92,7 @@ async def test_sibling_still_running_no_enqueue(make_updated_event, arq_mock, mo
 
 
 # ── DB path: parent already terminal (concurrent guard) ───────────────────────
+
 
 async def test_parent_already_terminal_no_double_rollup(make_updated_event, arq_mock, mocker):
     """If the parent is already completed, skip — another worker already rolled up."""
@@ -114,8 +117,10 @@ async def test_parent_already_terminal_no_double_rollup(make_updated_event, arq_
     mocker.patch("worker.handlers.rollup.get_session", _gs)
 
     event = make_updated_event(
-        "executing", "completed",
-        parent_task_id=parent_id, workspace_id=ws_id,
+        "executing",
+        "completed",
+        parent_task_id=parent_id,
+        workspace_id=ws_id,
     )
     handler, publish = _make_handler(arq_mock)
     await handler.handle(event)
@@ -126,8 +131,11 @@ async def test_parent_already_terminal_no_double_rollup(make_updated_event, arq_
 
 # ── DB path: all siblings terminal — happy paths ──────────────────────────────
 
+
 async def _run_all_siblings_terminal(
-    make_updated_event, arq_mock, mocker,
+    make_updated_event,
+    arq_mock,
+    mocker,
     sibling_statuses: list[str],
     expected_parent_status: str,
 ):
@@ -160,8 +168,10 @@ async def _run_all_siblings_terminal(
     mocker.patch("worker.handlers.rollup.get_session", _gs)
 
     event = make_updated_event(
-        "executing", sibling_statuses[-1],
-        parent_task_id=parent_id, workspace_id=ws_id,
+        "executing",
+        sibling_statuses[-1],
+        parent_task_id=parent_id,
+        workspace_id=ws_id,
     )
     handler, publish = _make_handler(arq_mock)
     await handler.handle(event)
@@ -169,10 +179,14 @@ async def _run_all_siblings_terminal(
 
 
 async def test_all_siblings_completed_promotes_parent_completed(
-    make_updated_event, arq_mock, mocker,
+    make_updated_event,
+    arq_mock,
+    mocker,
 ):
     parent, publish = await _run_all_siblings_terminal(
-        make_updated_event, arq_mock, mocker,
+        make_updated_event,
+        arq_mock,
+        mocker,
         sibling_statuses=["completed", "completed"],
         expected_parent_status="completed",
     )
@@ -182,11 +196,15 @@ async def test_all_siblings_completed_promotes_parent_completed(
 
 
 async def test_any_sibling_failed_promotes_parent_failed(
-    make_updated_event, arq_mock, mocker,
+    make_updated_event,
+    arq_mock,
+    mocker,
 ):
     """failed wins — even one failed sibling makes the parent failed."""
     parent, publish = await _run_all_siblings_terminal(
-        make_updated_event, arq_mock, mocker,
+        make_updated_event,
+        arq_mock,
+        mocker,
         sibling_statuses=["completed", "failed"],
         expected_parent_status="failed",
     )
@@ -195,7 +213,9 @@ async def test_any_sibling_failed_promotes_parent_failed(
 
 
 async def test_reflect_job_enqueued_with_correct_args(
-    make_updated_event, arq_mock, mocker,
+    make_updated_event,
+    arq_mock,
+    mocker,
 ):
     """reflect job must carry agent_id, task_id, workspace_id, execution_id, status."""
     parent_id = uuid.uuid4()
@@ -226,8 +246,10 @@ async def test_reflect_job_enqueued_with_correct_args(
     mocker.patch("worker.handlers.rollup.get_session", _gs)
 
     event = make_updated_event(
-        "executing", "completed",
-        parent_task_id=parent_id, workspace_id=ws_id,
+        "executing",
+        "completed",
+        parent_task_id=parent_id,
+        workspace_id=ws_id,
     )
     handler, _ = _make_handler(arq_mock)
     await handler.handle(event)

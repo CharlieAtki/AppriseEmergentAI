@@ -101,7 +101,7 @@ class EventBus:
     async def _handle_safely(handler: EventHandler, event: DomainEvent) -> None:
         try:
             await handler.handle(event)
-        except Exception:  # noqa: BLE001
+        except Exception:
             logger.exception(
                 "Background handler %s failed on event %s (id=%s)",
                 repr(handler),
@@ -127,5 +127,5 @@ class EventBus:
         for subscriber in self._subscribers:
             try:
                 await subscriber.stop()
-            except Exception:  # noqa: BLE001
+            except Exception:
                 logger.exception("Error stopping subscriber %s", type(subscriber).__name__)

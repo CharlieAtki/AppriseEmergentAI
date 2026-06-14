@@ -7,6 +7,12 @@ from fastapi import FastAPI
 from fastapi.openapi.utils import get_openapi
 from redis.asyncio import Redis
 
+from api.handlers.task_bridge import TaskCreatedRedisPublisher
+from api.middleware.auth import AuthMiddleware
+from api.routers import agents as agents_router
+from api.routers import api_keys as api_keys_router
+from api.routers import tasks as tasks_router
+from api.routers import workspaces as workspaces_router
 from core.config import settings as core_settings
 from core.eventing.bus.in_process_bus import EventBus
 from core.eventing.bus.redis_bus import RedisBus
@@ -14,12 +20,6 @@ from core.eventing.events.task_events import TaskCreatedEvent
 from core.intelligence.llm_router import LLMRouter
 from core.intelligence.registry import registry
 from core.intelligence.routing_config import resolve_routing
-from api.handlers.task_bridge import TaskCreatedRedisPublisher
-from api.middleware.auth import AuthMiddleware
-from api.routers import tasks as tasks_router
-from api.routers import workspaces as workspaces_router
-from api.routers import agents as agents_router
-from api.routers import api_keys as api_keys_router
 
 
 @asynccontextmanager
@@ -87,6 +87,7 @@ app.openapi = _custom_openapi  # type: ignore[method-assign]
 @app.get("/health", include_in_schema=False)
 async def health() -> dict:
     return {"status": "ok"}
+
 
 app.include_router(
     workspaces_router.router,

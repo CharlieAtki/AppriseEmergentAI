@@ -23,6 +23,10 @@ class WorkerConfig(BaseSettings):
     keep_result: int = 3600
     max_tries: int = 3
     # Cron frequencies in seconds / minutes — tune per environment.
-    metrics_sample_interval_seconds: Annotated[int, Field(ge=1)] = 15   # WORKER__METRICS_SAMPLE_INTERVAL_SECONDS
-    sweep_interval_minutes: Annotated[int, Field(ge=1)] = 5             # WORKER__SWEEP_INTERVAL_MINUTES
-    curate_memory_hour: Annotated[int, Field(ge=0, le=23)] = 0          # WORKER__CURATE_MEMORY_HOUR (midnight UTC)
+    metrics_sample_interval_seconds: Annotated[int, Field(ge=1)] = (
+        15  # WORKER__METRICS_SAMPLE_INTERVAL_SECONDS
+    )
+    sweep_interval_minutes: Annotated[int, Field(ge=1)] = 5  # WORKER__SWEEP_INTERVAL_MINUTES
+    curate_memory_hour: Annotated[int, Field(ge=0, le=23)] = (
+        0  # WORKER__CURATE_MEMORY_HOUR (midnight UTC)
+    )

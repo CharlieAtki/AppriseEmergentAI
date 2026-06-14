@@ -2,11 +2,10 @@ from __future__ import annotations
 
 import hashlib
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Literal
 
 import bcrypt as _bcrypt
-
 from fastapi import HTTPException, status
 from pydantic import BaseModel
 from redis.asyncio import Redis
@@ -67,7 +66,7 @@ async def validate_api_key(
     if record is None:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid API key")
 
-    if record.expires_at and record.expires_at < datetime.now(timezone.utc):
+    if record.expires_at and record.expires_at < datetime.now(UTC):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="API key expired")
 
     payload = ApiKeyPayload(
@@ -78,7 +77,7 @@ async def validate_api_key(
     await redis.set(cache_key, payload.model_dump_json(), ex=300)
 
     # Fire-and-forget last_used_at update — don't block the request
-    record.last_used_at = datetime.now(timezone.utc)
+    record.last_used_at = datetime.now(UTC)
 
     return payload
 
@@ -97,9 +96,7 @@ async def validate_clerk_token(
     if org is None:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Unauthorised")
 
-    user_result = await session.execute(
-        select(User).where(User.clerk_user_id == clerk_user_id)
-    )
+    user_result = await session.execute(select(User).where(User.clerk_user_id == clerk_user_id))
     user = user_result.scalar_one_or_none()
     if user is None:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Unauthorised")

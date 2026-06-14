@@ -16,9 +16,8 @@ from core.eventing.events.task_events import TaskSnapshot, TaskUpdatedEvent
 from core.models.tasks import Task, TaskExecution
 
 if TYPE_CHECKING:
-    from sqlalchemy.ext.asyncio import AsyncSession
-
     from arq import ArqRedis
+    from sqlalchemy.ext.asyncio import AsyncSession
 
 logger = logging.getLogger(__name__)
 
@@ -56,15 +55,22 @@ class RollupSubtaskHandler(EventHandler[TaskUpdatedEvent]):
             reflect_execution_id: uuid.UUID | None = None
 
             async with get_session() as session:
-                parent_before, parent_after, reflect_agent_id, reflect_execution_id = (
-                    await self._evaluate_parent(session, event)
-                )
+                (
+                    parent_before,
+                    parent_after,
+                    reflect_agent_id,
+                    reflect_execution_id,
+                ) = await self._evaluate_parent(session, event)
 
             if parent_before is not None and parent_after is not None:
                 task_logger = TaskActivityLogger(self.publish)
                 await task_logger.updated(parent_before, parent_after)
 
-            if reflect_agent_id is not None and reflect_execution_id is not None and parent_after is not None:
+            if (
+                reflect_agent_id is not None
+                and reflect_execution_id is not None
+                and parent_after is not None
+            ):
                 # Session is closed; scalar access is safe because SessionLocal uses
                 # expire_on_commit=False — attributes remain readable after commit.
                 parent_status = parent_after.status
@@ -96,15 +102,21 @@ class RollupSubtaskHandler(EventHandler[TaskUpdatedEvent]):
         execution_id is the parent's decompose execution (the coordinator's execution record).
         quality_score is no longer passed — the reflect job loads it directly from the DB.
         """
-        parent_id    = event.state.parent_task_id
+        parent_id = event.state.parent_task_id
         workspace_id = event.state.workspace_id
 
-        siblings = (await session.execute(
-            select(Task).where(
-                Task.parent_task_id == parent_id,
-                Task.workspace_id == workspace_id,
+        siblings = (
+            (
+                await session.execute(
+                    select(Task).where(
+                        Task.parent_task_id == parent_id,
+                        Task.workspace_id == workspace_id,
+                    )
+                )
             )
-        )).scalars().all()
+            .scalars()
+            .all()
+        )
 
         if not siblings:
             return None, None, None, None
@@ -120,12 +132,16 @@ class RollupSubtaskHandler(EventHandler[TaskUpdatedEvent]):
         TaskStateMachine.transition(parent, "failed" if any_failed else "completed")
         session.add(parent)
 
-        execution_id: uuid.UUID | None = (await session.execute(
-            select(TaskExecution.id).where(
-                TaskExecution.task_id == parent_id,
-                TaskExecution.execution_path == "decompose",
-            ).limit(1)
-        )).scalar()
+        execution_id: uuid.UUID | None = (
+            await session.execute(
+                select(TaskExecution.id)
+                .where(
+                    TaskExecution.task_id == parent_id,
+                    TaskExecution.execution_path == "decompose",
+                )
+                .limit(1)
+            )
+        ).scalar()
 
         reflect_agent = parent.coordinator_agent_id or parent.created_by_agent_id
         return before, parent, reflect_agent, execution_id

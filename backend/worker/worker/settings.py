@@ -4,7 +4,14 @@ from arq import cron
 from arq.connections import RedisSettings
 
 from core.config import settings as core_settings
-from worker.jobs import curate_memory, deliver_webhook, execute_task, reflect, sample_metrics, sweep_tasks
+from worker.jobs import (
+    curate_memory,
+    deliver_webhook,
+    execute_task,
+    reflect,
+    sample_metrics,
+    sweep_tasks,
+)
 from worker.startup import shutdown, startup
 
 _w = core_settings.worker
@@ -21,11 +28,9 @@ if _w.sweep_interval_minutes < 1:
         f"WORKER__SWEEP_INTERVAL_MINUTES must be >= 1, got {_w.sweep_interval_minutes}"
     )
 if not 0 <= _w.curate_memory_hour <= 23:
-    raise ValueError(
-        f"WORKER__CURATE_MEMORY_HOUR must be 0-23, got {_w.curate_memory_hour}"
-    )
+    raise ValueError(f"WORKER__CURATE_MEMORY_HOUR must be 0-23, got {_w.curate_memory_hour}")
 _metrics_seconds = set(range(0, 60, _w.metrics_sample_interval_seconds))
-_sweep_minutes   = set(range(0, 60, _w.sweep_interval_minutes))
+_sweep_minutes = set(range(0, 60, _w.sweep_interval_minutes))
 
 
 class WorkerSettings:
@@ -48,19 +53,19 @@ class WorkerSettings:
 
     cron_jobs = [
         cron(sample_metrics, second=_metrics_seconds),  # default: every 15 s
-        cron(curate_memory,  minute={0}, hour={_w.curate_memory_hour}),  # default: midnight UTC
-        cron(sweep_tasks,    minute=_sweep_minutes),    # default: every 5 min
+        cron(curate_memory, minute={0}, hour={_w.curate_memory_hour}),  # default: midnight UTC
+        cron(sweep_tasks, minute=_sweep_minutes),  # default: every 5 min
     ]
 
-    on_startup  = startup
+    on_startup = startup
     on_shutdown = shutdown
 
     redis_settings = RedisSettings.from_dsn(core_settings.redis.url)
 
-    max_jobs    = _w.max_jobs
+    max_jobs = _w.max_jobs
     job_timeout = _w.job_timeout
     keep_result = _w.keep_result
     # All enqueued jobs must be idempotent — ARQ will retry up to max_tries on
     # unhandled exceptions. deliver_webhook is self-managed and should not reach
     # this limit under normal operation.
-    max_tries   = _w.max_tries
+    max_tries = _w.max_tries

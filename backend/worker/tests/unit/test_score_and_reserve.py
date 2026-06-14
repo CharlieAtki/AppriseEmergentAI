@@ -4,11 +4,12 @@ This function is where bid scores turn into a committed task reservation.
 The race-condition paths (SETNX win/loss, stale task status) are the most
 likely source of silent double-execution bugs.
 """
+
 from __future__ import annotations
 
 import uuid
 from collections.abc import Mapping
-from unittest.mock import AsyncMock, MagicMock, call
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
@@ -36,13 +37,18 @@ def _make_deps():
 
 # ── No candidates ─────────────────────────────────────────────────────────────
 
+
 async def test_no_agents_returns_silently():
     session, redis, arq_queue = _make_deps()
     await score_and_reserve(
-        session=session, agents=[],
-        task_id=uuid.uuid4(), workspace_id=uuid.uuid4(),
-        required_skills={}, domain_tags=None,
-        redis=redis, arq_queue=arq_queue,
+        session=session,
+        agents=[],
+        task_id=uuid.uuid4(),
+        workspace_id=uuid.uuid4(),
+        required_skills={},
+        domain_tags=None,
+        redis=redis,
+        arq_queue=arq_queue,
     )
     arq_queue.enqueue_job.assert_not_called()
     redis.set.assert_not_called()
@@ -55,17 +61,21 @@ async def test_all_below_threshold_no_enqueue():
     agent = _agent(skills={}, active_tasks=3, influence=0.0)
 
     await score_and_reserve(
-        session=session, agents=[agent],
-        task_id=uuid.uuid4(), workspace_id=uuid.uuid4(),
+        session=session,
+        agents=[agent],
+        task_id=uuid.uuid4(),
+        workspace_id=uuid.uuid4(),
         required_skills={"exotic_ml_skill": 1.0},
         domain_tags=None,
-        redis=redis, arq_queue=arq_queue,
+        redis=redis,
+        arq_queue=arq_queue,
     )
     arq_queue.enqueue_job.assert_not_called()
     redis.set.assert_not_called()
 
 
 # ── SETNX win — task still open ───────────────────────────────────────────────
+
 
 async def test_setnx_win_task_open_enqueues_job(make_task):
     """Win the reservation and find the task still open → transition + enqueue."""
@@ -81,11 +91,14 @@ async def test_setnx_win_task_open_enqueues_job(make_task):
     agent = _agent(skills={"python": 1.0})
 
     await score_and_reserve(
-        session=session, agents=[agent],
-        task_id=task_id, workspace_id=ws_id,
+        session=session,
+        agents=[agent],
+        task_id=task_id,
+        workspace_id=ws_id,
         required_skills={"python": 1.0},
         domain_tags=None,
-        redis=redis, arq_queue=arq_queue,
+        redis=redis,
+        arq_queue=arq_queue,
     )
 
     arq_queue.enqueue_job.assert_called_once_with(
@@ -102,6 +115,7 @@ async def test_setnx_win_task_open_enqueues_job(make_task):
 
 # ── SETNX win — task status stale ─────────────────────────────────────────────
 
+
 async def test_setnx_win_task_not_open_releases_reservation(make_task):
     """Win the SETNX but task is no longer "open" → release key, no enqueue."""
     session, redis, arq_queue = _make_deps()
@@ -117,11 +131,14 @@ async def test_setnx_win_task_not_open_releases_reservation(make_task):
     agent = _agent(skills={"python": 1.0})
 
     await score_and_reserve(
-        session=session, agents=[agent],
-        task_id=task_id, workspace_id=ws_id,
+        session=session,
+        agents=[agent],
+        task_id=task_id,
+        workspace_id=ws_id,
         required_skills={"python": 1.0},
         domain_tags=None,
-        redis=redis, arq_queue=arq_queue,
+        redis=redis,
+        arq_queue=arq_queue,
     )
 
     arq_queue.enqueue_job.assert_not_called()
@@ -141,11 +158,14 @@ async def test_setnx_win_task_missing_releases_reservation():
     agent = _agent(skills={"python": 1.0})
 
     await score_and_reserve(
-        session=session, agents=[agent],
-        task_id=task_id, workspace_id=ws_id,
+        session=session,
+        agents=[agent],
+        task_id=task_id,
+        workspace_id=ws_id,
         required_skills={"python": 1.0},
         domain_tags=None,
-        redis=redis, arq_queue=arq_queue,
+        redis=redis,
+        arq_queue=arq_queue,
     )
 
     arq_queue.enqueue_job.assert_not_called()
@@ -153,6 +173,7 @@ async def test_setnx_win_task_missing_releases_reservation():
 
 
 # ── SETNX loss ────────────────────────────────────────────────────────────────
+
 
 async def test_setnx_loss_all_agents_no_enqueue():
     """All SETNX attempts fail → another worker won, no enqueue."""
@@ -163,11 +184,14 @@ async def test_setnx_loss_all_agents_no_enqueue():
     agents = [_agent(skills={"python": 1.0}), _agent(skills={"python": 0.8})]
 
     await score_and_reserve(
-        session=session, agents=agents,
-        task_id=uuid.uuid4(), workspace_id=uuid.uuid4(),
+        session=session,
+        agents=agents,
+        task_id=uuid.uuid4(),
+        workspace_id=uuid.uuid4(),
         required_skills={"python": 1.0},
         domain_tags=None,
-        redis=redis, arq_queue=arq_queue,
+        redis=redis,
+        arq_queue=arq_queue,
     )
 
     arq_queue.enqueue_job.assert_not_called()
@@ -190,11 +214,14 @@ async def test_setnx_loss_on_first_win_on_second(make_task):
     agent2 = _agent(skills={"python": 0.8}, influence=0.5)
 
     await score_and_reserve(
-        session=session, agents=[agent1, agent2],
-        task_id=task_id, workspace_id=ws_id,
+        session=session,
+        agents=[agent1, agent2],
+        task_id=task_id,
+        workspace_id=ws_id,
         required_skills={"python": 1.0},
         domain_tags=None,
-        redis=redis, arq_queue=arq_queue,
+        redis=redis,
+        arq_queue=arq_queue,
     )
 
     arq_queue.enqueue_job.assert_called_once_with(
@@ -206,6 +233,7 @@ async def test_setnx_loss_on_first_win_on_second(make_task):
 
 
 # ── Enqueue failure compensation ──────────────────────────────────────────────
+
 
 async def test_enqueue_failure_releases_reservation(make_task):
     """If enqueue_job raises, the Redis reservation key must be deleted."""
@@ -223,11 +251,14 @@ async def test_enqueue_failure_releases_reservation(make_task):
 
     with pytest.raises(RuntimeError, match="arq unavailable"):
         await score_and_reserve(
-            session=session, agents=[agent],
-            task_id=task_id, workspace_id=ws_id,
+            session=session,
+            agents=[agent],
+            task_id=task_id,
+            workspace_id=ws_id,
             required_skills={"python": 1.0},
             domain_tags=None,
-            redis=redis, arq_queue=arq_queue,
+            redis=redis,
+            arq_queue=arq_queue,
         )
 
     redis.delete.assert_called_once_with(f"reservation:{ws_id}:{task_id}")

@@ -22,8 +22,7 @@ def _skill_match(
     if total_weight == 0.0:
         return 0.5
     weighted_sum = sum(
-        required_skills[skill] * _clamp01(agent_skills.get(skill, 0.0))
-        for skill in required_skills
+        required_skills[skill] * _clamp01(agent_skills.get(skill, 0.0)) for skill in required_skills
     )
     return weighted_sum / total_weight
 

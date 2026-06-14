@@ -4,7 +4,7 @@ import hashlib
 import hmac
 import logging
 import uuid
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from typing import Any, Literal
 
 import httpx
@@ -26,6 +26,7 @@ _RETRY_DELAYS: tuple[int, ...] = (30, 300, 1800, 7200)  # 30s, 5m, 30m, 2h
 # which is the contract external webhook consumers depend on. The worker makes
 # HTTP calls — it does not serve them — so this is not a violation of the
 # "worker/ never serves HTTP" rule.
+
 
 class _WebhookArtefact(BaseModel):
     """The task output embedded in the webhook body sent to external consumers."""
@@ -105,7 +106,8 @@ async def deliver_webhook(
         if execution is None or workspace is None:
             logger.warning(
                 "deliver_webhook: execution or workspace not found exec=%s ws=%s",
-                execution_id, workspace_id,
+                execution_id,
+                workspace_id,
             )
             return
 
@@ -126,13 +128,16 @@ async def deliver_webhook(
                 external_ref = task.external_ref
 
         if delivery_id is not None:
-            existing = (await session.execute(
-                select(WebhookDelivery).where(WebhookDelivery.delivery_id == delivery_id)
-            )).scalar_one_or_none()
+            existing = (
+                await session.execute(
+                    select(WebhookDelivery).where(WebhookDelivery.delivery_id == delivery_id)
+                )
+            ).scalar_one_or_none()
             if existing is not None and existing.status in ("sent", "failed"):
                 logger.info(
                     "deliver_webhook: delivery=%s already terminal (status=%s), skipping",
-                    delivery_id, existing.status,
+                    delivery_id,
+                    existing.status,
                 )
                 return
 
@@ -148,14 +153,18 @@ async def deliver_webhook(
             )
             session.add(delivery)
 
-    body = _WebhookPayload(
-        delivery_id=delivery_id,
-        task_id=task_id,
-        workspace_id=ws_uuid,
-        completed_at=completed_at,
-        external_ref=external_ref,
-        artefact=_WebhookArtefact(content=artifact),
-    ).model_dump_json().encode()
+    body = (
+        _WebhookPayload(
+            delivery_id=delivery_id,
+            task_id=task_id,
+            workspace_id=ws_uuid,
+            completed_at=completed_at,
+            external_ref=external_ref,
+            artefact=_WebhookArtefact(content=artifact),
+        )
+        .model_dump_json()
+        .encode()
+    )
 
     headers: dict[str, str] = {"Content-Type": "application/json"}
     if webhook_secret:
@@ -190,7 +199,7 @@ async def deliver_webhook(
                 return
 
             record.attempt_count += 1
-            record.last_attempt_at = datetime.now(timezone.utc)
+            record.last_attempt_at = datetime.now(UTC)
             record.last_http_status = http_status
             record.last_error = last_error
 
@@ -200,7 +209,7 @@ async def deliver_webhook(
                 idx = record.attempt_count - 1
                 if idx < len(_RETRY_DELAYS):
                     delay = _RETRY_DELAYS[idx]
-                    record.next_attempt_at = datetime.now(timezone.utc) + timedelta(seconds=delay)
+                    record.next_attempt_at = datetime.now(UTC) + timedelta(seconds=delay)
                     await wctx.arq_queue.enqueue_job(
                         "deliver_webhook",
                         execution_id=execution_id,
@@ -211,9 +220,11 @@ async def deliver_webhook(
                 else:
                     record.status = "failed"
                     logger.warning(
-                        "deliver_webhook: all retries exhausted for delivery=%s", delivery_id,
+                        "deliver_webhook: all retries exhausted for delivery=%s",
+                        delivery_id,
                     )
     except Exception:
         logger.exception(
-            "deliver_webhook: failed to record outcome for delivery=%s", delivery_id,
+            "deliver_webhook: failed to record outcome for delivery=%s",
+            delivery_id,
         )

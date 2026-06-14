@@ -76,9 +76,7 @@ class OrganisationMember(Base, CreatedAtMixin):
     )
     role: Mapped[str] = mapped_column(sa.Text, nullable=False)
 
-    __table_args__ = (
-        sa.Index("ix_organisation_members_user_id", "user_id"),
-    )
+    __table_args__ = (sa.Index("ix_organisation_members_user_id", "user_id"),)
 
     organisation: Mapped[Organisation] = relationship(back_populates="members")
     user: Mapped[User] = relationship(back_populates="memberships")
@@ -108,9 +106,7 @@ class Workspace(Base, TimestampMixin):
     result_webhook_url: Mapped[str | None] = mapped_column(sa.Text, nullable=True)
     webhook_secret: Mapped[str | None] = mapped_column(sa.Text, nullable=True)
 
-    __table_args__ = (
-        sa.Index("ix_workspaces_organisation_id", "organisation_id"),
-    )
+    __table_args__ = (sa.Index("ix_workspaces_organisation_id", "organisation_id"),)
 
     organisation: Mapped[Organisation] = relationship(back_populates="workspaces")
     api_keys: Mapped[list[ApiKey]] = relationship(

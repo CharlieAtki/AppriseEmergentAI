@@ -11,10 +11,10 @@ from core.utils.retry import is_retryable_http, retry_async
 from core.vendors.base import VendorProvider
 
 _FALLBACK_STUBS: dict[CallType, str] = {
-    CallType.EVALUATE:      '{"decision":"self_execute","reasoning":"heuristic fallback"}',
-    CallType.REFLECT:       '{"skill_domains":[],"new_skill_suggestions":[],"generalised_rule":null,"verdict":null,"superseded_ids":[]}',
-    CallType.DECOMPOSE:     '{"subtasks":[]}',
-    CallType.ENRICH:        '{"required_skills":{},"difficulty":1.0,"task_type":"general","domain_tags":{}}',
+    CallType.EVALUATE: '{"decision":"self_execute","reasoning":"heuristic fallback"}',
+    CallType.REFLECT: '{"skill_domains":[],"new_skill_suggestions":[],"generalised_rule":null,"verdict":null,"superseded_ids":[]}',
+    CallType.DECOMPOSE: '{"subtasks":[]}',
+    CallType.ENRICH: '{"required_skills":{},"difficulty":1.0,"task_type":"general","domain_tags":{}}',
     CallType.CURATE_MEMORY: '{"flagged":[]}',
 }
 
@@ -66,9 +66,7 @@ class LLMRouter:
 
         if json_mode and messages:
             last = messages[-1]
-            messages = messages[:-1] + [
-                {**last, "content": last["content"] + _JSON_INSTRUCTION}
-            ]
+            messages = messages[:-1] + [{**last, "content": last["content"] + _JSON_INSTRUCTION}]
 
         lc_messages = _to_langchain_messages(messages)
         model = self._get_model(call_type, routing_override)

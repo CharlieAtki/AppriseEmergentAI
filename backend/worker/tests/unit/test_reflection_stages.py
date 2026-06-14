@@ -5,6 +5,7 @@ each have idempotency guards designed to be safe on ARQ retry. Regressions here
 cause double-applies (skills credited twice) or missing writes (rules lost on
 Qdrant failure). We test the guards directly without running the full pipeline.
 """
+
 from __future__ import annotations
 
 import uuid
@@ -16,8 +17,8 @@ import pytest
 from core.intelligence.reflection.types import PipelineResult, ReflectContext
 from worker.reflection.stages import _primary_domain, _stage_rules, _stage_skills
 
-
 # ── Helpers ───────────────────────────────────────────────────────────────────
+
 
 def _make_rctx(**kwargs) -> ReflectContext:
     defaults = dict(
@@ -68,6 +69,7 @@ def _make_span(session_factory=None):
 
 # ── _primary_domain ───────────────────────────────────────────────────────────
 
+
 def test_primary_domain_uses_task_type():
     rctx = _make_rctx(task_type="code")
     assert _primary_domain(rctx) == "code"
@@ -79,6 +81,7 @@ def test_primary_domain_falls_back_to_general():
 
 
 # ── _stage_skills: empty domains → early return ───────────────────────────────
+
 
 async def test_stage_skills_empty_domains_returns_without_db():
     rctx = _make_rctx()
@@ -93,6 +96,7 @@ async def test_stage_skills_empty_domains_returns_without_db():
 
 
 # ── _stage_skills: idempotency guard ─────────────────────────────────────────
+
 
 async def test_stage_skills_idempotency_skip_when_snapshot_exists():
     """If a SkillSnapshot already exists for this execution_id, skip the stage."""
@@ -118,6 +122,7 @@ async def test_stage_skills_idempotency_skip_when_snapshot_exists():
 
 # ── _stage_skills: skill guard ────────────────────────────────────────────────
 
+
 async def test_stage_skills_filters_out_of_required_set(caplog):
     """Skills named by LLM that are not in required_skills must be dropped."""
     rctx = _make_rctx(required_skills={"python": 1.0})
@@ -140,8 +145,11 @@ async def test_stage_skills_filters_out_of_required_set(caplog):
     span = _make_span(session_factory=_session_cm)
 
     import logging
-    with patch("worker.reflection.stages.current_span", return_value=span), \
-         caplog.at_level(logging.WARNING, logger="worker.reflection.stages"):
+
+    with (
+        patch("worker.reflection.stages.current_span", return_value=span),
+        caplog.at_level(logging.WARNING, logger="worker.reflection.stages"),
+    ):
         await _stage_skills(rctx, result, AsyncMock(), AsyncMock())
 
     # "exotic_unlisted_skill" must not be in the final agent.skills
@@ -211,6 +219,7 @@ async def test_stage_skills_does_not_overwrite_existing_skill_with_seed():
 
 # ── _stage_rules: early returns ───────────────────────────────────────────────
 
+
 async def test_stage_rules_returns_early_when_no_rule():
     """No rule extracted → skip all DB and Qdrant writes."""
     rctx = _make_rctx()
@@ -252,6 +261,7 @@ async def test_stage_rules_idempotency_both_writes_complete():
 
 # ── _stage_rules: full first-run path ────────────────────────────────────────
 
+
 async def test_stage_rules_first_run_creates_log_and_writes_qdrant():
     """No existing log → Phase 1 (Postgres), Phase 2 (Qdrant), Phase 3 (stamp)."""
     rctx = _make_rctx()
@@ -285,6 +295,7 @@ async def test_stage_rules_first_run_creates_log_and_writes_qdrant():
 
 
 # ── _stage_rules: partial idempotency (Qdrant previously failed) ──────────────
+
 
 async def test_stage_rules_retry_skips_phase1_reruns_phase2():
     """Existing log without vector_store_ref → skip Phase 1, retry Qdrant write."""

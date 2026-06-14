@@ -5,8 +5,8 @@ from typing import TYPE_CHECKING, Any, TypedDict
 if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession
 
-    from core.eventing.activity.task_logger import TaskActivityLogger
     from core.coordination.task_context import TaskContext
+    from core.eventing.activity.task_logger import TaskActivityLogger
     from core.models.agents import Agent
     from core.models.tasks import Task
 

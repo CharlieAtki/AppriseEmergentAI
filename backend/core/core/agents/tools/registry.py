@@ -1,7 +1,8 @@
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any, Callable
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from langchain_core.tools import BaseTool
@@ -12,7 +13,7 @@ class ToolEntry:
     name: str
     # Empty frozenset means available for all task types.
     task_types: frozenset[str]
-    factory: Callable[..., "BaseTool"]
+    factory: Callable[..., BaseTool]
 
 
 class ToolRegistry:
@@ -28,7 +29,7 @@ class ToolRegistry:
     def register(
         self,
         name: str,
-        factory: Callable[..., "BaseTool"],
+        factory: Callable[..., BaseTool],
         *,
         task_types: frozenset[str] | set[str] = frozenset(),
     ) -> None:
@@ -38,7 +39,7 @@ class ToolRegistry:
             factory=factory,
         )
 
-    def build_for_task_type(self, task_type: str, **kwargs: Any) -> list["BaseTool"]:
+    def build_for_task_type(self, task_type: str, **kwargs: Any) -> list[BaseTool]:
         """Instantiate all tools applicable to task_type, injecting kwargs into each factory."""
         return [
             entry.factory(**kwargs)

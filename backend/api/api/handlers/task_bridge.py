@@ -23,12 +23,14 @@ class TaskCreatedRedisPublisher(EventHandler["TaskCreatedEvent"]):
 
     async def handle(self, event: TaskCreatedEvent) -> None:
         s = event.state
-        await self._bus.apublish(TaskCreatedStreamEvent(
-            task_id=s.id,
-            workspace_id=s.workspace_id,
-            organisation_id=s.organisation_id,
-            required_skills=s.required_skills or {},
-            difficulty=s.difficulty,
-            task_type=s.task_type,
-            domain_tags=s.domain_tags,
-        ))
+        await self._bus.apublish(
+            TaskCreatedStreamEvent(
+                task_id=s.id,
+                workspace_id=s.workspace_id,
+                organisation_id=s.organisation_id,
+                required_skills=s.required_skills or {},
+                difficulty=s.difficulty,
+                task_type=s.task_type,
+                domain_tags=s.domain_tags,
+            )
+        )

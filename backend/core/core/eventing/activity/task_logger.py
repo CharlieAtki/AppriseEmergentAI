@@ -9,12 +9,18 @@ Logger methods read scalar attributes from their argument. This works even on
 detached SQLAlchemy instances, since SQLAlchemy keeps cached scalar values in
 ``__dict__`` after detach.
 """
+
 from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
 from core.eventing.activity.base import PublishFn
-from core.eventing.events.task_events import TaskCreatedEvent, TaskDeletedEvent, TaskSnapshot, TaskUpdatedEvent
+from core.eventing.events.task_events import (
+    TaskCreatedEvent,
+    TaskDeletedEvent,
+    TaskSnapshot,
+    TaskUpdatedEvent,
+)
 
 if TYPE_CHECKING:
     import uuid

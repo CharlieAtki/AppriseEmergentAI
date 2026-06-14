@@ -25,7 +25,7 @@ logger = logging.getLogger(__name__)
 # Adding a new event type: define the class in stream_events.py and add one entry here.
 # No other files need to change.
 TASK_STREAM_REGISTRY: Mapping[str, type[StreamEvent]] = {
-    "task.created":   TaskCreatedStreamEvent,
+    "task.created": TaskCreatedStreamEvent,
     "task.completed": TaskCompletedStreamEvent,
 }
 
@@ -98,13 +98,13 @@ class StreamSubscriber(ExternalEventSubscriber):
     the ack does not wait for handlers to complete.
     """
 
-    bus:      SubscribableBusProtocol
-    publish:  PublishFn
-    stream:   str
-    group:    str
+    bus: SubscribableBusProtocol
+    publish: PublishFn
+    stream: str
+    group: str
     consumer: str
     registry: Mapping[str, type[StreamEvent]]
-    name:     str  # used for task naming and log messages
+    name: str  # used for task naming and log messages
 
     _task: asyncio.Task[None] | None = field(default=None, init=False, repr=False)
 

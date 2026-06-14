@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from sqlalchemy import select
@@ -31,35 +31,53 @@ async def sweep_tasks(ctx: dict[str, Any]) -> None:
     wctx = get_worker_context()
     task_logger = TaskActivityLogger(wctx.event_bus.apublish)
 
-    now = datetime.now(timezone.utc)
-    open_cutoff     = now - timedelta(seconds=settings.TASK_OPEN_TIMEOUT_SECONDS)
+    now = datetime.now(UTC)
+    open_cutoff = now - timedelta(seconds=settings.TASK_OPEN_TIMEOUT_SECONDS)
     reserved_cutoff = now - timedelta(seconds=settings.TASK_RESERVED_TIMEOUT_SECONDS)
 
     transitioned: list[tuple[TaskSnapshot, Task]] = []
 
     async with get_session() as session:
-        stuck_open = (await session.execute(
-            select(Task).where(
-                Task.status == "open",
-                Task.updated_at < open_cutoff,
-                Task.deadline_at.is_(None),
+        stuck_open = (
+            (
+                await session.execute(
+                    select(Task).where(
+                        Task.status == "open",
+                        Task.updated_at < open_cutoff,
+                        Task.deadline_at.is_(None),
+                    )
+                )
             )
-        )).scalars().all()
+            .scalars()
+            .all()
+        )
 
-        deadline_expired = (await session.execute(
-            select(Task).where(
-                Task.status.in_(["open", "executing"]),
-                Task.deadline_at.is_not(None),
-                Task.deadline_at < now,
+        deadline_expired = (
+            (
+                await session.execute(
+                    select(Task).where(
+                        Task.status.in_(["open", "executing"]),
+                        Task.deadline_at.is_not(None),
+                        Task.deadline_at < now,
+                    )
+                )
             )
-        )).scalars().all()
+            .scalars()
+            .all()
+        )
 
-        stale_reserved = (await session.execute(
-            select(Task).where(
-                Task.status == "reserved",
-                Task.updated_at < reserved_cutoff,
+        stale_reserved = (
+            (
+                await session.execute(
+                    select(Task).where(
+                        Task.status == "reserved",
+                        Task.updated_at < reserved_cutoff,
+                    )
+                )
             )
-        )).scalars().all()
+            .scalars()
+            .all()
+        )
 
         for task in (*stuck_open, *deadline_expired):
             before = TaskSnapshot.from_domain(task)

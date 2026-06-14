@@ -5,13 +5,13 @@ import uuid
 from fastapi import APIRouter, BackgroundTasks, Depends, Header, HTTPException, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from api.deps import get_db, require_workspace
+from api.schemas.task import CreateTaskRequest, TaskCreatedResponse, TaskResponse
+from api.services.task_service import TaskService
 from core.database import get_session
 from core.eventing.activity.task_logger import TaskActivityLogger
 from core.intelligence.enrichment import EnrichmentOverrides, enrich
 from core.models.tasks import Task
-from api.deps import get_db, require_workspace
-from api.schemas.task import CreateTaskRequest, TaskCreatedResponse, TaskOverrides, TaskResponse
-from api.services.task_service import TaskService
 
 router = APIRouter()
 
@@ -38,10 +38,10 @@ async def enrich_and_release(
 
         result = await enrich(task.title, task.description, llm_router, overrides)
         task.required_skills = result.required_skills
-        task.difficulty      = result.difficulty
-        task.task_type       = result.task_type
-        task.domain_tags     = result.domain_tags
-        task.status          = "open"
+        task.difficulty = result.difficulty
+        task.task_type = result.task_type
+        task.domain_tags = result.domain_tags
+        task.status = "open"
 
     task_logger = TaskActivityLogger(publish)
     await task_logger.created(task)
@@ -70,9 +70,12 @@ async def create_task(
             required_skills=body.overrides.required_skills,
             difficulty=body.overrides.difficulty,
         )
-        if body.overrides else None
+        if body.overrides
+        else None
     )
-    background_tasks.add_task(enrich_and_release, task.id, bus.apublish, request.app.state.llm_router, ov)
+    background_tasks.add_task(
+        enrich_and_release, task.id, bus.apublish, request.app.state.llm_router, ov
+    )
     return TaskCreatedResponse(task_id=task.id, status=task.status, workspace_id=task.workspace_id)
 
 

@@ -10,11 +10,9 @@ if TYPE_CHECKING:
     from core.memory.agent_memory import AgentMemory
 
 
-def _factory(*, memory: "AgentMemory") -> object:
+def _factory(*, memory: AgentMemory) -> object:
     @tool
-    async def search_social_memory(
-        agent_id: str, workspace_id: str, peer_agent_id: str
-    ) -> str:
+    async def search_social_memory(agent_id: str, workspace_id: str, peer_agent_id: str) -> str:
         """Retrieve what this agent knows about a peer agent's capabilities and reliability.
 
         Use this when deciding whether to delegate to or collaborate with a specific peer.

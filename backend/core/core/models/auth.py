@@ -46,7 +46,9 @@ class ApiKey(Base, CreatedAtMixin):
     scopes: Mapped[list[str] | None] = mapped_column(JSONB, nullable=True)
     last_used_at: Mapped[datetime | None] = mapped_column(sa.DateTime(timezone=True), nullable=True)
     expires_at: Mapped[datetime | None] = mapped_column(sa.DateTime(timezone=True), nullable=True)
-    revoked: Mapped[bool] = mapped_column(sa.Boolean, nullable=False, server_default=sa.text("false"))
+    revoked: Mapped[bool] = mapped_column(
+        sa.Boolean, nullable=False, server_default=sa.text("false")
+    )
 
     __table_args__ = (
         sa.Index("ix_api_keys_workspace_id", "workspace_id"),

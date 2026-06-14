@@ -70,8 +70,6 @@ class TaskService:
 
     async def list(self, workspace_id: uuid.UUID) -> list[Task]:
         result = await self._session.execute(
-            select(Task)
-            .where(Task.workspace_id == workspace_id)
-            .order_by(Task.created_at.desc())
+            select(Task).where(Task.workspace_id == workspace_id).order_by(Task.created_at.desc())
         )
         return list(result.scalars().all())

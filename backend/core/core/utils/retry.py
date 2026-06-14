@@ -2,7 +2,8 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from typing import Awaitable, Callable, TypeVar
+from collections.abc import Awaitable, Callable
+from typing import TypeVar
 
 logger = logging.getLogger(__name__)
 
@@ -36,7 +37,10 @@ def is_retryable_http(exc: BaseException) -> bool:
     # httpx is a project-wide transport dependency, not a vendor SDK.
     try:
         import httpx
-        return isinstance(exc, (httpx.ConnectError, httpx.TimeoutException, httpx.RemoteProtocolError))
+
+        return isinstance(
+            exc, httpx.ConnectError | httpx.TimeoutException | httpx.RemoteProtocolError
+        )
     except ImportError:
         return False
 
@@ -69,10 +73,13 @@ async def retry_async(
             last_exc = exc
             if attempt == max_attempts - 1 or not is_retryable(exc):
                 raise
-            delay = backoff * 2 ** attempt
+            delay = backoff * 2**attempt
             logger.warning(
                 "retry_async: attempt %d/%d failed (%s) — retrying in %.1fs",
-                attempt + 1, max_attempts, type(exc).__name__, delay,
+                attempt + 1,
+                max_attempts,
+                type(exc).__name__,
+                delay,
             )
             await asyncio.sleep(delay)
     raise last_exc  # type: ignore[misc]  # unreachable in practice

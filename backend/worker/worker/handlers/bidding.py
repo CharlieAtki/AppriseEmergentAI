@@ -42,11 +42,17 @@ class TaskBiddingHandler(EventHandler[TaskCreatedStreamEvent]):
 
     async def handle(self, event: TaskCreatedStreamEvent) -> None:
         async with get_session() as session:
-            agents = (await session.execute(
-                select(Agent)
-                .where(Agent.workspace_id == event.workspace_id, Agent.status == "active")
-                .options(selectinload(Agent.task_executions))
-            )).scalars().all()
+            agents = (
+                (
+                    await session.execute(
+                        select(Agent)
+                        .where(Agent.workspace_id == event.workspace_id, Agent.status == "active")
+                        .options(selectinload(Agent.task_executions))
+                    )
+                )
+                .scalars()
+                .all()
+            )
 
             if not agents:
                 return

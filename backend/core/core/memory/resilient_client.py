@@ -20,10 +20,12 @@ class ResilientQdrantClient:
     def __getattr__(self, name: str):
         attr = getattr(self._client, name)
         if asyncio.iscoroutinefunction(attr):
+
             async def _retrying(*args, **kwargs):
                 return await retry_async(
                     lambda: attr(*args, **kwargs),
                     is_retryable=is_retryable_http,
                 )
+
             return _retrying
         return attr

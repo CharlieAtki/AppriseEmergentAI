@@ -21,6 +21,7 @@ Changing a field:
     Change it here only. to_payload() and from_payload() are colocated so
     publisher and subscriber stay in sync automatically.
 """
+
 from __future__ import annotations
 
 import dataclasses
@@ -63,15 +64,15 @@ class TaskCreatedStreamEvent(StreamEvent):
 
     def to_payload(self) -> dict:
         return {
-            "event_type":      self.event_type,
-            "event_id":        str(self.event_id),
-            "task_id":         str(self.task_id),
-            "workspace_id":    str(self.workspace_id),
+            "event_type": self.event_type,
+            "event_id": str(self.event_id),
+            "task_id": str(self.task_id),
+            "workspace_id": str(self.workspace_id),
             "organisation_id": str(self.organisation_id),
             "required_skills": self.required_skills,
-            "difficulty":      self.difficulty,
-            "task_type":       self.task_type,
-            "domain_tags":     self.domain_tags or {},
+            "difficulty": self.difficulty,
+            "task_type": self.task_type,
+            "domain_tags": self.domain_tags or {},
         }
 
     @classmethod
@@ -81,7 +82,9 @@ class TaskCreatedStreamEvent(StreamEvent):
             workspace_id=uuid.UUID(payload["workspace_id"]),
             organisation_id=uuid.UUID(payload["organisation_id"]),
             required_skills=payload.get("required_skills") or {},
-            difficulty=float(payload["difficulty"]) if payload.get("difficulty") is not None else None,
+            difficulty=float(payload["difficulty"])
+            if payload.get("difficulty") is not None
+            else None,
             task_type=payload.get("task_type"),
             domain_tags=payload.get("domain_tags"),
         )
@@ -115,13 +118,13 @@ class TaskCompletedStreamEvent(StreamEvent):
 
     def to_payload(self) -> dict:
         return {
-            "event_type":          self.event_type,
-            "event_id":            str(self.event_id),
-            "task_id":             str(self.task_id),
-            "workspace_id":        str(self.workspace_id),
+            "event_type": self.event_type,
+            "event_id": str(self.event_id),
+            "task_id": str(self.task_id),
+            "workspace_id": str(self.workspace_id),
             "completing_agent_id": str(self.completing_agent_id),
-            "quality_score":       self.quality_score,
-            "task_type":           self.task_type,
+            "quality_score": self.quality_score,
+            "task_type": self.task_type,
         }
 
     @classmethod
@@ -167,17 +170,19 @@ class CfpIssuedStreamEvent(StreamEvent):
 
     def to_payload(self) -> dict:
         return {
-            "event_type":           self.event_type,
-            "event_id":             str(self.event_id),
-            "task_id":              str(self.task_id),
-            "workspace_id":         str(self.workspace_id),
-            "organisation_id":      str(self.organisation_id),
-            "initiating_agent_id":  str(self.initiating_agent_id),
-            "coordinator_agent_id": str(self.coordinator_agent_id) if self.coordinator_agent_id else None,
-            "required_skills":      self.required_skills,
-            "difficulty":           self.difficulty,
-            "task_type":            self.task_type,
-            "domain_tags":          self.domain_tags or {},
+            "event_type": self.event_type,
+            "event_id": str(self.event_id),
+            "task_id": str(self.task_id),
+            "workspace_id": str(self.workspace_id),
+            "organisation_id": str(self.organisation_id),
+            "initiating_agent_id": str(self.initiating_agent_id),
+            "coordinator_agent_id": str(self.coordinator_agent_id)
+            if self.coordinator_agent_id
+            else None,
+            "required_skills": self.required_skills,
+            "difficulty": self.difficulty,
+            "task_type": self.task_type,
+            "domain_tags": self.domain_tags or {},
         }
 
     @classmethod
@@ -190,7 +195,9 @@ class CfpIssuedStreamEvent(StreamEvent):
             initiating_agent_id=uuid.UUID(payload["initiating_agent_id"]),
             coordinator_agent_id=uuid.UUID(coord) if coord else None,
             required_skills=payload.get("required_skills") or {},
-            difficulty=float(payload["difficulty"]) if payload.get("difficulty") is not None else None,
+            difficulty=float(payload["difficulty"])
+            if payload.get("difficulty") is not None
+            else None,
             task_type=payload.get("task_type"),
             domain_tags=payload.get("domain_tags"),
         )

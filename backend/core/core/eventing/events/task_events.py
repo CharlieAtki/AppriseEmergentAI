@@ -28,7 +28,9 @@ class TaskSnapshot(Snapshot):
     executing_agent_id: uuid.UUID | None = dataclasses.field(default=None)
     quality_score: float | None = dataclasses.field(default=None)
     execution_id: uuid.UUID | None = dataclasses.field(default=None)
-    execution_path: Literal["self_execute", "cfp", "decompose"] | None = dataclasses.field(default=None)
+    execution_path: Literal["self_execute", "cfp", "decompose"] | None = dataclasses.field(
+        default=None
+    )
 
     @classmethod
     def from_domain(
@@ -41,7 +43,11 @@ class TaskSnapshot(Snapshot):
         execution_path: Literal["self_execute", "cfp", "decompose"] | None = None,
     ) -> TaskSnapshot:
         return cls(
-            **{f.name: getattr(model, f.name) for f in dataclasses.fields(cls) if f.name not in _SYNTHETIC},
+            **{
+                f.name: getattr(model, f.name)
+                for f in dataclasses.fields(cls)
+                if f.name not in _SYNTHETIC
+            },
             executing_agent_id=executing_agent_id,
             quality_score=quality_score,
             execution_id=execution_id,

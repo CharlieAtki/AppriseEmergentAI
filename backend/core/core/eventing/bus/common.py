@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import abc
 import types
 import uuid
@@ -13,7 +15,7 @@ class DomainEvent(abc.ABC):  # noqa: B024
 
 
 @dataclass
-class StreamEvent(DomainEvent):  # noqa: B024
+class StreamEvent(DomainEvent):
     """Base class for cross-process events published to Redis Streams.
 
     Extends DomainEvent with the Redis transport contract. Subclasses must
@@ -106,7 +108,9 @@ class Snapshot:
             hint = hints.get(f.name)
             snapshot_cls, allows_none = _unwrap_snapshot_type(hint)
             if snapshot_cls is not None:
-                kwargs[f.name] = None if (value is None and allows_none) else snapshot_cls.from_domain(value)
+                kwargs[f.name] = (
+                    None if (value is None and allows_none) else snapshot_cls.from_domain(value)
+                )
                 continue
             tuple_snapshot_cls = _unwrap_tuple_snapshot_type(hint)
             if tuple_snapshot_cls is not None:
@@ -197,7 +201,8 @@ class StateChangeEvent[T: Snapshot](StateActionEvent[T]):
     def changes(self) -> frozenset[str]:
         """Names of snapshot fields whose value differs between before and after."""
         return frozenset(
-            f.name for f in fields(self.before)
+            f.name
+            for f in fields(self.before)
             if getattr(self.before, f.name) != getattr(self.after, f.name)
         )
 

@@ -5,6 +5,7 @@ that reads the ARQ ctx dict; a bug here silently breaks retry correlation across
 all jobs. JobSpan's ContextVar is the mechanism every stage uses to emit events
 without thread-unsafe parameter passing.
 """
+
 from __future__ import annotations
 
 import json
@@ -15,8 +16,8 @@ import pytest
 
 from worker.span import ArqJobMeta, JobSpan, NoActiveSpanError, current_span
 
-
 # ── ArqJobMeta.from_ctx ───────────────────────────────────────────────────────
+
 
 def test_from_ctx_reads_job_id_and_try():
     ctx = {"job_id": "arq:job:abc123", "job_try": 3}
@@ -43,6 +44,7 @@ def test_from_ctx_extra_keys_ignored():
 
 
 # ── JobSpan.emit ──────────────────────────────────────────────────────────────
+
 
 def _make_span(agent_id=None, task_id=None, workspace_id=None):
     redis_publish = AsyncMock()
@@ -126,6 +128,7 @@ async def test_emit_includes_job_meta_fields():
 
 
 # ── ContextVar behaviour ──────────────────────────────────────────────────────
+
 
 async def test_current_span_outside_context_raises():
     with pytest.raises(NoActiveSpanError):

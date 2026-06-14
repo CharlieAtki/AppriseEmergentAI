@@ -8,10 +8,10 @@ from redis.asyncio import Redis
 
 from core.agents.graphs.factory import build_graph
 from core.agents.tools.registry import tool_registry
-from core.eventing.bus.in_process_bus import EventBus
-from core.eventing.bus.redis_bus import RedisBus
 from core.config import settings
 from core.database import get_session
+from core.eventing.bus.in_process_bus import EventBus
+from core.eventing.bus.redis_bus import RedisBus
 from core.intelligence.call_types import CallType
 from core.intelligence.llm_router import LLMRouter
 from core.intelligence.registry import registry
@@ -28,33 +28,34 @@ from core.vendors.ollama.provider import OllamaProvider
 if TYPE_CHECKING:
     from arq import ArqRedis
     from langgraph.graph.state import CompiledStateGraph
+
     from core.eventing.bus.protocols import SubscribableBusProtocol
     from worker.reflection.manager import ReflectionManager
 
 
 @dataclass(frozen=True)
 class WorkerContext:
-    graphs:             dict[str, "CompiledStateGraph"]  # keyed by task_type
-    bus:                "SubscribableBusProtocol"         # Redis Streams — durable task events
-    redis:              Redis                             # raw Redis — Pub/Sub + SETNX reservations
-    arq_queue:          "ArqRedis"                        # ARQ job queue — enqueue_job()
-    memory:             AgentMemory                       # Qdrant-backed three-tier memory
-    llm_router:         LLMRouter                         # routes all LLM calls by CallType
-    event_bus:          EventBus                          # in-process — same-process side effects
-    reflection_manager: "ReflectionManager"               # post-execution learning pipeline
+    graphs: dict[str, CompiledStateGraph]  # keyed by task_type
+    bus: SubscribableBusProtocol  # Redis Streams — durable task events
+    redis: Redis  # raw Redis — Pub/Sub + SETNX reservations
+    arq_queue: ArqRedis  # ARQ job queue — enqueue_job()
+    memory: AgentMemory  # Qdrant-backed three-tier memory
+    llm_router: LLMRouter  # routes all LLM calls by CallType
+    event_bus: EventBus  # in-process — same-process side effects
+    reflection_manager: ReflectionManager  # post-execution learning pipeline
 
     @classmethod
-    async def build(cls, arq_queue: "ArqRedis") -> WorkerContext:
+    async def build(cls, arq_queue: ArqRedis) -> WorkerContext:
         # 1. Self-registration side effects — importing is registering
-        import core.vendors.anthropic  # noqa: F401
-        import core.vendors.aws  # noqa: F401
-        import core.vendors.azure  # noqa: F401
+        import core.agents.tools.execute_code
+        import core.agents.tools.search_episodic
+        import core.agents.tools.search_procedural
+        import core.agents.tools.search_social
+        import core.agents.tools.web_search
+        import core.vendors.anthropic
+        import core.vendors.aws
+        import core.vendors.azure
         import core.vendors.ollama  # noqa: F401
-        import core.agents.tools.search_episodic  # noqa: F401
-        import core.agents.tools.search_procedural  # noqa: F401
-        import core.agents.tools.search_social  # noqa: F401
-        import core.agents.tools.web_search  # noqa: F401
-        import core.agents.tools.execute_code  # noqa: F401
 
         # 2. Sync in-memory model registry → DB models table
         async with get_session() as session:
@@ -64,9 +65,9 @@ class WorkerContext:
         routing_cfg = resolve_routing(settings.intelligence.routing, workspace_overrides=None)
         vendors = {
             "anthropic": AnthropicProvider(settings.anthropic),
-            "azure":     AzureProvider(settings.azure),
-            "aws":       AWSProvider(settings.aws),
-            "ollama":    OllamaProvider(settings.ollama),
+            "azure": AzureProvider(settings.azure),
+            "aws": AWSProvider(settings.aws),
+            "ollama": OllamaProvider(settings.ollama),
         }
         llm_router = LLMRouter(
             vendors=vendors,
@@ -99,10 +100,12 @@ class WorkerContext:
 
         # 7. In-process event bus — must be created from the running event loop
         import asyncio  # local import avoids circular: startup imports this module at module level
+
         loop = asyncio.get_running_loop()
         event_bus = EventBus(loop=loop)
 
         from worker.reflection.manager import REFLECT_PIPELINE, ReflectionManager
+
         reflection_manager = ReflectionManager(
             pipeline=REFLECT_PIPELINE,
             llm_router=llm_router,

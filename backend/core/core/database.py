@@ -18,7 +18,7 @@ SessionLocal = async_sessionmaker(bind=engine, expire_on_commit=False)
 
 
 @asynccontextmanager
-async def get_session() -> AsyncGenerator[AsyncSession, None]:
+async def get_session() -> AsyncGenerator[AsyncSession]:
     session = SessionLocal()
     try:
         yield session

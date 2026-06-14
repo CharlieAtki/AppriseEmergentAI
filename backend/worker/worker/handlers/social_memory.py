@@ -7,10 +7,10 @@ from dataclasses import dataclass
 from sqlalchemy import select
 
 from core.database import get_session
-from core.models.agents import Agent
 from core.eventing.bus.handlers import EventHandler
 from core.eventing.events.stream_events import TaskCompletedStreamEvent
 from core.memory.agent_memory import AgentMemory
+from core.models.agents import Agent
 
 logger = logging.getLogger(__name__)
 
@@ -40,18 +40,32 @@ class SocialMemoryHandler(EventHandler[TaskCompletedStreamEvent]):
         completing_agent_id = str(event.completing_agent_id)
 
         async with get_session() as session:
-            peers = (await session.execute(
-                select(Agent).where(
-                    Agent.workspace_id == event.workspace_id,
-                    Agent.status == "active",
-                    Agent.id != event.completing_agent_id,
+            peers = (
+                (
+                    await session.execute(
+                        select(Agent).where(
+                            Agent.workspace_id == event.workspace_id,
+                            Agent.status == "active",
+                            Agent.id != event.completing_agent_id,
+                        )
+                    )
                 )
-            )).scalars().all()
+                .scalars()
+                .all()
+            )
 
-        await asyncio.gather(*(
-            self._write_social(str(peer.id), completing_agent_id, workspace_id, event.quality_score, event.task_type)
-            for peer in peers
-        ))
+        await asyncio.gather(
+            *(
+                self._write_social(
+                    str(peer.id),
+                    completing_agent_id,
+                    workspace_id,
+                    event.quality_score,
+                    event.task_type,
+                )
+                for peer in peers
+            )
+        )
 
     async def _write_social(
         self,

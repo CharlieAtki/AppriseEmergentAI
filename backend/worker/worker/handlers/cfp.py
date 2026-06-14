@@ -40,15 +40,21 @@ class CfpHandler(EventHandler[CfpIssuedStreamEvent]):
 
     async def handle(self, event: CfpIssuedStreamEvent) -> None:
         async with get_session() as session:
-            agents = (await session.execute(
-                select(Agent)
-                .where(
-                    Agent.workspace_id == event.workspace_id,
-                    Agent.status == "active",
-                    Agent.id != event.initiating_agent_id,  # excludes the routing agent
+            agents = (
+                (
+                    await session.execute(
+                        select(Agent)
+                        .where(
+                            Agent.workspace_id == event.workspace_id,
+                            Agent.status == "active",
+                            Agent.id != event.initiating_agent_id,  # excludes the routing agent
+                        )
+                        .options(selectinload(Agent.task_executions))
+                    )
                 )
-                .options(selectinload(Agent.task_executions))
-            )).scalars().all()
+                .scalars()
+                .all()
+            )
 
             if not agents:
                 return

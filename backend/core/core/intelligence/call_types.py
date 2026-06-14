@@ -4,9 +4,9 @@ from enum import Enum
 
 
 class CallType(str, Enum):
-    EVALUATE      = "evaluate"
-    REFLECT       = "reflect"
-    DECOMPOSE     = "decompose"
-    ENRICH        = "enrich"
+    EVALUATE = "evaluate"
+    REFLECT = "reflect"
+    DECOMPOSE = "decompose"
+    ENRICH = "enrich"
     CURATE_MEMORY = "curate_memory"
-    EXECUTE       = "execute"
+    EXECUTE = "execute"

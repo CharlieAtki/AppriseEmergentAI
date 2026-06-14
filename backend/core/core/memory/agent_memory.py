@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import asyncio
 import uuid
-from datetime import datetime, timezone
-from typing import TYPE_CHECKING, Any
+from datetime import UTC, datetime
+from typing import Any
 
 from qdrant_client import AsyncQdrantClient
 from qdrant_client.models import FieldCondition, Filter, MatchValue, PointStruct
@@ -51,7 +51,7 @@ class AgentMemory:
             "workspace_id": workspace_id,
             "agent_id": agent_id,
             "tier": "episodic",
-            "created_at": datetime.now(timezone.utc).isoformat(),
+            "created_at": datetime.now(UTC).isoformat(),
             "archived": False,
             **episode,
         }
@@ -85,7 +85,7 @@ class AgentMemory:
             "text": rule,
             "domain": domain,
             "verdict": verdict,
-            "created_at": datetime.now(timezone.utc).isoformat(),
+            "created_at": datetime.now(UTC).isoformat(),
             "archived": False,
         }
         await self._client.upsert(
@@ -115,7 +115,7 @@ class AgentMemory:
             "workspace_id": workspace_id,
             "agent_id": agent_id,
             "tier": "social",
-            "created_at": datetime.now(timezone.utc).isoformat(),
+            "created_at": datetime.now(UTC).isoformat(),
             "archived": False,
             **observation,
         }
@@ -138,9 +138,15 @@ class AgentMemory:
         filt = _base_filter(workspace_id, agent_id)
 
         ep_res, pr_res, so_res = await asyncio.gather(
-            self._client.query_points("mem_episodic", query=vector, query_filter=filt, limit=k, with_payload=True),
-            self._client.query_points("mem_procedural", query=vector, query_filter=filt, limit=k, with_payload=True),
-            self._client.query_points("mem_social", query=vector, query_filter=filt, limit=k, with_payload=True),
+            self._client.query_points(
+                "mem_episodic", query=vector, query_filter=filt, limit=k, with_payload=True
+            ),
+            self._client.query_points(
+                "mem_procedural", query=vector, query_filter=filt, limit=k, with_payload=True
+            ),
+            self._client.query_points(
+                "mem_social", query=vector, query_filter=filt, limit=k, with_payload=True
+            ),
         )
 
         return MemoryContext(
@@ -167,8 +173,8 @@ class AgentMemory:
             scroll_filter=Filter(
                 must=[
                     FieldCondition(key="workspace_id", match=MatchValue(value=workspace_id)),
-                    FieldCondition(key="agent_id",     match=MatchValue(value=agent_id)),
-                    FieldCondition(key="archived",      match=MatchValue(value=False)),
+                    FieldCondition(key="agent_id", match=MatchValue(value=agent_id)),
+                    FieldCondition(key="archived", match=MatchValue(value=False)),
                 ]
             ),
             limit=limit,

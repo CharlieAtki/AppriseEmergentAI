@@ -39,7 +39,7 @@ async def score_and_reserve(
     Callers are responsible for the DB query and any agent exclusions (e.g. CFP
     excludes the initiating agent before calling this function).
     """
-    task_id_str      = str(task_id)
+    task_id_str = str(task_id)
     workspace_id_str = str(workspace_id)
 
     scored: list[tuple[Agent, float]] = []
@@ -70,7 +70,10 @@ async def score_and_reserve(
                 observed = "missing" if task is None else task.status
                 logger.warning(
                     "task %s won by agent %s but not biddable (status=%s, workspace=%s) — releasing reservation",
-                    task_id_str, agent.id, observed, workspace_id_str,
+                    task_id_str,
+                    agent.id,
+                    observed,
+                    workspace_id_str,
                 )
                 await redis.delete(f"reservation:{workspace_id_str}:{task_id_str}")
             else:
@@ -89,6 +92,9 @@ async def score_and_reserve(
                     raise
                 logger.info(
                     "task %s reserved by agent %s (score=%.3f, workspace=%s)",
-                    task_id_str, agent.id, score, workspace_id_str,
+                    task_id_str,
+                    agent.id,
+                    score,
+                    workspace_id_str,
                 )
             break

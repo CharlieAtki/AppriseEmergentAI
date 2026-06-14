@@ -9,13 +9,13 @@ import bcrypt as _bcrypt
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from api.services.auth_service import revoke_api_key
 from core.models.auth import ApiKey
 from core.models.tenant import Workspace
 
-from api.services.auth_service import revoke_api_key
-
 if TYPE_CHECKING:
     from redis.asyncio import Redis
+
     from api.schemas.api_key import CreateApiKeyRequest
 
 

@@ -6,6 +6,7 @@ Run inside the api container:
 The raw API key is printed once — paste it into Swagger Authorize → ApiKeyAuth (X-API-Key).
 Re-running creates a new API key against the same org/workspace (idempotent on structure).
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -37,9 +38,7 @@ async def main() -> None:
             await session.flush()
 
         # User
-        result = await session.execute(
-            select(User).where(User.clerk_user_id == _CLERK_USER_ID)
-        )
+        result = await session.execute(select(User).where(User.clerk_user_id == _CLERK_USER_ID))
         user = result.scalar_one_or_none()
         if user is None:
             user = User(clerk_user_id=_CLERK_USER_ID, email="dev@local", name="Dev User")

@@ -6,11 +6,11 @@ from typing import Any
 
 from sqlalchemy import select
 
-from core.database import get_session
-from core.models.observability import EmergenceEvent, WorkspaceMetricsSnapshot
-from core.models.agents import Agent
-from core.models.tenant import Workspace
 from core.config import settings
+from core.database import get_session
+from core.models.agents import Agent
+from core.models.observability import EmergenceEvent, WorkspaceMetricsSnapshot
+from core.models.tenant import Workspace
 
 logger = logging.getLogger(__name__)
 
@@ -31,52 +31,70 @@ async def sample_metrics(ctx: dict[str, Any]) -> None:
     wctx.bus.publish() directly from this function.
     """
     async with get_session() as session:
-        workspaces = (await session.execute(
-            select(Workspace).where(Workspace.status == "active")
-        )).scalars().all()
+        workspaces = (
+            (await session.execute(select(Workspace).where(Workspace.status == "active")))
+            .scalars()
+            .all()
+        )
 
         snapshots_written = 0
         for workspace in workspaces:
-            agents = (await session.execute(
-                select(Agent).where(
-                    Agent.workspace_id == workspace.id,
-                    Agent.status == "active",
+            agents = (
+                (
+                    await session.execute(
+                        select(Agent).where(
+                            Agent.workspace_id == workspace.id,
+                            Agent.status == "active",
+                        )
+                    )
                 )
-            )).scalars().all()
+                .scalars()
+                .all()
+            )
 
             if len(agents) < 2:
                 continue
 
-            influences  = [a.influence or 0.0 for a in agents]
-            skills_list = [a.skills or {}      for a in agents]
+            influences = [a.influence or 0.0 for a in agents]
+            skills_list = [a.skills or {} for a in agents]
 
-            gini       = _gini(influences)
+            gini = _gini(influences)
             spec_index = _specialisation_index(skills_list)
-            hub_agent  = next(
-                (a for a in agents if (a.influence or 0.0) >= settings.intelligence.hub_influence_threshold),
+            hub_agent = next(
+                (
+                    a
+                    for a in agents
+                    if (a.influence or 0.0) >= settings.intelligence.hub_influence_threshold
+                ),
                 None,
             )
 
-            session.add(WorkspaceMetricsSnapshot(
-                workspace_id=workspace.id,
-                metrics={
-                    "gini":                gini,
-                    "specialisation_index": spec_index,
-                    "agent_count":         len(agents),
-                },
-            ))
+            session.add(
+                WorkspaceMetricsSnapshot(
+                    workspace_id=workspace.id,
+                    metrics={
+                        "gini": gini,
+                        "specialisation_index": spec_index,
+                        "agent_count": len(agents),
+                    },
+                )
+            )
             snapshots_written += 1
 
             if hub_agent:
-                session.add(EmergenceEvent(
-                    workspace_id=workspace.id,
-                    event_type="hub_detected",
-                    gini_coefficient=gini,
-                    hub_agent_id=hub_agent.id,
-                ))
+                session.add(
+                    EmergenceEvent(
+                        workspace_id=workspace.id,
+                        event_type="hub_detected",
+                        gini_coefficient=gini,
+                        hub_agent_id=hub_agent.id,
+                    )
+                )
                 logger.info(
                     "emergence: hub agent %s detected in workspace %s (gini=%.3f)",
-                    hub_agent.id, workspace.id, gini,
+                    hub_agent.id,
+                    workspace.id,
+                    gini,
                 )
         # Single commit for all workspaces on context manager exit
 
@@ -112,10 +130,7 @@ def _specialisation_index(skills_list: list[dict[str, float]]) -> float:
     if not all_keys:
         return 0.0
 
-    vecs = [
-        [skills.get(k, 0.0) for k in all_keys]
-        for skills in skills_list
-    ]
+    vecs = [[skills.get(k, 0.0) for k in all_keys] for skills in skills_list]
 
     total_distance = 0.0
     pairs = 0
@@ -129,7 +144,7 @@ def _specialisation_index(skills_list: list[dict[str, float]]) -> float:
 
 
 def _cosine_similarity(a: list[float], b: list[float]) -> float:
-    dot   = sum(x * y for x, y in zip(a, b))
+    dot = sum(x * y for x, y in zip(a, b, strict=False))
     mag_a = math.sqrt(sum(x * x for x in a))
     mag_b = math.sqrt(sum(y * y for y in b))
     if mag_a == 0.0 or mag_b == 0.0:

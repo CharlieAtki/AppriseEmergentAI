@@ -14,6 +14,7 @@ Never mix the two: in-process handlers cannot receive stream events and vice ver
 Both use ``apublish`` as the method name — the distinction is the argument type:
 DomainEvent for in-process, StreamEvent for cross-process.
 """
+
 from __future__ import annotations
 
 import asyncio

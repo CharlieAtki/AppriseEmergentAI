@@ -17,7 +17,7 @@ def _clamp01(x: float) -> float:
     return max(0.0, min(1.0, x))
 
 
-def score_outcome(task: "Task", state: GraphState) -> float:
+def score_outcome(task: Task, state: GraphState) -> float:
     """Return a deterministic quality score in [0.0, 1.0].
 
     Deterministic baseline only — no LLM calls. This value is written to
@@ -43,8 +43,4 @@ def score_outcome(task: "Task", state: GraphState) -> float:
     else:
         tool_score = 0.5
 
-    return _clamp01(
-        _W_ARTIFACT * artifact_score
-        + _W_STEPS * step_score
-        + _W_TOOLS * tool_score
-    )
+    return _clamp01(_W_ARTIFACT * artifact_score + _W_STEPS * step_score + _W_TOOLS * tool_score)

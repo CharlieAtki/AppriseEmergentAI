@@ -4,7 +4,7 @@ import uuid
 from datetime import datetime
 
 import sqlalchemy as sa
-from sqlalchemy.dialects.postgresql import ARRAY, JSONB, UUID
+from sqlalchemy.dialects.postgresql import ARRAY, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from core.models.agents import Agent
@@ -37,9 +37,7 @@ class Artifact(Base, TimestampMixin):
     status: Mapped[str] = mapped_column(sa.Text, nullable=False, server_default=sa.text("'draft'"))
     storage_ref: Mapped[str | None] = mapped_column(sa.Text, nullable=True)
 
-    __table_args__ = (
-        sa.Index("ix_artifacts_workspace_id_status", "workspace_id", "status"),
-    )
+    __table_args__ = (sa.Index("ix_artifacts_workspace_id_status", "workspace_id", "status"),)
 
     organisation: Mapped[Organisation] = relationship()
     workspace: Mapped[Workspace] = relationship(back_populates="artifacts")
@@ -85,7 +83,9 @@ class ArtifactOperation(Base):
         nullable=False,
     )
     operation_type: Mapped[str] = mapped_column(sa.Text, nullable=False)
-    status: Mapped[str] = mapped_column(sa.Text, nullable=False, server_default=sa.text("'pending'"))
+    status: Mapped[str] = mapped_column(
+        sa.Text, nullable=False, server_default=sa.text("'pending'")
+    )
     # UUIDs of other ArtifactOperations that must complete before this one can start
     depends_on: Mapped[list[uuid.UUID] | None] = mapped_column(
         ARRAY(UUID(as_uuid=True)),
@@ -112,7 +112,9 @@ class ArtifactOperation(Base):
     )
 
     def __repr__(self) -> str:
-        return f"<ArtifactOperation id={self.id} type={self.operation_type!r} status={self.status!r}>"
+        return (
+            f"<ArtifactOperation id={self.id} type={self.operation_type!r} status={self.status!r}>"
+        )
 
 
 class ArtifactContribution(Base, CreatedAtMixin):

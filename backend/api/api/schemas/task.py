@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from pydantic import BaseModel, Field, field_validator
 
@@ -31,7 +31,7 @@ class CreateTaskRequest(BaseModel):
     @field_validator("deadline_at")
     @classmethod
     def deadline_must_be_future(cls, v: datetime | None) -> datetime | None:
-        if v is not None and v <= datetime.now(tz=timezone.utc):
+        if v is not None and v <= datetime.now(tz=UTC):
             raise ValueError("deadline_at must be in the future")
         return v
 

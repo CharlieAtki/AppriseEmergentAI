@@ -4,6 +4,7 @@ The HMAC signature is a security primitive; the retry delay table determines
 when external systems receive retries. Both must be tested directly because
 no end-to-end test can observe these without a live HTTP server.
 """
+
 from __future__ import annotations
 
 import hashlib
@@ -12,12 +13,10 @@ import uuid
 from contextlib import asynccontextmanager
 from unittest.mock import AsyncMock, MagicMock, patch
 
-import pytest
-
 from worker.jobs.deliver_webhook import _RETRY_DELAYS, _sign_body, deliver_webhook
 
-
 # ── _sign_body (pure function) ────────────────────────────────────────────────
+
 
 def test_sign_body_is_deterministic():
     body = b'{"event": "task.completed"}'
@@ -51,6 +50,7 @@ def test_sign_body_returns_hex_string():
 
 # ── _RETRY_DELAYS schedule ────────────────────────────────────────────────────
 
+
 def test_retry_delays_has_four_entries():
     """Exactly four attempts before giving up."""
     assert len(_RETRY_DELAYS) == 4
@@ -67,6 +67,7 @@ def test_retry_delays_are_increasing():
 
 
 # ── deliver_webhook job: early exits ─────────────────────────────────────────
+
 
 async def test_no_webhook_url_returns_early():
     """Workspace with no webhook URL → job returns without any HTTP call."""
@@ -93,8 +94,10 @@ async def test_no_webhook_url_returns_early():
     wctx = MagicMock()
     wctx.arq_queue = AsyncMock()
 
-    with patch("worker.jobs.deliver_webhook.get_session", _gs), \
-         patch("worker.jobs.deliver_webhook.get_worker_context", return_value=wctx):
+    with (
+        patch("worker.jobs.deliver_webhook.get_session", _gs),
+        patch("worker.jobs.deliver_webhook.get_worker_context", return_value=wctx),
+    ):
         await deliver_webhook({}, execution_id=exec_id, workspace_id=ws_id)
 
     # No session.add call (no delivery row created)
@@ -115,14 +118,17 @@ async def test_missing_execution_returns_early():
 
     wctx = MagicMock()
 
-    with patch("worker.jobs.deliver_webhook.get_session", _gs), \
-         patch("worker.jobs.deliver_webhook.get_worker_context", return_value=wctx):
+    with (
+        patch("worker.jobs.deliver_webhook.get_session", _gs),
+        patch("worker.jobs.deliver_webhook.get_worker_context", return_value=wctx),
+    ):
         await deliver_webhook({}, execution_id=exec_id, workspace_id=ws_id)
 
     wctx.arq_queue.enqueue_job.assert_not_called()
 
 
 # ── deliver_webhook job: retry schedule ──────────────────────────────────────
+
 
 async def _run_delivery_failure(attempt_count: int, mocker):
     """Run deliver_webhook with an HTTP failure at attempt_count, return (record, wctx)."""
@@ -164,18 +170,18 @@ async def _run_delivery_failure(attempt_count: int, mocker):
     wctx.arq_queue.enqueue_job = AsyncMock()
 
     # HTTP call fails
-    with patch("worker.jobs.deliver_webhook.get_session", _gs), \
-         patch("worker.jobs.deliver_webhook.get_worker_context", return_value=wctx), \
-         patch("worker.jobs.deliver_webhook.httpx.AsyncClient") as mock_client_cls:
+    with (
+        patch("worker.jobs.deliver_webhook.get_session", _gs),
+        patch("worker.jobs.deliver_webhook.get_worker_context", return_value=wctx),
+        patch("worker.jobs.deliver_webhook.httpx.AsyncClient") as mock_client_cls,
+    ):
         mock_client = AsyncMock()
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
         mock_client.__aexit__ = AsyncMock(return_value=None)
         mock_client.post = AsyncMock(side_effect=Exception("connection refused"))
         mock_client_cls.return_value = mock_client
 
-        await deliver_webhook(
-            {}, execution_id=exec_id, workspace_id=ws_id, delivery_id=delivery_id
-        )
+        await deliver_webhook({}, execution_id=exec_id, workspace_id=ws_id, delivery_id=delivery_id)
 
     return record, wctx
 
@@ -185,6 +191,7 @@ async def test_failure_attempt_1_schedules_retry_30s(mocker):
     wctx.arq_queue.enqueue_job.assert_called_once()
     call_kwargs = wctx.arq_queue.enqueue_job.call_args.kwargs
     from datetime import timedelta
+
     assert call_kwargs["_defer_by"] == timedelta(seconds=30)
     assert record.status != "failed"
 
@@ -194,6 +201,7 @@ async def test_failure_attempt_3_schedules_retry_1800s(mocker):
     wctx.arq_queue.enqueue_job.assert_called_once()
     call_kwargs = wctx.arq_queue.enqueue_job.call_args.kwargs
     from datetime import timedelta
+
     assert call_kwargs["_defer_by"] == timedelta(seconds=1800)
 
 
