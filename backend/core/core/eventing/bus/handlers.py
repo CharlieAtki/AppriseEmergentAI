@@ -4,6 +4,8 @@ import abc
 import asyncio
 from typing import TYPE_CHECKING
 
+from core.utils.retry import retry_async
+
 if TYPE_CHECKING:
     from collections.abc import Callable
 
@@ -84,16 +86,17 @@ class Retry[E](EventHandler[E]):
         self._backoff = backoff
 
     async def handle(self, event: E) -> None:
-        for attempt in range(self._max_attempts):
-            try:
-                await self._handler.handle(event)
-                return
-            except self._fatal_on:
-                raise
-            except self._retry_on:
-                if attempt == self._max_attempts - 1:
-                    raise
-                await asyncio.sleep(self._backoff * (2**attempt))
+        def is_retryable(exc: BaseException) -> bool:
+            if isinstance(exc, self._fatal_on):
+                return False
+            return isinstance(exc, self._retry_on)
+
+        await retry_async(
+            fn=lambda: self._handler.handle(event),
+            is_retryable=is_retryable,
+            max_attempts=self._max_attempts,
+            backoff=self._backoff,
+        )
 
     def __repr__(self) -> str:
         return f"Retry({self._handler!r}, max={self._max_attempts})"

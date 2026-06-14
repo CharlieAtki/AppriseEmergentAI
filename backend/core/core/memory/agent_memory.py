@@ -35,9 +35,9 @@ def _base_filter(workspace_id: str, agent_id: str) -> Filter:
 
 
 class AgentMemory:
-    def __init__(self, client: AsyncQdrantClient, top_k: int = settings.memory.top_k) -> None:
+    def __init__(self, client: AsyncQdrantClient, top_k: int | None = None) -> None:
         self._client = client
-        self._top_k = top_k
+        self._top_k = top_k if top_k is not None else settings.memory.top_k
 
     async def store_episode(
         self,

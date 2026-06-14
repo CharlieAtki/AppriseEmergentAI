@@ -14,12 +14,12 @@ engine = create_async_engine(
     pool_pre_ping=True,
 )
 
-SessionLocal = async_sessionmaker(bind=engine, expire_on_commit=False)
+_SessionLocal = async_sessionmaker(bind=engine, expire_on_commit=False)
 
 
 @asynccontextmanager
 async def get_session() -> AsyncGenerator[AsyncSession]:
-    session = SessionLocal()
+    session = _SessionLocal()
     try:
         yield session
         await session.commit()

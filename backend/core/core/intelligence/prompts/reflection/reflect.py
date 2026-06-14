@@ -6,7 +6,7 @@ from typing import Any, Literal
 
 from pydantic import BaseModel
 
-from core.intelligence.prompts import strip_fences
+from core.utils import strip_fences
 
 logger = logging.getLogger(__name__)
 
