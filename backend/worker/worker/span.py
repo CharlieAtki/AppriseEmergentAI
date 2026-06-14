@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 import uuid
-from collections.abc import AsyncGenerator, Awaitable, Callable
+from collections.abc import AsyncGenerator, Awaitable, Callable, Mapping
 from contextlib import asynccontextmanager
 from contextvars import ContextVar, Token
 from dataclasses import dataclass
@@ -28,7 +28,7 @@ class ArqJobMeta:
     job_try: int          # 1 on first attempt, increments on each ARQ retry
 
     @classmethod
-    def from_ctx(cls, ctx: dict[str, Any]) -> ArqJobMeta:
+    def from_ctx(cls, ctx: Mapping[str, Any]) -> ArqJobMeta:
         return cls(
             job_id=ctx.get("job_id"),
             job_try=ctx.get("job_try", 1),
@@ -105,7 +105,7 @@ class JobSpan:
         async with get_session() as s:
             yield s
 
-    async def emit(self, event_type: str, data: dict[str, object] | None = None) -> None:
+    async def emit(self, event_type: str, data: Mapping[str, object] | None = None) -> None:
         """Publish a structured event immediately to Redis Pub/Sub.
 
         The API WebSocket endpoint subscribes to workspace:{id}:events and forwards

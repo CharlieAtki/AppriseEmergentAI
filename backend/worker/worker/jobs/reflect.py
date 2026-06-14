@@ -3,6 +3,7 @@ from __future__ import annotations
 import logging
 import uuid
 from datetime import datetime, timezone
+from collections.abc import Mapping
 from typing import Any
 
 from core.intelligence.reflection.types import ReflectContext
@@ -15,7 +16,7 @@ logger = logging.getLogger(__name__)
 
 
 async def reflect(
-    ctx: dict[str, Any],
+    ctx: Mapping[str, Any],
     agent_id: str,
     task_id: str,
     workspace_id: str,
