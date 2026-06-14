@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import dataclasses
 import uuid
-from typing import Literal
+from typing import Any, Literal
 
 from core.eventing.bus import Snapshot, StateActionEvent, StateChangeEvent
 
@@ -21,9 +21,9 @@ class TaskSnapshot(Snapshot):
     title: str
     status: str
     task_type: str | None
-    required_skills: dict | None
+    required_skills: dict[str, float] | None
     difficulty: float | None
-    domain_tags: dict | None
+    domain_tags: dict[str, Any] | None
     # Synthetic fields — not columns on Task; passed explicitly by execute_task.
     executing_agent_id: uuid.UUID | None = dataclasses.field(default=None)
     quality_score: float | None = dataclasses.field(default=None)

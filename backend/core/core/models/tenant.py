@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import uuid
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import sqlalchemy as sa
 from sqlalchemy.dialects.postgresql import JSONB, UUID
@@ -26,8 +26,7 @@ class Organisation(Base, TimestampMixin):
     )
     clerk_org_id: Mapped[str] = mapped_column(sa.Text, unique=True, nullable=False)
     name: Mapped[str | None] = mapped_column(sa.Text, nullable=True)
-    # TODO: expose via PATCH /orgs/{org_id}/config — org-level model routing default (requires org admin role)
-    config: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+    config: Mapped[dict[str, Any] | None] = mapped_column(JSONB, nullable=True)
 
     workspaces: Mapped[list[Workspace]] = relationship(
         back_populates="organisation",
@@ -105,7 +104,7 @@ class Workspace(Base, TimestampMixin):
     status: Mapped[str] = mapped_column(sa.Text, nullable=False, server_default=sa.text("'active'"))
     # General workspace settings (decay rates, quotas, agent count, etc.).
     # Model routing overrides live in workspace_model_routing — not here.
-    config: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+    config: Mapped[dict[str, Any] | None] = mapped_column(JSONB, nullable=True)
     result_webhook_url: Mapped[str | None] = mapped_column(sa.Text, nullable=True)
     webhook_secret: Mapped[str | None] = mapped_column(sa.Text, nullable=True)
 

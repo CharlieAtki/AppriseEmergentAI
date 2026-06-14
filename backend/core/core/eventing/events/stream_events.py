@@ -25,6 +25,7 @@ from __future__ import annotations
 
 import dataclasses
 import uuid
+from typing import Any
 
 from core.eventing.bus.common import StreamEvent
 
@@ -47,10 +48,10 @@ class TaskCreatedStreamEvent(StreamEvent):
     task_id: uuid.UUID
     workspace_id: uuid.UUID
     organisation_id: uuid.UUID
-    required_skills: dict
+    required_skills: dict[str, float]
     difficulty: float | None = None
     task_type: str | None = None
-    domain_tags: dict | None = None
+    domain_tags: dict[str, Any] | None = None
 
     @property
     def stream_key(self) -> str:
@@ -151,10 +152,10 @@ class CfpIssuedStreamEvent(StreamEvent):
     organisation_id: uuid.UUID
     initiating_agent_id: uuid.UUID
     coordinator_agent_id: uuid.UUID | None
-    required_skills: dict
+    required_skills: dict[str, float]
     difficulty: float | None
     task_type: str | None
-    domain_tags: dict | None = None
+    domain_tags: dict[str, Any] | None = None
 
     @property
     def stream_key(self) -> str:

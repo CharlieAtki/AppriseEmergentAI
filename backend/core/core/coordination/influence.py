@@ -1,7 +1,13 @@
 from __future__ import annotations
 
+from core.config import settings
 
-def compute_influence_ema(current: float | None, quality: float) -> float:
+
+def compute_influence_ema(
+    current: float | None,
+    quality: float,
+    alpha: float = settings.INFLUENCE_EMA_ALPHA,
+) -> float:
     """Blend a new quality signal into the running influence score via EMA.
 
     Influence is an exponential moving average of task quality scores. It
@@ -11,14 +17,12 @@ def compute_influence_ema(current: float | None, quality: float) -> float:
 
     The EMA formula is: new = base + alpha * (quality - base)
 
-    ``alpha`` (``settings.INFLUENCE_EMA_ALPHA``) controls how quickly new
-    quality signals displace historical ones. A higher alpha makes the score
-    more reactive; a lower alpha gives more weight to the agent's history.
+    ``alpha`` controls how quickly new quality signals displace historical ones.
+    A higher alpha makes the score more reactive; a lower alpha gives more
+    weight to the agent's history.
 
     ``current=None`` is treated as 0.0 — the starting influence of a new agent
     with no task history.
     """
-    from core.config import settings
-
     base = current if current is not None else 0.0
-    return base + settings.INFLUENCE_EMA_ALPHA * (quality - base)
+    return base + alpha * (quality - base)

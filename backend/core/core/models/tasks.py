@@ -3,6 +3,8 @@ from __future__ import annotations
 import uuid
 from datetime import datetime
 
+from typing import Any
+
 import sqlalchemy as sa
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -41,9 +43,9 @@ class Task(Base, TimestampMixin):
     priority: Mapped[str | None] = mapped_column(sa.Text, nullable=True)
     deadline_at: Mapped[datetime | None] = mapped_column(sa.DateTime(timezone=True), nullable=True)
     task_type: Mapped[str | None] = mapped_column(sa.Text, nullable=True)
-    required_skills: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+    required_skills: Mapped[dict[str, Any] | None] = mapped_column(JSONB, nullable=True)
     difficulty: Mapped[float | None] = mapped_column(sa.Float, nullable=True)
-    domain_tags: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+    domain_tags: Mapped[dict[str, Any] | None] = mapped_column(JSONB, nullable=True)
     external_ref: Mapped[str | None] = mapped_column(sa.Text, nullable=True)
     idempotency_key: Mapped[str | None] = mapped_column(sa.Text, nullable=True)
     coordinator_agent_id: Mapped[uuid.UUID | None] = mapped_column(
@@ -125,9 +127,9 @@ class TaskExecution(Base):
     status: Mapped[str] = mapped_column(sa.Text, nullable=False)
     quality_score: Mapped[float | None] = mapped_column(sa.Float, nullable=True)
     artifact: Mapped[str | None] = mapped_column(sa.Text, nullable=True)
-    tool_trace: Mapped[list | None] = mapped_column(JSONB, nullable=True)
+    tool_trace: Mapped[list[dict[str, Any]] | None] = mapped_column(JSONB, nullable=True)
     execution_path: Mapped[str | None] = mapped_column(sa.Text, nullable=True)
-    error: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+    error: Mapped[dict[str, Any] | None] = mapped_column(JSONB, nullable=True)
     started_at: Mapped[datetime | None] = mapped_column(sa.DateTime(timezone=True), nullable=True)
     completed_at: Mapped[datetime | None] = mapped_column(sa.DateTime(timezone=True), nullable=True)
     reflect_completed_at: Mapped[datetime | None] = mapped_column(sa.DateTime(timezone=True), nullable=True)

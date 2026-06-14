@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, TypedDict
+from typing import TYPE_CHECKING, Any, TypedDict
 
 if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession
@@ -17,7 +17,7 @@ class SubtaskSpec(TypedDict, total=False):
     required_skills: dict[str, float]
     difficulty: float
     task_type: str
-    domain_tags: dict
+    domain_tags: dict[str, Any]
 
 
 async def decompose_and_publish(

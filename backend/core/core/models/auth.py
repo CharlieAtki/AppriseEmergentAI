@@ -43,7 +43,7 @@ class ApiKey(Base, CreatedAtMixin):
     # Not sensitive — SHA-256 is one-way and cannot reconstruct the raw key.
     # Nullable to handle keys created before migration 005.
     key_sha256: Mapped[str | None] = mapped_column(sa.Text, nullable=True)
-    scopes: Mapped[list | None] = mapped_column(JSONB, nullable=True)
+    scopes: Mapped[list[str] | None] = mapped_column(JSONB, nullable=True)
     last_used_at: Mapped[datetime | None] = mapped_column(sa.DateTime(timezone=True), nullable=True)
     expires_at: Mapped[datetime | None] = mapped_column(sa.DateTime(timezone=True), nullable=True)
     revoked: Mapped[bool] = mapped_column(sa.Boolean, nullable=False, server_default=sa.text("false"))

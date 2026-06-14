@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Mapping
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -9,17 +10,17 @@ if TYPE_CHECKING:
 class InvalidTaskTransition(Exception):
     pass
 
-# Todo: Is this clean - is this texonomy? do we want to have a graph style that can be traced?
+
 class TaskStateMachine:
     # Maps current status → set of statuses it may legally move to.
     # reserved → open: allows a future cron job to release stale reservations
     # (Redis TTL expired; Postgres row still shows "reserved") back into bidding.
-    TRANSITIONS: dict[str, set[str]] = {
-        "pending": {"enriching"},
-        "enriching": {"open"},
-        "open": {"reserved", "expired"},
-        "reserved": {"executing", "open"},
-        "executing": {"completed", "failed", "expired", "open"},
+    TRANSITIONS: Mapping[str, frozenset[str]] = {
+        "pending": frozenset({"enriching"}),
+        "enriching": frozenset({"open"}),
+        "open": frozenset({"reserved", "expired"}),
+        "reserved": frozenset({"executing", "open"}),
+        "executing": frozenset({"completed", "failed", "expired", "open"}),
     }
 
     @classmethod

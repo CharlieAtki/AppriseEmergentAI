@@ -3,6 +3,8 @@ from __future__ import annotations
 import uuid
 from typing import TYPE_CHECKING
 
+from typing import Any
+
 import sqlalchemy as sa
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -34,9 +36,9 @@ class Agent(Base, TimestampMixin):
     )
     name: Mapped[str] = mapped_column(sa.Text, nullable=False)
     status: Mapped[str] = mapped_column(sa.Text, nullable=False, server_default=sa.text("'active'"))
-    skills: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+    skills: Mapped[dict[str, Any] | None] = mapped_column(JSONB, nullable=True)
     influence: Mapped[float | None] = mapped_column(sa.Float, nullable=True)
-    personality: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+    personality: Mapped[dict[str, Any] | None] = mapped_column(JSONB, nullable=True)
 
     __table_args__ = (
         sa.Index("ix_agents_workspace_id_status", "workspace_id", "status"),

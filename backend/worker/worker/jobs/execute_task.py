@@ -13,7 +13,6 @@ from core.eventing.activity.task_stream_logger import TaskStreamLogger
 from core.agents.agent import build_initial_state
 from core.agents.graphs.state import GraphState
 from core.agents.scoring import score_outcome
-from core.coordination.contract_net import issue_cfp
 from core.coordination.decompose import decompose_and_publish
 from core.coordination.task_context import MAX_DELEGATION_DEPTH, TaskContext
 from core.coordination.task_state import TaskStateMachine
@@ -195,7 +194,7 @@ async def execute_task(
 
             if decision.decision == "cfp":
                 await span.emit("agent.issuing_cfp", {"reasoning": decision.reasoning})
-                await issue_cfp(task, agent, stream_logger)
+                await stream_logger.cfp_issued(task, agent)
                 await _release_to_pool(span, execution, task, wctx.redis, task_logger, stream_logger)
                 return
 
@@ -308,7 +307,7 @@ async def _release_to_pool(
 
     stream_logger.task_created() re-publishes the task to stream:task so standard
     bidding can pick it up. This is separate from the cfp_issued event fired by the
-    caller (issue_cfp) — that event targets the CFP stream which has no subscriber yet.
+    caller — that event targets the CFP stream which has no subscriber yet.
     Both must fire: cfp_issued records that a negotiation round was initiated;
     task_created triggers actual re-bidding now.
     """

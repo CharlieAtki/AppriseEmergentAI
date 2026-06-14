@@ -9,7 +9,6 @@ from redis.exceptions import ResponseError
 if TYPE_CHECKING:
     from core.eventing.bus.common import StreamEvent
 
-# ToDo: Need to wire up ReisBus - Currently using InMemoryBus for testing until we have subs
 class RedisBus:
     """Redis Streams-backed event bus.
 

@@ -24,7 +24,6 @@ class EnrichmentOverrides:
     difficulty: float | None = None
 
 
-# ToDo: Need to look through this to check quality - is this correct
 @dataclass(frozen=True)
 class EnrichmentResult:
     required_skills: dict[str, float]

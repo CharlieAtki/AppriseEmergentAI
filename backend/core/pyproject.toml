@@ -23,5 +23,8 @@ dependencies = [
     "langgraph>=1.1.0",
 ]
 
+[project.optional-dependencies]
+dev = ["ruff>=0.11"]
+
 [tool.hatch.build.targets.wheel]
 packages = ["core"]
