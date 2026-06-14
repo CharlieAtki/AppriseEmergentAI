@@ -1,11 +1,14 @@
 from __future__ import annotations
 
+from collections.abc import Awaitable, Callable
+
+from core.database import get_session
 from fastapi import Request
 from fastapi.responses import JSONResponse
 from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.responses import Response
 
 from api.services.auth_service import validate_api_key, validate_clerk_token
-from core.database import get_session
 
 EXEMPT_PATHS = {"/health", "/docs", "/openapi.json", "/redoc"}
 
@@ -32,7 +35,9 @@ class AuthMiddleware(BaseHTTPMiddleware):
     intentionally generic to avoid leaking auth internals to callers.
     """
 
-    async def dispatch(self, request: Request, call_next):
+    async def dispatch(
+        self, request: Request, call_next: Callable[[Request], Awaitable[Response]]
+    ) -> Response:
         if request.url.path in EXEMPT_PATHS:
             return await call_next(request)
 

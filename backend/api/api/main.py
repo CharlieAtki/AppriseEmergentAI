@@ -1,8 +1,18 @@
 from __future__ import annotations
 
 import asyncio
+from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
+from typing import Any
 
+from core.config import settings as core_settings
+from core.eventing.activity.task_stream_logger import TaskStreamLogger
+from core.eventing.bus.in_process_bus import EventBus
+from core.eventing.bus.redis_bus import RedisBus
+from core.eventing.events.task_events import TaskCreatedEvent
+from core.intelligence.llm_router import LLMRouter
+from core.intelligence.registry import registry
+from core.intelligence.routing_config import resolve_routing
 from fastapi import FastAPI
 from fastapi.openapi.utils import get_openapi
 from redis.asyncio import Redis
@@ -13,17 +23,10 @@ from api.routers import agents as agents_router
 from api.routers import api_keys as api_keys_router
 from api.routers import tasks as tasks_router
 from api.routers import workspaces as workspaces_router
-from core.config import settings as core_settings
-from core.eventing.bus.in_process_bus import EventBus
-from core.eventing.bus.redis_bus import RedisBus
-from core.eventing.events.task_events import TaskCreatedEvent
-from core.intelligence.llm_router import LLMRouter
-from core.intelligence.registry import registry
-from core.intelligence.routing_config import resolve_routing
 
 
 @asynccontextmanager
-async def lifespan(app: FastAPI):
+async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
     import core.vendors.anthropic  # noqa: F401 — self-registers models
 
     loop = asyncio.get_running_loop()
@@ -31,7 +34,6 @@ async def lifespan(app: FastAPI):
     redis_bus = await RedisBus.create(core_settings.redis.url)
     redis = Redis.from_url(core_settings.redis.url, decode_responses=True)
 
-    # ToDo: Remove vendor coupling
     from core.vendors.anthropic.provider import AnthropicProvider
 
     routing = resolve_routing(core_settings.intelligence.routing, None)
@@ -55,7 +57,8 @@ async def lifespan(app: FastAPI):
     # crypto with no network round-trip per request.
     app.state.clerk = Clerk(bearer_auth=core_settings.clerk.secret_key.get_secret_value())
 
-    bus.bind(TaskCreatedEvent, TaskCreatedRedisPublisher(redis_bus))
+    task_stream_logger = TaskStreamLogger(redis_bus.apublish)
+    bus.bind(TaskCreatedEvent, TaskCreatedRedisPublisher(task_stream_logger))
 
     yield
 
@@ -68,7 +71,7 @@ app = FastAPI(lifespan=lifespan)
 app.add_middleware(AuthMiddleware)
 
 
-def _custom_openapi():
+def _custom_openapi() -> dict[str, Any]:
     if app.openapi_schema:
         return app.openapi_schema
     schema = get_openapi(title=app.title, version=app.version, routes=app.routes)

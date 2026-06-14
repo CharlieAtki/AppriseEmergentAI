@@ -3,11 +3,10 @@ from __future__ import annotations
 import uuid
 from typing import TYPE_CHECKING
 
+from core.models.tasks import Task
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
-
-from core.models.tasks import Task
 
 if TYPE_CHECKING:
     from api.schemas.task import CreateTaskRequest

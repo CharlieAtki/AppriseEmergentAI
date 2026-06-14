@@ -13,11 +13,10 @@ import asyncio
 import hashlib
 import secrets
 
-from sqlalchemy import select
-
 from core.database import get_session
 from core.models.auth import ApiKey
 from core.models.tenant import Organisation, OrganisationMember, User, Workspace
+from sqlalchemy import select
 
 _ORG_NAME = "Dev Org"
 _CLERK_ORG_ID = "dev_org_local"

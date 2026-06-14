@@ -29,6 +29,7 @@ from core.eventing.events.stream_events import (
 )
 
 if TYPE_CHECKING:
+    from core.eventing.events.task_events import TaskSnapshot
     from core.models.agents import Agent
     from core.models.tasks import Task
 
@@ -45,6 +46,24 @@ class TaskStreamLogger:
 
     def __init__(self, publish: StreamPublishFn) -> None:
         self._publish = publish
+
+    async def task_created_from_snapshot(self, snapshot: TaskSnapshot) -> None:
+        """Publish a ``task.created`` stream event from a snapshot.
+
+        Used by the API bridge handler to forward an in-process TaskCreatedEvent
+        to Redis Streams without the handler touching the bus directly.
+        """
+        await self._publish(
+            TaskCreatedStreamEvent(
+                task_id=snapshot.id,
+                workspace_id=snapshot.workspace_id,
+                organisation_id=snapshot.organisation_id,
+                required_skills=snapshot.required_skills or {},
+                difficulty=snapshot.difficulty,
+                task_type=snapshot.task_type,
+                domain_tags=snapshot.domain_tags,
+            )
+        )
 
     async def task_created(self, task: Task) -> None:
         """Publish a ``task.created`` event to trigger bidding for *task*.

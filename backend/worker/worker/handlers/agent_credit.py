@@ -5,8 +5,6 @@ import uuid
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
-from sqlalchemy import func, select
-
 from core.config import settings
 from core.coordination.influence import compute_influence_ema
 from core.coordination.task_state import TaskStateMachine
@@ -16,6 +14,7 @@ from core.eventing.events.task_events import TaskUpdatedEvent
 from core.models.agents import Agent
 from core.models.observability import InfluenceSnapshot
 from core.models.tasks import Task, TaskExecution
+from sqlalchemy import func, select
 
 if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession

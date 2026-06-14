@@ -4,13 +4,12 @@ import logging
 import math
 from typing import Any
 
-from sqlalchemy import select
-
 from core.config import settings
 from core.database import get_session
 from core.models.agents import Agent
 from core.models.observability import EmergenceEvent, WorkspaceMetricsSnapshot
 from core.models.tenant import Workspace
+from sqlalchemy import select
 
 logger = logging.getLogger(__name__)
 

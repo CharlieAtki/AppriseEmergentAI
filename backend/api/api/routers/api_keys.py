@@ -2,7 +2,9 @@ from __future__ import annotations
 
 import uuid
 
+from core.models.tenant import Workspace
 from fastapi import APIRouter, Depends, HTTPException, Request, status
+from redis.asyncio import Redis
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.deps import get_db, get_redis, require_workspace
@@ -20,7 +22,7 @@ def get_service(session: AsyncSession = Depends(get_db)) -> ApiKeyService:
 async def create_api_key(
     body: CreateApiKeyRequest,
     request: Request,
-    workspace=Depends(require_workspace("write")),
+    workspace: Workspace = Depends(require_workspace("write")),
     service: ApiKeyService = Depends(get_service),
 ) -> ApiKeyCreatedResponse:
     user_id: uuid.UUID | None = getattr(request.state.auth, "user_id", None)
@@ -36,7 +38,7 @@ async def create_api_key(
 
 @router.get("", response_model=list[ApiKeyResponse])
 async def list_api_keys(
-    workspace=Depends(require_workspace("read")),
+    workspace: Workspace = Depends(require_workspace("read")),
     service: ApiKeyService = Depends(get_service),
 ) -> list[ApiKeyResponse]:
     records = await service.list(workspace_id=workspace.id)
@@ -46,9 +48,9 @@ async def list_api_keys(
 @router.delete("/{key_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def revoke_api_key(
     key_id: uuid.UUID,
-    workspace=Depends(require_workspace("write")),
+    workspace: Workspace = Depends(require_workspace("write")),
     service: ApiKeyService = Depends(get_service),
-    redis=Depends(get_redis),
+    redis: Redis = Depends(get_redis),
 ) -> None:
     record = await service.get(workspace_id=workspace.id, key_id=key_id)
     if record is None:

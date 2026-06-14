@@ -3,10 +3,9 @@ from __future__ import annotations
 import uuid
 from typing import TYPE_CHECKING
 
+from core.models.tenant import Workspace
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
-
-from core.models.tenant import Workspace
 
 if TYPE_CHECKING:
     from api.schemas.workspace import CreateWorkspaceRequest, UpdateWorkspaceRequest

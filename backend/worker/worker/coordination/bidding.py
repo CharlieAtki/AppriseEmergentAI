@@ -12,10 +12,9 @@ from core.models.tasks import Task
 
 if TYPE_CHECKING:
     from arq import ArqRedis
+    from core.models.agents import Agent
     from redis.asyncio import Redis
     from sqlalchemy.ext.asyncio import AsyncSession
-
-    from core.models.agents import Agent
 
 logger = logging.getLogger(__name__)
 

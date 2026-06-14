@@ -13,7 +13,6 @@ import uuid
 from unittest.mock import AsyncMock
 
 import pytest
-
 from worker.span import ArqJobMeta, JobSpan, NoActiveSpanError, current_span
 
 # ── ArqJobMeta.from_ctx ───────────────────────────────────────────────────────

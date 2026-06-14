@@ -15,7 +15,6 @@ from __future__ import annotations
 import uuid
 
 import pytest
-
 from worker.handlers.reflect_job import ReflectJobHandler
 
 

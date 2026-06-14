@@ -4,14 +4,14 @@ import logging
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
-from sqlalchemy import select
-
 from core.config import settings
 from core.coordination.task_state import TaskStateMachine
 from core.database import get_session
 from core.eventing.activity.task_logger import TaskActivityLogger
 from core.eventing.events.task_events import TaskSnapshot
 from core.models.tasks import Task
+from sqlalchemy import select
+
 from worker.context import get_worker_context
 
 logger = logging.getLogger(__name__)

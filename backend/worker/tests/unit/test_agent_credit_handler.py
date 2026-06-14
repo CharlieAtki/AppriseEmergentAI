@@ -13,7 +13,6 @@ from contextlib import asynccontextmanager
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-
 from core.config import settings
 from worker.handlers.agent_credit import AgentCreditHandler, compute_delegation_credits
 

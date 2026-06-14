@@ -9,6 +9,7 @@ from typing import Any
 from core.intelligence.reflection.types import ReflectContext
 from core.models.agents import Agent
 from core.models.tasks import Task, TaskExecution
+
 from worker.context import get_worker_context
 from worker.span import ArqJobMeta, JobSpan
 

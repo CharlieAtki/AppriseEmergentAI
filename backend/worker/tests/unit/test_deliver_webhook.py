@@ -197,7 +197,7 @@ async def test_failure_attempt_1_schedules_retry_30s(mocker):
 
 
 async def test_failure_attempt_3_schedules_retry_1800s(mocker):
-    record, wctx = await _run_delivery_failure(attempt_count=3, mocker=mocker)
+    _record, wctx = await _run_delivery_failure(attempt_count=3, mocker=mocker)
     wctx.arq_queue.enqueue_job.assert_called_once()
     call_kwargs = wctx.arq_queue.enqueue_job.call_args.kwargs
     from datetime import timedelta

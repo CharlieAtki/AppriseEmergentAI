@@ -2,16 +2,19 @@ from __future__ import annotations
 
 import uuid
 
+from core.database import get_session
+from core.eventing.activity.base import PublishFn
+from core.eventing.activity.task_logger import TaskActivityLogger
+from core.intelligence.enrichment import EnrichmentOverrides, enrich
+from core.intelligence.llm_router import LLMRouter
+from core.models.tasks import Task
+from core.models.tenant import Workspace
 from fastapi import APIRouter, BackgroundTasks, Depends, Header, HTTPException, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.deps import get_db, require_workspace
 from api.schemas.task import CreateTaskRequest, TaskCreatedResponse, TaskResponse
 from api.services.task_service import TaskService
-from core.database import get_session
-from core.eventing.activity.task_logger import TaskActivityLogger
-from core.intelligence.enrichment import EnrichmentOverrides, enrich
-from core.models.tasks import Task
 
 router = APIRouter()
 
@@ -22,8 +25,8 @@ def get_service(session: AsyncSession = Depends(get_db)) -> TaskService:
 
 async def enrich_and_release(
     task_id: uuid.UUID,
-    publish,
-    llm_router,
+    publish: PublishFn,
+    llm_router: LLMRouter,
     overrides: EnrichmentOverrides | None = None,
 ) -> None:
     """Background task: enrichment → 'open' → publish TaskCreatedEvent.
@@ -53,7 +56,7 @@ async def create_task(
     request: Request,
     background_tasks: BackgroundTasks,
     idempotency_key_header: str | None = Header(None, alias="Idempotency-Key"),
-    workspace=Depends(require_workspace("write")),
+    workspace: Workspace = Depends(require_workspace("write")),
     service: TaskService = Depends(get_service),
 ) -> TaskCreatedResponse:
     task = await service.create(
@@ -82,7 +85,7 @@ async def create_task(
 @router.get("/{task_id}", response_model=TaskResponse)
 async def get_task(
     task_id: uuid.UUID,
-    workspace=Depends(require_workspace("read")),
+    workspace: Workspace = Depends(require_workspace("read")),
     service: TaskService = Depends(get_service),
 ) -> TaskResponse:
     task = await service.get(workspace.id, task_id)
@@ -93,7 +96,7 @@ async def get_task(
 
 @router.get("", response_model=list[TaskResponse])
 async def list_tasks(
-    workspace=Depends(require_workspace("read")),
+    workspace: Workspace = Depends(require_workspace("read")),
     service: TaskService = Depends(get_service),
 ) -> list[TaskResponse]:
     tasks = await service.list(workspace.id)

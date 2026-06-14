@@ -62,7 +62,7 @@ def _personality_fit(
     try:
         a = {k: float(v) for k, v in agent_personality.items()}
         b = {k: float(v) for k, v in task_domain_tags.items()}
-    except (TypeError, ValueError):
+    except TypeError, ValueError:
         return 0.5
     sim = _cosine_similarity(a, b)  # [-1, 1]
     return (sim + 1.0) / 2.0  # [0, 1]

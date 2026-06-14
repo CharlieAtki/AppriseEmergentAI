@@ -14,7 +14,6 @@ from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-
 from core.eventing.events.task_events import TaskSnapshot, TaskUpdatedEvent
 
 

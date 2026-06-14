@@ -8,41 +8,19 @@ Items explicitly deferred during hardening and CI setup. Each entry records what
 
 ### 1. mypy / static type checking
 
-**Status:** Not configured.
-
-**Why deferred:** SQLAlchemy's `Mapped[...]` annotations, LangChain generics, and ARQ context dicts generate a high volume of false positives on first run. Adding mypy strict before those are suppressed creates noise that trains developers to ignore the output.
-
-**What completing it requires:**
-- Add `mypy>=1.0` to each package's `dev` optional-dependencies
-- Add `[tool.mypy]` section to each `pyproject.toml`, starting permissive (`ignore_missing_imports = true`, `check_untyped_defs = false`)
-- Add a `mypy` step to `.github/workflows/ci.yml` after lint
-- Tighten rules incrementally per module — coordination and eventing are clean enough to enable strict now; models and vendors need suppressions
+**Status:** Done. Permissive config (`ignore_missing_imports = true`, `check_untyped_defs = false`) added to all three `pyproject.toml` files. Three mypy steps added to the `lint` job in `ci.yml`. Next step: tighten per-module — coordination and eventing are clean enough for strict now.
 
 ---
 
 ### 2. ANN ruff rules (annotation completeness enforcement)
 
-**Status:** Intentionally excluded from `backend/ruff.toml`.
-
-**Why deferred:** The codebase was just cleaned of bare `dict`/`list` annotations. Turning on `ANN` rules immediately would flag every function that lacks a return annotation or has `Any` parameters, which is too noisy to be useful right now.
-
-**What completing it requires:**
-- Add `"ANN"` to `select` in `ruff.toml`
-- Add targeted `ignore` entries for rules that conflict with SQLAlchemy and FastAPI patterns (e.g. `ANN401` — disallowing `Any` — would need to be suppressed on ORM files)
-- Fix all existing annotation gaps in one pass before enabling
+**Status:** Done. `ANN` added to `ruff.toml` with `ANN401` suppressed and per-file ignores for `models/` and `tests/`. All 25 violations fixed across `api/`, `core/`, and `worker/` in a single pass.
 
 ---
 
 ### 3. Security scanning
 
-**Status:** Not configured.
-
-**Why deferred:** Out of scope for the initial CI setup.
-
-**What completing it requires:**
-- Add a `security` job to `ci.yml` using [Trivy](https://github.com/aquasecurity/trivy-action) to scan Docker images for CVEs after `build.yml` pushes them
-- Add [Bandit](https://github.com/PyCIASecurity/bandit) to the pre-commit hooks for Python SAST (`bandit -r backend/ -ll` — medium and above only)
-- Decide whether security findings block the build (recommended: block on HIGH/CRITICAL, warn on MEDIUM)
+**Status:** Done. Bandit SAST in pre-commit and `ci.yml`; Trivy image scans in `build.yml` after each image push. HIGH/CRITICAL block the build; results upload to GitHub Security tab as SARIF.
 
 ---
 

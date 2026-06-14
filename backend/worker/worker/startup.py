@@ -48,6 +48,7 @@ async def startup(ctx: dict[str, Any]) -> None:
         TaskCreatedStreamEvent,
     )
     from core.eventing.events.task_events import TaskUpdatedEvent
+
     from worker.handlers.agent_credit import AgentCreditHandler
     from worker.handlers.bidding import TaskBiddingHandler
     from worker.handlers.cfp import CfpHandler

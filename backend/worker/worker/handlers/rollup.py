@@ -5,8 +5,6 @@ import uuid
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
-from sqlalchemy import select
-
 from core.coordination.task_state import TaskStateMachine
 from core.database import get_session
 from core.eventing.activity.base import PublishFn
@@ -14,6 +12,7 @@ from core.eventing.activity.task_logger import TaskActivityLogger
 from core.eventing.bus.handlers import EventHandler
 from core.eventing.events.task_events import TaskSnapshot, TaskUpdatedEvent
 from core.models.tasks import Task, TaskExecution
+from sqlalchemy import select
 
 if TYPE_CHECKING:
     from arq import ArqRedis

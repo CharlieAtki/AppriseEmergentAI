@@ -2,8 +2,8 @@ from __future__ import annotations
 
 from arq import cron
 from arq.connections import RedisSettings
-
 from core.config import settings as core_settings
+
 from worker.jobs import (
     curate_memory,
     deliver_webhook,

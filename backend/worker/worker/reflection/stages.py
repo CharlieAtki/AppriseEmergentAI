@@ -3,8 +3,6 @@ from __future__ import annotations
 import logging
 import uuid
 
-from sqlalchemy import select
-
 from core.coordination.skills import apply_skill_delta, compute_delta_magnitude
 from core.intelligence.call_types import CallType
 from core.intelligence.llm_router import LLMRouter
@@ -15,6 +13,8 @@ from core.memory.agent_memory import AgentMemory
 from core.memory.types import ProceduralRule
 from core.models.agents import Agent
 from core.models.observability import ProceduralKnowledgeLog, SkillSnapshot
+from sqlalchemy import select
+
 from worker.span import current_span
 
 logger = logging.getLogger(__name__)

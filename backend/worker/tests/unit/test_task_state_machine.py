@@ -8,7 +8,6 @@ Every transition pair is parameterised so coverage doesn't require thought.
 from __future__ import annotations
 
 import pytest
-
 from core.coordination.task_state import InvalidTaskTransition, TaskStateMachine
 
 

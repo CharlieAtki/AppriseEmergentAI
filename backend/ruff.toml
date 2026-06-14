@@ -1,4 +1,4 @@
-target-version = "py313"   # ruff doesn't support 3.14 yet; 3.13 is the ceiling
+target-version = "py314"
 line-length = 100
 
 [lint]
@@ -11,15 +11,19 @@ select = [
     "B",    # flake8-bugbear (common mistakes / footguns)
     "ERA",  # eradicate (commented-out code)
     "RUF",  # ruff-native rules
+    "ANN",  # annotation completeness
 ]
 ignore = [
     "E501",   # line length — formatter handles this, linter shouldn't double-flag
     "B008",   # do not call functions in default args — conflicts with FastAPI Depends()
     "RUF012", # mutable class attributes — SQLAlchemy relationship() triggers this
+    "ANN401", # disallows Any — used intentionally for dict[str, Any]
 ]
 
 [lint.per-file-ignores]
 "*/migrations/*" = ["ALL"]
+"*/models/*"     = ["ANN"]
+"*/tests/*"      = ["ANN"]
 
 [format]
 quote-style = "double"

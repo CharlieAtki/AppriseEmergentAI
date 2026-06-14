@@ -6,12 +6,12 @@ import uuid
 from typing import TYPE_CHECKING
 
 import bcrypt as _bcrypt
+from core.models.auth import ApiKey
+from core.models.tenant import Workspace
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.services.auth_service import revoke_api_key
-from core.models.auth import ApiKey
-from core.models.tenant import Workspace
 
 if TYPE_CHECKING:
     from redis.asyncio import Redis

@@ -6,14 +6,13 @@ from datetime import UTC, datetime
 from typing import Literal
 
 import bcrypt as _bcrypt
+from core.models.auth import ApiKey
+from core.models.tenant import Organisation, User
 from fastapi import HTTPException, status
 from pydantic import BaseModel
 from redis.asyncio import Redis
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
-
-from core.models.auth import ApiKey
-from core.models.tenant import Organisation, User
 
 
 class ApiKeyPayload(BaseModel):

@@ -4,13 +4,13 @@ import logging
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
-from sqlalchemy import select
-from sqlalchemy.orm import selectinload
-
 from core.database import get_session
 from core.eventing.bus.handlers import EventHandler
 from core.eventing.events.stream_events import TaskCreatedStreamEvent
 from core.models.agents import Agent
+from sqlalchemy import select
+from sqlalchemy.orm import selectinload
+
 from worker.coordination.bidding import score_and_reserve
 
 if TYPE_CHECKING:

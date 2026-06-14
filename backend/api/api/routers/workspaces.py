@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import uuid
 
+from core.models.tenant import Workspace
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -53,7 +54,7 @@ async def get_workspace(
 @router.patch("/{workspace_id}", response_model=WorkspaceResponse)
 async def update_workspace(
     body: UpdateWorkspaceRequest,
-    workspace=Depends(require_workspace("write")),
+    workspace: Workspace = Depends(require_workspace("write")),
     service: WorkspaceService = Depends(get_service),
 ) -> WorkspaceResponse:
     ws = await service.update(workspace, body)
@@ -62,7 +63,7 @@ async def update_workspace(
 
 @router.delete("/{workspace_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_workspace(
-    workspace=Depends(require_workspace("write")),
+    workspace: Workspace = Depends(require_workspace("write")),
     service: WorkspaceService = Depends(get_service),
 ) -> None:
     await service.delete(workspace)

@@ -1,9 +1,9 @@
 from __future__ import annotations
 
-from enum import Enum
+from enum import StrEnum
 
 
-class CallType(str, Enum):
+class CallType(StrEnum):
     EVALUATE = "evaluate"
     REFLECT = "reflect"
     DECOMPOSE = "decompose"

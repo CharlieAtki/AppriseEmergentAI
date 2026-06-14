@@ -3,11 +3,8 @@ from __future__ import annotations
 import asyncio
 import logging
 from collections.abc import Awaitable, Callable
-from typing import TypeVar
 
 logger = logging.getLogger(__name__)
-
-T = TypeVar("T")
 
 _RETRYABLE_STATUSES: frozenset[int] = frozenset({429, 500, 502, 503, 504})
 
@@ -30,7 +27,7 @@ def is_retryable_http(exc: BaseException) -> bool:
     if raw is not None:
         try:
             return int(raw) in _RETRYABLE_STATUSES  # type: ignore[arg-type]
-        except (TypeError, ValueError):
+        except TypeError, ValueError:
             pass
 
     # Network-level errors carry no status code — check via httpx base types.
@@ -45,7 +42,7 @@ def is_retryable_http(exc: BaseException) -> bool:
         return False
 
 
-async def retry_async(
+async def retry_async[T](
     fn: Callable[[], Awaitable[T]],
     *,
     is_retryable: Callable[[BaseException], bool],

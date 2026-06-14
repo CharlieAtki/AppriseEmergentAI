@@ -13,7 +13,6 @@ from contextlib import asynccontextmanager
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-
 from core.intelligence.reflection.types import PipelineResult, ReflectContext
 from worker.reflection.stages import _primary_domain, _stage_rules, _stage_skills
 

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+from typing import Any
 
 from qdrant_client import AsyncQdrantClient
 
@@ -17,11 +18,11 @@ class ResilientQdrantClient:
     def __init__(self, client: AsyncQdrantClient) -> None:
         self._client = client
 
-    def __getattr__(self, name: str):
+    def __getattr__(self, name: str) -> Any:
         attr = getattr(self._client, name)
         if asyncio.iscoroutinefunction(attr):
 
-            async def _retrying(*args, **kwargs):
+            async def _retrying(*args: Any, **kwargs: Any) -> Any:
                 return await retry_async(
                     lambda: attr(*args, **kwargs),
                     is_retryable=is_retryable_http,

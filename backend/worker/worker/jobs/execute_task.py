@@ -5,8 +5,6 @@ import uuid
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
-from sqlalchemy.orm import selectinload
-
 from core.agents.agent import build_initial_state
 from core.agents.graphs.state import GraphState
 from core.agents.scoring import score_outcome
@@ -24,6 +22,8 @@ from core.intelligence.prompts import evaluate
 from core.intelligence.prompts.evaluate import EvaluateResponse
 from core.models.agents import Agent
 from core.models.tasks import Task, TaskExecution
+from sqlalchemy.orm import selectinload
+
 from worker.context import get_worker_context
 from worker.span import ArqJobMeta, JobSpan
 

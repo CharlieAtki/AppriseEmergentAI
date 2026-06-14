@@ -7,6 +7,7 @@ from core.intelligence.llm_router import LLMRouter
 from core.intelligence.reflection.pipeline import PipelineStage
 from core.intelligence.reflection.types import PipelineResult, ReflectContext
 from core.memory.agent_memory import AgentMemory
+
 from worker.reflection.stages import _stage_episodic, _stage_reflect, _stage_rules, _stage_skills
 
 logger = logging.getLogger(__name__)

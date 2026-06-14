@@ -3,13 +3,13 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from sqlalchemy import select
-
 from core.database import get_session
 from core.intelligence.call_types import CallType
 from core.intelligence.prompts import curate as curate_prompt
 from core.memory.types import ProceduralRule
 from core.models.agents import Agent
+from sqlalchemy import select
+
 from worker.context import get_worker_context
 
 logger = logging.getLogger(__name__)

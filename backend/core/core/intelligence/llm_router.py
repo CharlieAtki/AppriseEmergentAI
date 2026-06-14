@@ -66,7 +66,7 @@ class LLMRouter:
 
         if json_mode and messages:
             last = messages[-1]
-            messages = messages[:-1] + [{**last, "content": last["content"] + _JSON_INSTRUCTION}]
+            messages = [*messages[:-1], {**last, "content": last["content"] + _JSON_INSTRUCTION}]
 
         lc_messages = _to_langchain_messages(messages)
         model = self._get_model(call_type, routing_override)

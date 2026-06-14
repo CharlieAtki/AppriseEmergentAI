@@ -8,7 +8,6 @@ invisible logic drift.
 from __future__ import annotations
 
 import pytest
-
 from core.coordination.contract_net import (
     _capacity_factor,
     _influence_factor,

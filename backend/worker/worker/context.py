@@ -3,9 +3,6 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
-from qdrant_client import AsyncQdrantClient
-from redis.asyncio import Redis
-
 from core.agents.graphs.factory import build_graph
 from core.agents.tools.registry import tool_registry
 from core.config import settings
@@ -24,12 +21,14 @@ from core.vendors.anthropic.provider import AnthropicProvider
 from core.vendors.aws.provider import AWSProvider
 from core.vendors.azure.provider import AzureProvider
 from core.vendors.ollama.provider import OllamaProvider
+from qdrant_client import AsyncQdrantClient
+from redis.asyncio import Redis
 
 if TYPE_CHECKING:
     from arq import ArqRedis
+    from core.eventing.bus.protocols import SubscribableBusProtocol
     from langgraph.graph.state import CompiledStateGraph
 
-    from core.eventing.bus.protocols import SubscribableBusProtocol
     from worker.reflection.manager import ReflectionManager
 
 

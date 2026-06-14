@@ -28,6 +28,33 @@ jobs:
       - name: Ruff format check
         run: uvx ruff format --check backend/
 
+      - name: mypy (core)
+        run: cd backend && uvx --with mypy mypy core/core/ --ignore-missing-imports
+
+      - name: mypy (api)
+        run: cd backend && uvx --with mypy mypy api/api/ --ignore-missing-imports
+
+      - name: mypy (worker)
+        run: cd backend && uvx --with mypy mypy worker/worker/ --ignore-missing-imports
+
+  security:
+    name: Security Scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Bandit SAST
+        run: uvx bandit -r backend/ -ll --exclude backend/core/core/migrations,backend/worker/tests
+
+      - name: Trivy filesystem scan
+        uses: aquasecurity/trivy-action@0.30.0
+        with:
+          scan-type: fs
+          scan-ref: backend/
+          severity: HIGH,CRITICAL
+          exit-code: "1"
+          format: table
+
   test:
     name: Unit & Integration Tests
     runs-on: ubuntu-latest
@@ -41,12 +68,14 @@ jobs:
         with:
           python-version: "3.14"
 
-      - name: Install dependencies
-        run: |
-          cd backend
-          uv sync --package apprise-worker --extra test
+      - name: Install worker test deps
+        run: cd backend && uv sync --package apprise-worker --extra test
 
-      - name: Run tests
-        run: |
-          cd backend
-          uv run --package apprise-worker pytest worker/tests/ -v
+      - name: Run worker tests
+        run: cd backend && uv run --package apprise-worker pytest worker/tests/ -v
+
+      - name: Install core test deps
+        run: cd backend && uv sync --package apprise-core --extra test
+
+      - name: Run core tests
+        run: cd backend && uv run --package apprise-core pytest core/tests/ -v

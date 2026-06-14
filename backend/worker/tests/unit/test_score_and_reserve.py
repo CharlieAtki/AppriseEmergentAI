@@ -12,7 +12,6 @@ from collections.abc import Mapping
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-
 from worker.coordination.bidding import score_and_reserve
 
 

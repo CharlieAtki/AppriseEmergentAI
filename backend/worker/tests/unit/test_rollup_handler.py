@@ -201,7 +201,7 @@ async def test_any_sibling_failed_promotes_parent_failed(
     mocker,
 ):
     """failed wins — even one failed sibling makes the parent failed."""
-    parent, publish = await _run_all_siblings_terminal(
+    parent, _publish = await _run_all_siblings_terminal(
         make_updated_event,
         arq_mock,
         mocker,
