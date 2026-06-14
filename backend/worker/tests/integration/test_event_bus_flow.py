@@ -26,10 +26,10 @@ from worker.handlers.webhook import WebhookDeliveryHandler
 @dataclass
 class _Tracking(EventHandler):
     """Captures every event it handles."""
-    calls: list = None
+    calls: list[DomainEvent] | None =None
     should_raise: bool = False
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         if self.calls is None:
             self.calls = []
 

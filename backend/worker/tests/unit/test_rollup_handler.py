@@ -232,6 +232,7 @@ async def test_reflect_job_enqueued_with_correct_args(
     handler, _ = _make_handler(arq_mock)
     await handler.handle(event)
 
+    arq_mock.enqueue_job.assert_called_once()
     call_kwargs = arq_mock.enqueue_job.call_args.kwargs
     assert arq_mock.enqueue_job.call_args.args[0] == "reflect"
     assert call_kwargs["agent_id"] == str(coordinator_id)

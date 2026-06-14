@@ -8,6 +8,7 @@ import os
 os.environ.setdefault("DATABASE__URL", "postgresql+asyncpg://test:test@localhost/test")
 os.environ.setdefault("ANTHROPIC__API_KEY", "test-key-not-real")
 
+from typing import Any
 import uuid
 from contextlib import asynccontextmanager
 from unittest.mock import AsyncMock, MagicMock
@@ -47,7 +48,7 @@ def make_task():
 @pytest.fixture
 def make_agent():
     """Factory for lightweight Agent-like stubs (no DB)."""
-    def _factory(skills: dict | None = None, influence: float = 0.5, **kwargs) -> MagicMock:
+    def _factory(skills: dict[str, float] | None = None, influence: float = 0.5, **kwargs) -> MagicMock:
         a = MagicMock()
         a.id = uuid.uuid4()
         a.workspace_id = uuid.uuid4()
@@ -67,7 +68,7 @@ def make_agent():
 def make_snapshot():
     """Factory for real TaskSnapshot instances with sensible defaults."""
     def _factory(**kwargs) -> TaskSnapshot:
-        defaults: dict = dict(
+        defaults: dict[str, Any] = dict(
             id=uuid.uuid4(),
             workspace_id=uuid.uuid4(),
             organisation_id=uuid.uuid4(),
