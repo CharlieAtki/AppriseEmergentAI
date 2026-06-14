@@ -70,16 +70,24 @@ class EventBus:
         for handler in self._handlers_for(event):
             asyncio.run_coroutine_threadsafe(self._handle_safely(handler, event), self._loop)
 
-    async def apublish(self, event: DomainEvent) -> None:
-        """Dispatch handlers from an async caller.
+    async def apublish(self, event: DomainEvent) -> list[asyncio.Task[None]]:
+        """Dispatch handlers from an async caller. Returns the scheduled tasks.
 
-        Schedules all handlers fire-and-forget. Exceptions are caught and
-        logged per handler — a failing handler does not affect others.
+        Schedules all matching handlers fire-and-forget and returns the
+        asyncio.Task objects created. Callers that need to know when handlers
+        have finished (e.g. StreamSubscriber, to defer the Redis Stream ACK)
+        can await the returned tasks with asyncio.gather. Callers that do not
+        need to wait simply discard the return value.
+
+        Exceptions are caught per handler by _handle_safely and never propagate.
         """
+        tasks: list[asyncio.Task[None]] = []
         for handler in self._handlers_for(event):
             task = asyncio.ensure_future(self._handle_safely(handler, event))
             self._pending_tasks.add(task)
             task.add_done_callback(self._pending_tasks.discard)
+            tasks.append(task)
+        return tasks
 
     def _handlers_for(self, event: DomainEvent) -> list[EventHandler]:
         return [

@@ -3,18 +3,20 @@ from __future__ import annotations
 import logging
 import uuid
 from datetime import datetime, timezone
+from collections.abc import Mapping
+from typing import Any
 
 from core.intelligence.reflection.types import ReflectContext
 from core.models.agents import Agent
 from core.models.tasks import Task, TaskExecution
 from worker.context import get_worker_context
-from worker.span import JobSpan
+from worker.span import ArqJobMeta, JobSpan
 
 logger = logging.getLogger(__name__)
 
 
 async def reflect(
-    ctx: dict,
+    ctx: Mapping[str, Any],
     agent_id: str,
     task_id: str,
     workspace_id: str,
@@ -34,8 +36,8 @@ async def reflect(
        ARQ retries safe regardless of which stage failed or how far the pipeline got.
 
     3. Run: delegate to ``WorkerContext.reflection_manager`` which sequences the
-       three stages (reflect → skills → rules). Per-stage failures are isolated —
-       a failing stage is logged and skipped, not a job failure.
+       four stages (reflect → skills → rules → episodic). Per-stage failures are
+       isolated — a failing stage is logged and skipped, not a job failure.
 
     4. Stamp: write ``reflect_completed_at`` after all stages complete. If the process
        dies between run() and stamp, ARQ will retry and re-run all stages.
@@ -43,8 +45,12 @@ async def reflect(
     Enqueued by ``ReflectJobHandler`` (self-execute path) and ``RollupSubtaskHandler``
     (decompose path) after a task reaches "completed" or "failed".
     """
+    wctx = get_worker_context()
+    meta = ArqJobMeta.from_ctx(ctx)
     async with JobSpan(
-        uuid.UUID(agent_id), uuid.UUID(task_id), uuid.UUID(workspace_id)
+        uuid.UUID(agent_id), uuid.UUID(task_id), uuid.UUID(workspace_id),
+        redis_publish=wctx.redis.publish,
+        meta=meta,
     ) as span:
         # Load all state in one session. Session closes before any stage runs.
         async with span.session() as session:
@@ -97,8 +103,7 @@ async def reflect(
             agent_skills=agent.skills or {},
         )
 
-        wctx   = get_worker_context()
-        result = await wctx.reflection_manager.run(rctx, span)
+        result = await wctx.reflection_manager.run(rctx)
 
         await span.emit("job.completed", {
             "quality_score":  rctx.heuristic_score,

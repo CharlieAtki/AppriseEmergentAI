@@ -28,13 +28,14 @@ from core.vendors.ollama.provider import OllamaProvider
 if TYPE_CHECKING:
     from arq import ArqRedis
     from langgraph.graph.state import CompiledStateGraph
+    from core.eventing.bus.protocols import SubscribableBusProtocol
     from worker.reflection.manager import ReflectionManager
 
 
 @dataclass(frozen=True)
 class WorkerContext:
     graphs:             dict[str, "CompiledStateGraph"]  # keyed by task_type
-    bus:                RedisBus                          # Redis Streams — durable task events
+    bus:                "SubscribableBusProtocol"         # Redis Streams — durable task events
     redis:              Redis                             # raw Redis — Pub/Sub + SETNX reservations
     arq_queue:          "ArqRedis"                        # ARQ job queue — enqueue_job()
     memory:             AgentMemory                       # Qdrant-backed three-tier memory
@@ -81,17 +82,16 @@ class WorkerContext:
         qdrant = ResilientQdrantClient(_raw_qdrant)
         memory = AgentMemory(qdrant)
 
-        # 5. Compile one graph per task type — expensive, done ONCE per process
+        # 5. Compile one graph per task type — expensive, done ONCE per process.
+        # Task types come from settings.worker.task_types — extend there, not here.
         model = llm_router.get_chat_model(CallType.EXECUTE)
-        graphs: dict[str, CompiledStateGraph] = {
-            task_type: build_graph(
-                model_with_tools=model.bind_tools(
-                    tool_registry.build_for_task_type(task_type, memory=memory)
-                ),
-                tools=tool_registry.build_for_task_type(task_type, memory=memory),
+        graphs: dict[str, CompiledStateGraph] = {}
+        for task_type in settings.worker.task_types:
+            tools = tool_registry.build_for_task_type(task_type, memory=memory)
+            graphs[task_type] = build_graph(
+                model_with_tools=model.bind_tools(tools),
+                tools=tools,
             )
-            for task_type in ["general", "code", "research", "coordination"]
-        }
 
         # 6. Two separate Redis connections — Streams bus vs raw Pub/Sub + locks
         redis = Redis.from_url(settings.redis.url, decode_responses=True)

@@ -3,7 +3,7 @@ from __future__ import annotations
 import logging
 import uuid
 from datetime import datetime, timezone
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from sqlalchemy.orm import selectinload
 
@@ -26,16 +26,17 @@ from core.intelligence.prompts.evaluate import EvaluateResponse
 from core.models.agents import Agent
 from core.models.tasks import Task, TaskExecution
 from worker.context import get_worker_context
-from worker.span import JobSpan
+from worker.span import ArqJobMeta, JobSpan
 
 if TYPE_CHECKING:
-    pass
+    from redis.asyncio import Redis
+    from worker.context import WorkerContext
 
 logger = logging.getLogger(__name__)
 
 
 async def execute_task(
-    ctx: dict,
+    ctx: dict[str, Any],
     agent_id: str,
     task_id: str,
     workspace_id: str,
@@ -53,8 +54,12 @@ async def execute_task(
 
     On any exception after the execution row is committed, writes failure state for the execution and transitions the task to "failed" (when appropriate) to avoid leaving dangling rows, logs failures, and re-raises the exception for the job system to record.
     """
+    wctx = get_worker_context()
+    meta = ArqJobMeta.from_ctx(ctx)
     async with JobSpan(
-        uuid.UUID(agent_id), uuid.UUID(task_id), uuid.UUID(workspace_id)
+        uuid.UUID(agent_id), uuid.UUID(task_id), uuid.UUID(workspace_id),
+        redis_publish=wctx.redis.publish,
+        meta=meta,
     ) as span:
 
         # ── Phase 1: READ ──────────────────────────────────────────────────────
@@ -88,7 +93,6 @@ async def execute_task(
         provenance = TaskContext.from_task(task)
         depth_exceeded = provenance.delegation_depth >= MAX_DELEGATION_DEPTH
 
-        wctx = get_worker_context()
         # task_logger   — in-process EventBus; fires typed DomainEvents to same-process
         #                 handlers (RollupSubtaskHandler, etc.). Does not cross process boundary.
         # stream_logger — Redis Streams; fires typed StreamEvents consumed by
@@ -192,7 +196,7 @@ async def execute_task(
             if decision.decision == "cfp":
                 await span.emit("agent.issuing_cfp", {"reasoning": decision.reasoning})
                 await issue_cfp(task, agent, stream_logger)
-                await _release_to_pool(span, execution, task, wctx, task_logger, stream_logger)
+                await _release_to_pool(span, execution, task, wctx.redis, task_logger, stream_logger)
                 return
 
             # ── Phase 5: SELF-EXECUTE via LangGraph ──────────────────────────────
@@ -278,7 +282,7 @@ async def execute_task(
                         before_failed, task,
                         executing_agent_id=agent.id if execution is not None else None,
                         execution_id=execution.id if execution is not None else None,
-                        execution_path="self_execute",
+                        execution_path=execution.execution_path if execution is not None else None,
                     )
             except Exception:
                 logger.exception(
@@ -292,7 +296,7 @@ async def _release_to_pool(
     span: JobSpan,
     execution: TaskExecution,
     task: Task,
-    wctx,
+    redis: Redis,
     task_logger: TaskActivityLogger,
     stream_logger: TaskStreamLogger,
 ) -> None:
@@ -325,7 +329,7 @@ async def _release_to_pool(
         session.add(task)
     await task_logger.updated(before, task, executing_agent_id=execution.agent_id, execution_path="cfp")
 
-    await wctx.redis.delete(f"reservation:{task.workspace_id}:{task.id}")
+    await redis.delete(f"reservation:{task.workspace_id}:{task.id}")
 
     await stream_logger.task_created(task)
 

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 from datetime import datetime, timedelta, timezone
+from typing import Any
 
 from sqlalchemy import select
 
@@ -16,7 +17,7 @@ from worker.context import get_worker_context
 logger = logging.getLogger(__name__)
 
 
-async def sweep_tasks(ctx: dict) -> None:
+async def sweep_tasks(ctx: dict[str, Any]) -> None:
     """Cron job — runs every 5 minutes.
 
     Three sweeps:

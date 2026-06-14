@@ -9,6 +9,7 @@ from sqlalchemy import func, select
 
 from core.config import settings
 from core.coordination.influence import compute_influence_ema
+from core.coordination.task_state import TaskStateMachine
 from core.database import get_session
 from core.eventing.bus.handlers import EventHandler
 from core.eventing.events.task_events import TaskUpdatedEvent
@@ -20,8 +21,6 @@ if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession
 
 logger = logging.getLogger(__name__)
-
-TERMINAL_STATUSES: frozenset[str] = frozenset({"completed", "failed", "expired"})
 
 
 async def compute_delegation_credits(
@@ -194,7 +193,7 @@ class AgentCreditHandler(EventHandler[TaskUpdatedEvent]):
 
         if not siblings:
             return []
-        if not all(s.status in TERMINAL_STATUSES for s in siblings):
+        if not all(TaskStateMachine.is_terminal(s.status) for s in siblings):
             return []  # more siblings still running — not the last one
 
         completed_ids = [s.id for s in siblings if s.status == "completed"]

@@ -233,3 +233,9 @@ dist/
 
 # Docker
 *.override.yml
+
+# Claude local files
+.claude
+
+# VS Code
+.vscode/

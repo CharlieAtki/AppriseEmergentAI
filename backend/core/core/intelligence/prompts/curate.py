@@ -1,8 +1,11 @@
 from __future__ import annotations
 
-from typing import Any, Literal
+from typing import TYPE_CHECKING, Literal
 
 from pydantic import BaseModel
+
+if TYPE_CHECKING:
+    from core.memory.types import ProceduralRule
 
 
 class FlaggedRule(BaseModel):
@@ -15,9 +18,9 @@ class CurateResponse(BaseModel):
     flagged: list[FlaggedRule]
 
 
-def build_prompt(rules: list[dict[str, Any]]) -> list[dict]:
+def build_prompt(rules: list[ProceduralRule]) -> list[dict[str, str]]:
     rules_text = "\n".join(
-        f"  [{r['id']}] (domain={r['domain']}, last_retrieved={r.get('last_accessed_at', 'unknown')}): {r['text']}"
+        f"  [{r.id}] (domain={r.domain}, last_retrieved={r.last_accessed_at}): {r.text}"
         for r in rules
     )
     system = (

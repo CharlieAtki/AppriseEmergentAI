@@ -22,18 +22,30 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
-TERMINAL_STATUSES: frozenset[str] = frozenset({"completed", "failed", "expired"})
-
 
 @dataclass
 class RollupSubtaskHandler(EventHandler[TaskUpdatedEvent]):
+    """Promotes a parent task to terminal when all its subtasks reach a terminal state.
+
+    Fires on every ``TaskUpdatedEvent`` where ``status`` changed. Ignores events
+    for root tasks (``parent_task_id is None``) and non-terminal subtask statuses.
+
+    When the last sibling goes terminal, ``_evaluate_parent`` checks that ALL siblings
+    are terminal (concurrent-safe guard against double-rollup), transitions the parent
+    to "completed" or "failed" (failed wins), emits a ``TaskUpdatedEvent`` for the
+    parent, and enqueues a ``reflect`` job for the coordinator agent.
+
+    ``publish`` is the in-process ``EventBus.apublish`` callable used to fire the
+    parent's ``TaskUpdatedEvent`` — not the cross-process Redis Streams bus.
+    """
+
     arq_queue: ArqRedis
     publish: PublishFn
 
     async def handle(self, event: TaskUpdatedEvent) -> None:
         if not event.changed("status"):
             return
-        if event.state.status not in TERMINAL_STATUSES:
+        if not TaskStateMachine.is_terminal(event.state.status):
             return
         if event.state.parent_task_id is None:
             return
@@ -52,8 +64,10 @@ class RollupSubtaskHandler(EventHandler[TaskUpdatedEvent]):
                 task_logger = TaskActivityLogger(self.publish)
                 await task_logger.updated(parent_before, parent_after)
 
-            if reflect_agent_id is not None and reflect_execution_id is not None:
-                parent_status = parent_after.status if parent_after else "completed"
+            if reflect_agent_id is not None and reflect_execution_id is not None and parent_after is not None:
+                # Session is closed; scalar access is safe because SessionLocal uses
+                # expire_on_commit=False — attributes remain readable after commit.
+                parent_status = parent_after.status
                 await self.arq_queue.enqueue_job(
                     "reflect",
                     agent_id=str(reflect_agent_id),
@@ -94,16 +108,17 @@ class RollupSubtaskHandler(EventHandler[TaskUpdatedEvent]):
 
         if not siblings:
             return None, None, None, None
-        if not {s.status for s in siblings}.issubset(TERMINAL_STATUSES):
+        if not all(TaskStateMachine.is_terminal(s.status) for s in siblings):
             return None, None, None, None
 
         parent = await session.get(Task, parent_id)
-        if parent is None or parent.status in TERMINAL_STATUSES:
+        if parent is None or TaskStateMachine.is_terminal(parent.status):
             return None, None, None, None  # already resolved — concurrent rollup guard
 
         before = TaskSnapshot.from_domain(parent)
         any_failed = any(s.status == "failed" for s in siblings)
         TaskStateMachine.transition(parent, "failed" if any_failed else "completed")
+        session.add(parent)
 
         execution_id: uuid.UUID | None = (await session.execute(
             select(TaskExecution.id).where(
