@@ -7,6 +7,7 @@ likely source of silent double-execution bugs.
 from __future__ import annotations
 
 import uuid
+from collections.abc import Mapping
 from unittest.mock import AsyncMock, MagicMock, call
 
 import pytest
@@ -14,7 +15,7 @@ import pytest
 from worker.coordination.bidding import score_and_reserve
 
 
-def _agent(skills: dict, active_tasks: int = 0, influence: float = 0.6) -> MagicMock:
+def _agent(skills: Mapping[str, float], active_tasks: int = 0, influence: float = 0.6) -> MagicMock:
     a = MagicMock()
     a.id = uuid.uuid4()
     a.skills = skills
