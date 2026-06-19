@@ -43,7 +43,7 @@ def get_llm_router(request: Request) -> LLMRouter:
     return request.app.state.llm_router  # type: ignore[no-any-return]
 
 
-async def get_db() -> AsyncGenerator[AsyncSession, None]:
+async def get_db() -> AsyncGenerator[AsyncSession]:
     async with get_session() as session:
         yield session
 
