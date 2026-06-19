@@ -33,7 +33,7 @@ jobs:
         with:
           images: ghcr.io/${{ github.repository }}/api
           tags: |
-            type=sha,prefix=sha-
+            type=sha,prefix=sha-,format=long
             type=raw,value=latest
 
       - name: Build and push
@@ -73,7 +73,7 @@ jobs:
         with:
           images: ghcr.io/${{ github.repository }}/worker
           tags: |
-            type=sha,prefix=sha-
+            type=sha,prefix=sha-,format=long
             type=raw,value=latest
 
       - name: Build and push
@@ -107,7 +107,7 @@ jobs:
       - name: Scan API image
         uses: aquasecurity/trivy-action@0.30.0
         with:
-          image-ref: ghcr.io/${{ github.repository }}/api:latest
+          image-ref: ghcr.io/${{ github.repository }}/api:sha-${{ github.sha }}
           severity: HIGH,CRITICAL
           exit-code: "1"
           format: sarif
@@ -139,7 +139,7 @@ jobs:
       - name: Scan Worker image
         uses: aquasecurity/trivy-action@0.30.0
         with:
-          image-ref: ghcr.io/${{ github.repository }}/worker:latest
+          image-ref: ghcr.io/${{ github.repository }}/worker:sha-${{ github.sha }}
           severity: HIGH,CRITICAL
           exit-code: "1"
           format: sarif

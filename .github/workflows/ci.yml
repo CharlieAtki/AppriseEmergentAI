@@ -21,6 +21,11 @@ jobs:
 
       - name: Install uv
         uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - name: Install workspace deps
+        run: uv sync --all-packages
 
       - name: Ruff lint
         run: uvx ruff check backend/
@@ -29,13 +34,13 @@ jobs:
         run: uvx ruff format --check backend/
 
       - name: mypy (core)
-        run: cd backend && uvx --with mypy mypy core/core/ --ignore-missing-imports
+        run: cd backend && uv run --with mypy mypy core/core/ --ignore-missing-imports
 
       - name: mypy (api)
-        run: cd backend && uvx --with mypy mypy api/api/ --ignore-missing-imports
+        run: cd backend && uv run --with mypy mypy api/api/ --ignore-missing-imports
 
       - name: mypy (worker)
-        run: cd backend && uvx --with mypy mypy worker/worker/ --ignore-missing-imports
+        run: cd backend && uv run --with mypy mypy worker/worker/ --ignore-missing-imports
 
   security:
     name: Security Scan
@@ -43,8 +48,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+
       - name: Bandit SAST
-        run: uvx bandit -r backend/ -ll --exclude backend/core/core/migrations,backend/worker/tests
+        run: uvx bandit -r backend/ -ll --exclude backend/core/core/migrations,backend/worker/tests,backend/core/tests
 
       - name: Trivy filesystem scan
         uses: aquasecurity/trivy-action@0.30.0
@@ -63,6 +71,8 @@ jobs:
 
       - name: Install uv
         uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
 
       - uses: actions/setup-python@v5
         with:
