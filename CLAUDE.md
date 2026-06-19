@@ -511,3 +511,19 @@ Do not explain what the code does. Well-named identifiers do that. Do not refere
 - Auth middleware maps Clerk claims (`clerk_user_id`, `clerk_org_id`) → internal UUIDs. Downstream code trusts `request.state.org_id` and never re-validates Clerk tokens.
 - The `models` table is written only by `sync_models()` at startup. Never write to it at request time.
 - Workspace routing config (`workspace_model_routing`) is the only place per-workspace model preferences live. Never embed workspace preferences in the registry.
+
+---
+
+## Agent skills
+
+### Issue tracker
+
+Issues live in GitHub Issues; external PRs are not a triage surface. See `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+Default label vocabulary (`needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, `wontfix`). See `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+Multi-context repo: `CONTEXT-MAP.md` at root points to per-area `CONTEXT.md` files under `docs/backend/` and `docs/frontend/`. See `docs/agents/domain.md`.
