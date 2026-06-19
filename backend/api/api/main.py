@@ -47,6 +47,12 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
 
     from clerk_backend_api import Clerk
 
+    if not core_settings.clerk.secret_key.get_secret_value():
+        raise ValueError(
+            "CLERK__SECRET_KEY is not set — the API cannot verify user JWTs. "
+            "Set this environment variable before starting the API process."
+        )
+
     app.state.bus = bus
     app.state.redis_bus = redis_bus
     app.state.redis = redis
@@ -62,9 +68,9 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
 
     yield
 
-    await redis.aclose()
-    await redis_bus.close()
     await bus.drain_pending()
+    await redis_bus.close()
+    await redis.aclose()
 
 
 app = FastAPI(lifespan=lifespan)

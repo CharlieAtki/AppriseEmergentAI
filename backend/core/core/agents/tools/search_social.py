@@ -26,6 +26,8 @@ def _factory(*, memory: AgentMemory) -> object:
             f"observations about agent {peer_agent_id}",
         )
 
+        if not ctx.social:
+            return "No observations found for this agent."
         return _format_memory_items(ctx.social)
 
     return search_social_memory
