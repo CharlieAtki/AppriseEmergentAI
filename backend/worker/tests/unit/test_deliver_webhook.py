@@ -153,6 +153,9 @@ async def _run_delivery_failure(attempt_count: int, mocker):
 
     load_session = AsyncMock()
     load_session.get = AsyncMock(side_effect=[execution, workspace])
+    load_result = MagicMock()
+    load_result.scalar_one_or_none.return_value = None  # existing delivery not terminal; proceed
+    load_session.execute = AsyncMock(return_value=load_result)
 
     record_result = MagicMock()
     record_result.scalar_one_or_none.return_value = record

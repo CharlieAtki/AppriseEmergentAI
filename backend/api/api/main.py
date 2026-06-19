@@ -29,6 +29,12 @@ from api.routers import workspaces as workspaces_router
 async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
     import core.vendors.anthropic  # noqa: F401 — self-registers models
 
+    if not core_settings.clerk.secret_key.get_secret_value().strip():
+        raise ValueError(
+            "CLERK__SECRET_KEY is not set — the API cannot verify user JWTs. "
+            "Set this environment variable before starting the API process."
+        )
+
     loop = asyncio.get_running_loop()
     bus = EventBus(loop=loop)
     redis_bus = await RedisBus.create(core_settings.redis.url)
@@ -46,12 +52,6 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
     )
 
     from clerk_backend_api import Clerk
-
-    if not core_settings.clerk.secret_key.get_secret_value():
-        raise ValueError(
-            "CLERK__SECRET_KEY is not set — the API cannot verify user JWTs. "
-            "Set this environment variable before starting the API process."
-        )
 
     app.state.bus = bus
     app.state.redis_bus = redis_bus
