@@ -25,7 +25,7 @@ class TaskStateMachine:
 
     @classmethod
     def transition(cls, task: Task, new_status: str) -> None:
-        allowed = cls.TRANSITIONS.get(task.status, set())
+        allowed = cls.TRANSITIONS.get(task.status, frozenset())
         if new_status not in allowed:
             raise InvalidTaskTransition(
                 f"Cannot transition task {task.id} from {task.status!r} to {new_status!r}. "
