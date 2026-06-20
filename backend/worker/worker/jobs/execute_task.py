@@ -20,15 +20,15 @@ from core.intelligence.context import AgentContext, TaskEvaluationContext
 from core.intelligence.prompts import decompose as decompose_prompt
 from core.intelligence.prompts import evaluate
 from core.intelligence.prompts.evaluate import EvaluateResponse
-from core.models.tasks import TaskExecution
 from core.repositories.agent_repository import AgentRepository
+from core.repositories.task_execution_repository import TaskExecutionRepository
 from core.repositories.task_repository import TaskRepository
 
 from worker.context import get_worker_context
 from worker.span import ArqJobMeta, JobSpan
 
 if TYPE_CHECKING:
-    from core.models.tasks import Task
+    from core.models.tasks import Task, TaskExecution
     from redis.asyncio import Redis
 
 
@@ -110,6 +110,8 @@ async def execute_task(
             # Idempotency guard: if ARQ retries a crashed job, the execution row
             # already exists and task.status is already "executing". Reuse it to
             # avoid an InvalidTaskTransition on the state machine transition.
+            # In-memory check using the already-loaded agent.task_executions — avoids a DB
+            # round-trip on ARQ retry. The guard is caller-owned because the data is caller-owned.
             existing = next(
                 (
                     e
@@ -122,18 +124,16 @@ async def execute_task(
                 execution = existing
                 committed_task_status = task.status  # already "executing"
             else:
-                execution = TaskExecution(
-                    task_id=task.id,
-                    agent_id=agent.id,
-                    organisation_id=agent.organisation_id,
-                    workspace_id=task.workspace_id,
-                    status="executing",
-                    started_at=datetime.now(UTC),
-                )
                 before_executing = TaskSnapshot.from_domain(task, executing_agent_id=agent.id)
                 async with span.session() as session:
                     task_repo = TaskRepository(session)
-                    session.add(execution)  # raw — Gap 2
+                    execution_repo = TaskExecutionRepository(session)
+                    execution = await execution_repo.create(
+                        workspace_id=task.workspace_id,
+                        organisation_id=agent.organisation_id,
+                        task_id=task.id,
+                        agent_id=agent.id,
+                    )
                     TaskStateMachine.transition(task, "executing")
                     await task_repo.save(task)
                 committed_task_status = task.status  # "executing"
@@ -227,6 +227,7 @@ async def execute_task(
             async with span.session() as session:
                 task_repo = TaskRepository(session)
                 agent_repo = AgentRepository(session)
+                execution_repo = TaskExecutionRepository(session)
                 execution.status = "completed"
                 execution.execution_path = "self_execute"
                 execution.quality_score = quality
@@ -235,7 +236,7 @@ async def execute_task(
                     "tool_trace"
                 ]  # structured {tool,args,result} records
                 execution.completed_at = datetime.now(UTC)
-                session.add(execution)  # raw — Gap 2
+                await execution_repo.save(execution)
 
                 # Flat entropy decay across all skills — one step per task completion.
                 # Reflect applies targeted, quality-weighted deltas to used skills on top.
@@ -281,6 +282,7 @@ async def execute_task(
             try:
                 async with span.session() as session:
                     task_repo = TaskRepository(session)
+                    execution_repo = TaskExecutionRepository(session)
                     if execution is not None:
                         execution.status = "failed"
                         execution.completed_at = datetime.now(UTC)
@@ -288,7 +290,7 @@ async def execute_task(
                             "type": type(exc).__name__,
                             "message": str(exc),
                         }
-                        session.add(execution)  # raw — Gap 2
+                        await execution_repo.save(execution)
                     if not TaskStateMachine.is_terminal(committed_task_status):
                         task.status = (
                             committed_task_status  # reset in-memory to last committed value
@@ -332,11 +334,12 @@ async def _release_to_pool(
     before = TaskSnapshot.from_domain(task, executing_agent_id=execution.agent_id)
     async with span.session() as session:
         task_repo = TaskRepository(session)
+        execution_repo = TaskExecutionRepository(session)
         execution.status = "completed"
         execution.execution_path = "cfp"
         execution.completed_at = datetime.now(UTC)
         execution.tool_trace = span.events
-        session.add(execution)  # raw — Gap 2
+        await execution_repo.save(execution)
         # Only set coordinator if not already tracked — preserves grandparent coordinator
         # on tasks that were previously decomposed before being CFP'd.
         if task.coordinator_agent_id is None:
@@ -369,11 +372,12 @@ async def _finalise_execution(
     before = TaskSnapshot.from_domain(task, executing_agent_id=execution.agent_id)
     async with span.session() as session:
         task_repo = TaskRepository(session)
+        execution_repo = TaskExecutionRepository(session)
         execution.status = status
         execution.execution_path = execution_path
         execution.completed_at = datetime.now(UTC)
         execution.tool_trace = span.events
-        session.add(execution)  # raw — Gap 2
+        await execution_repo.save(execution)
         TaskStateMachine.transition(task, "completed")
         await task_repo.save(task)
     await task_logger.updated(

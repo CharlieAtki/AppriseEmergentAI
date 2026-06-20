@@ -14,9 +14,31 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from core.config import settings
+from core.repositories.task_execution_repository import TaskExecutionRepository
 from worker.handlers.agent_credit import AgentCreditHandler, compute_delegation_credits
 
-# ── compute_delegation_credits (pure aside from session) ──────────────────────
+# ── compute_delegation_credits ────────────────────────────────────────────────
+
+
+def _make_execution_repo(executions: list[MagicMock]) -> tuple[TaskExecutionRepository, AsyncMock]:
+    """Return (execution_repo, session_mock) with get_delegation_contributors() wired up.
+
+    execution_repo wraps a real TaskExecutionRepository around the session mock so tests
+    configure session.execute to control what the repo returns — consistent with the
+    test_score_and_reserve.py pattern from Gap 1.
+    """
+    session = AsyncMock()
+    result_mock = MagicMock()
+    result_mock.scalars.return_value.all.return_value = executions
+    session.execute = AsyncMock(return_value=result_mock)
+    return TaskExecutionRepository(session), session
+
+
+def _exec_mock(agent_id: uuid.UUID, execution_path: str) -> MagicMock:
+    m = MagicMock()
+    m.agent_id = agent_id
+    m.execution_path = execution_path
+    return m
 
 
 async def test_delegation_credits_decompose_full_signal():
@@ -24,17 +46,13 @@ async def test_delegation_credits_decompose_full_signal():
     agent_id = uuid.uuid4()
     quality = 0.8
 
-    result_mock = MagicMock()
-    result_mock.all.return_value = [(agent_id, "decompose")]
-
-    session = AsyncMock()
-    session.execute = AsyncMock(return_value=result_mock)
+    execution_repo, _ = _make_execution_repo([_exec_mock(agent_id, "decompose")])
 
     credits_entries = await compute_delegation_credits(
         task_id=uuid.uuid4(),
         workspace_id=uuid.uuid4(),
         quality=quality,
-        session=session,
+        execution_repo=execution_repo,
     )
 
     assert credits_entries == [(agent_id, quality)]
@@ -45,17 +63,13 @@ async def test_delegation_credits_cfp_partial_signal():
     agent_id = uuid.uuid4()
     quality = 1.0
 
-    result_mock = MagicMock()
-    result_mock.all.return_value = [(agent_id, "cfp")]
-
-    session = AsyncMock()
-    session.execute = AsyncMock(return_value=result_mock)
+    execution_repo, _ = _make_execution_repo([_exec_mock(agent_id, "cfp")])
 
     credits = await compute_delegation_credits(
         task_id=uuid.uuid4(),
         workspace_id=uuid.uuid4(),
         quality=quality,
-        session=session,
+        execution_repo=execution_repo,
     )
 
     assert len(credits) == 1
@@ -69,20 +83,18 @@ async def test_delegation_credits_mixed_chain():
     cfp_agent = uuid.uuid4()
     quality = 0.6
 
-    result_mock = MagicMock()
-    result_mock.all.return_value = [
-        (decompose_agent, "decompose"),
-        (cfp_agent, "cfp"),
-    ]
-
-    session = AsyncMock()
-    session.execute = AsyncMock(return_value=result_mock)
+    execution_repo, _ = _make_execution_repo(
+        [
+            _exec_mock(decompose_agent, "decompose"),
+            _exec_mock(cfp_agent, "cfp"),
+        ]
+    )
 
     credits = await compute_delegation_credits(
         task_id=uuid.uuid4(),
         workspace_id=uuid.uuid4(),
         quality=quality,
-        session=session,
+        execution_repo=execution_repo,
     )
 
     assert len(credits) == 2
@@ -93,17 +105,13 @@ async def test_delegation_credits_mixed_chain():
 
 
 async def test_delegation_credits_no_rows_returns_empty():
-    result_mock = MagicMock()
-    result_mock.all.return_value = []
-
-    session = AsyncMock()
-    session.execute = AsyncMock(return_value=result_mock)
+    execution_repo, _ = _make_execution_repo([])
 
     credits = await compute_delegation_credits(
         task_id=uuid.uuid4(),
         workspace_id=uuid.uuid4(),
         quality=0.5,
-        session=session,
+        execution_repo=execution_repo,
     )
     assert credits == []
 
@@ -281,8 +289,11 @@ async def test_subtask_last_sibling_triggers_coordinator_credit(make_updated_eve
     avg_result = MagicMock()
     avg_result.scalar.return_value = avg_quality
 
+    delegation_exec = MagicMock()
+    delegation_exec.agent_id = coord_agent_id
+    delegation_exec.execution_path = "decompose"
     delegation_result = MagicMock()
-    delegation_result.all.return_value = [(coord_agent_id, "decompose")]
+    delegation_result.scalars.return_value.all.return_value = [delegation_exec]
 
     session = AsyncMock()
     # _credit_executor returns immediately when execution_path=None (no session.get call).

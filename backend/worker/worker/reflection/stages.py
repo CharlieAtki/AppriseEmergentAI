@@ -198,7 +198,7 @@ async def _stage_skills(
 
         agent.skills = updated
         await agent_repo.save(agent)
-        session.add(  # raw — Gap 2
+        session.add(  # raw — Gap 3 (SkillRepository)
             SkillSnapshot(
                 agent_id=agent.id,
                 organisation_id=rctx.organisation_id,
@@ -254,7 +254,7 @@ async def _stage_rules(
 
         if existing_log is None:
             log_id = uuid.uuid4()
-            session.add(
+            session.add(  # raw — Gap 3 (ProceduralKnowledgeRepository)
                 ProceduralKnowledgeLog(
                     id=log_id,
                     workspace_id=rctx.workspace_id,
@@ -283,7 +283,7 @@ async def _stage_rules(
         log = await session.get(ProceduralKnowledgeLog, log_id)
         if log is not None:
             log.vector_store_ref = point_id
-            session.add(log)
+            session.add(log)  # raw — Gap 3 (ProceduralKnowledgeRepository)
 
     return result
 

@@ -7,9 +7,7 @@ from datetime import UTC, datetime
 from typing import Any
 
 from core.intelligence.reflection.types import ReflectContext
-from core.models.tasks import TaskExecution
-from core.repositories.agent_repository import AgentRepository
-from core.repositories.task_repository import TaskRepository
+from core.repositories.task_execution_repository import TaskExecutionRepository
 
 from worker.context import get_worker_context
 from worker.span import ArqJobMeta, JobSpan
@@ -56,23 +54,23 @@ async def reflect(
         redis_publish=wctx.redis.publish,
         meta=meta,
     ) as span:
-        # Load all state in one session. Session closes before any stage runs.
-        # Three separate queries because TaskExecution is raw (no repo, Gap 2). Once
-        # TaskExecutionRepository exists, get_for_reflection(execution_id) should load
-        # execution + selectinload(task, agent) in one round-trip via ORM graph traversal.
+        # Load execution, task, and agent in one round-trip via ORM graph traversal.
+        # get_for_reflection() uses selectinload(task, agent) — callers access
+        # execution.task and execution.agent as already-loaded attributes.
         async with span.session() as session:
-            task_repo = TaskRepository(session)
-            agent_repo = AgentRepository(session)
-            task = await task_repo.get_by_id(uuid.UUID(task_id))
-            agent = await agent_repo.get_by_id(uuid.UUID(agent_id))
-            execution = await session.get(TaskExecution, uuid.UUID(execution_id))  # raw — Gap 2
+            execution_repo = TaskExecutionRepository(session)
+            execution = await execution_repo.get_for_reflection(uuid.UUID(execution_id))
 
-        if not task or not agent or not execution:
+        if execution is None:
+            logger.warning("reflect: execution=%s not found — skipping", execution_id)
+            return
+
+        task = execution.task
+        agent = execution.agent
+
+        if not task or not agent:
             logger.warning(
-                "reflect: missing records — task=%s agent=%s execution=%s — skipping",
-                task_id,
-                agent_id,
-                execution_id,
+                "reflect: task or agent missing for execution=%s — skipping", execution_id
             )
             return
 
@@ -142,7 +140,8 @@ async def reflect(
         # Stamp only after all stages pass. Prevents the idempotency guard at the top
         # from short-circuiting ARQ retries when a previous attempt had partial failures.
         async with span.session() as session:
-            exc = await session.get(TaskExecution, execution.id)
+            execution_repo = TaskExecutionRepository(session)
+            exc = await execution_repo.get_by_id(execution.id)
             if exc is not None:
                 exc.reflect_completed_at = datetime.now(tz=UTC)
-                session.add(exc)
+                await execution_repo.save(exc)

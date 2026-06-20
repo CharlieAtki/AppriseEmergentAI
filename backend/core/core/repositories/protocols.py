@@ -5,7 +5,7 @@ from datetime import datetime
 from typing import Any, Protocol
 
 from core.models.agents import Agent
-from core.models.tasks import Task
+from core.models.tasks import Task, TaskExecution
 
 
 class TaskRepositoryProtocol(Protocol):
@@ -124,3 +124,48 @@ class AgentRepositoryProtocol(Protocol):
     # Mutates fields in-place and stages the agent. Caller is responsible for flush/commit.
 
     async def save(self, agent: Agent) -> None: ...
+
+
+class TaskExecutionRepositoryProtocol(Protocol):
+    """Read/write interface for TaskExecution persistence.
+
+    TaskExecution is an aggregate root — its lifecycle is driven by job execution,
+    not by Task CRUD. It is created once (always at status="executing"), then
+    carried as a detached ORM object across multiple session blocks during the job.
+    session.add() calls in later phases are merges, re-attaching the detached object.
+
+    Same transaction contract as the other protocols: never commits, never flushes
+    internally (except create(), which flushes to populate the auto-generated id).
+    """
+
+    async def create(
+        self,
+        workspace_id: uuid.UUID,
+        organisation_id: uuid.UUID,
+        task_id: uuid.UUID,
+        agent_id: uuid.UUID,
+    ) -> TaskExecution: ...
+
+    # Always creates with status="executing" — no valid path to create at any other
+    # status. Flushes to populate execution.id before returning.
+
+    async def get_by_id(self, execution_id: uuid.UUID) -> TaskExecution | None: ...
+
+    # Unscoped PK lookup — for internal worker paths only.
+
+    async def get_for_reflection(self, execution_id: uuid.UUID) -> TaskExecution | None: ...
+
+    # Loads execution with selectinload(task, agent) in one round-trip.
+    # Callers access execution.task and execution.agent as already-loaded attributes.
+
+    async def get_delegation_contributors(
+        self, task_id: uuid.UUID, workspace_id: uuid.UUID
+    ) -> list[TaskExecution]: ...
+
+    # Executions with execution_path in ("cfp", "decompose") for a given task.
+    # Used by compute_delegation_credits to identify coordinating agents.
+
+    async def save(self, execution: TaskExecution) -> None: ...
+
+    # Stages execution for persistence. On detached objects this is a merge —
+    # re-attaches the execution to the current session. async for interface consistency.
