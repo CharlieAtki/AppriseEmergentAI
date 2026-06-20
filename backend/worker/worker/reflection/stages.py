@@ -11,8 +11,8 @@ from core.intelligence.prompts.reflection.reflect import ExistingRule, ResultCon
 from core.intelligence.reflection.types import PipelineResult, ReflectContext
 from core.memory.agent_memory import AgentMemory
 from core.memory.types import ProceduralRule
-from core.models.agents import Agent
 from core.models.observability import ProceduralKnowledgeLog, SkillSnapshot
+from core.repositories.agent_repository import AgentRepository
 from sqlalchemy import select
 
 from worker.span import current_span
@@ -163,7 +163,11 @@ async def _stage_skills(
         if existing is not None:
             return result
 
-        agent = await session.get(Agent, rctx.agent_id, with_for_update=True)
+        # AgentRepository constructed here because stages own their sessions via span.session().
+        # get_for_update() acquires a row-level lock to prevent concurrent overwrites between
+        # this reflect pipeline and execute_task's skill decay (which runs in a separate job).
+        agent_repo = AgentRepository(session)
+        agent = await agent_repo.get_for_update(rctx.agent_id)
         if agent is None:
             return result
 
@@ -193,8 +197,8 @@ async def _stage_skills(
                 updated[skill_name] = 0.1
 
         agent.skills = updated
-        session.add(agent)
-        session.add(
+        await agent_repo.save(agent)
+        session.add(  # raw — Gap 2
             SkillSnapshot(
                 agent_id=agent.id,
                 organisation_id=rctx.organisation_id,

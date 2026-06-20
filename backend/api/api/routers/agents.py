@@ -3,36 +3,37 @@ from __future__ import annotations
 import uuid
 
 from core.models.tenant import Workspace
+from core.repositories.agent_repository import AgentRepository
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy.ext.asyncio import AsyncSession
 
-from api.deps import get_db, require_workspace
+from api.deps import get_agent_repo, require_workspace
 from api.schemas.agent import AgentResponse, CreateAgentRequest, UpdateAgentRequest
-from api.services.agent_service import AgentService
 
 router = APIRouter()
-
-
-def get_service(session: AsyncSession = Depends(get_db)) -> AgentService:
-    return AgentService(session)
 
 
 @router.post("", response_model=AgentResponse, status_code=status.HTTP_201_CREATED)
 async def create_agent(
     body: CreateAgentRequest,
     workspace: Workspace = Depends(require_workspace("write")),
-    service: AgentService = Depends(get_service),
+    repo: AgentRepository = Depends(get_agent_repo),
 ) -> AgentResponse:
-    agent = await service.create(workspace=workspace, body=body)
+    agent = await repo.create(
+        workspace_id=workspace.id,
+        organisation_id=workspace.organisation_id,
+        name=body.name,
+        skills=body.skills,
+        personality=body.personality,
+    )
     return AgentResponse.model_validate(agent)
 
 
 @router.get("", response_model=list[AgentResponse])
 async def list_agents(
     workspace: Workspace = Depends(require_workspace("read")),
-    service: AgentService = Depends(get_service),
+    repo: AgentRepository = Depends(get_agent_repo),
 ) -> list[AgentResponse]:
-    agents = await service.list(workspace_id=workspace.id)
+    agents = await repo.list(workspace_id=workspace.id)
     return [AgentResponse.model_validate(a) for a in agents]
 
 
@@ -40,9 +41,9 @@ async def list_agents(
 async def get_agent(
     agent_id: uuid.UUID,
     workspace: Workspace = Depends(require_workspace("read")),
-    service: AgentService = Depends(get_service),
+    repo: AgentRepository = Depends(get_agent_repo),
 ) -> AgentResponse:
-    agent = await service.get(workspace_id=workspace.id, agent_id=agent_id)
+    agent = await repo.get(agent_id, workspace.id)
     if agent is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Agent not found")
     return AgentResponse.model_validate(agent)
@@ -53,10 +54,10 @@ async def update_agent(
     agent_id: uuid.UUID,
     body: UpdateAgentRequest,
     workspace: Workspace = Depends(require_workspace("write")),
-    service: AgentService = Depends(get_service),
+    repo: AgentRepository = Depends(get_agent_repo),
 ) -> AgentResponse:
-    agent = await service.get(workspace_id=workspace.id, agent_id=agent_id)
+    agent = await repo.get(agent_id, workspace.id)
     if agent is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Agent not found")
-    agent = await service.update(agent=agent, body=body)
+    agent = await repo.update_fields(agent, name=body.name, status=body.status)
     return AgentResponse.model_validate(agent)

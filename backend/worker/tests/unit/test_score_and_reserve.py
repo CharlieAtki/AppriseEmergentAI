@@ -12,6 +12,7 @@ from collections.abc import Mapping
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
+from core.repositories.task_repository import TaskRepository
 from worker.coordination.bidding import score_and_reserve
 
 
@@ -26,21 +27,27 @@ def _agent(skills: Mapping[str, float], active_tasks: int = 0, influence: float 
 
 
 def _make_deps():
-    """Return (session, redis, arq_queue) as AsyncMocks."""
+    """Return (task_repo, session_mock, redis, arq_queue).
+
+    task_repo wraps a real TaskRepository around the session mock so callers can
+    configure session.get and session.execute to control what the repo returns —
+    without mocking SQLAlchemy internals directly in score_and_reserve itself.
+    """
     session = AsyncMock()
+    task_repo = TaskRepository(session)
     redis = AsyncMock()
     arq_queue = AsyncMock()
     arq_queue.enqueue_job = AsyncMock()
-    return session, redis, arq_queue
+    return task_repo, session, redis, arq_queue
 
 
 # ── No candidates ─────────────────────────────────────────────────────────────
 
 
 async def test_no_agents_returns_silently():
-    session, redis, arq_queue = _make_deps()
+    task_repo, _session, redis, arq_queue = _make_deps()
     await score_and_reserve(
-        session=session,
+        task_repo=task_repo,
         agents=[],
         task_id=uuid.uuid4(),
         workspace_id=uuid.uuid4(),
@@ -55,12 +62,12 @@ async def test_no_agents_returns_silently():
 
 async def test_all_below_threshold_no_enqueue():
     """Agent with zero matching skills scores below BID_SCORE_THRESHOLD (0.3)."""
-    session, redis, arq_queue = _make_deps()
+    task_repo, _session, redis, arq_queue = _make_deps()
     # No skills, no influence, full queue → score ~ 0.025 (personality only)
     agent = _agent(skills={}, active_tasks=3, influence=0.0)
 
     await score_and_reserve(
-        session=session,
+        task_repo=task_repo,
         agents=[agent],
         task_id=uuid.uuid4(),
         workspace_id=uuid.uuid4(),
@@ -78,7 +85,7 @@ async def test_all_below_threshold_no_enqueue():
 
 async def test_setnx_win_task_open_enqueues_job(make_task):
     """Win the reservation and find the task still open → transition + enqueue."""
-    session, redis, arq_queue = _make_deps()
+    task_repo, session, redis, arq_queue = _make_deps()
 
     task_id = uuid.uuid4()
     ws_id = uuid.uuid4()
@@ -90,7 +97,7 @@ async def test_setnx_win_task_open_enqueues_job(make_task):
     agent = _agent(skills={"python": 1.0})
 
     await score_and_reserve(
-        session=session,
+        task_repo=task_repo,
         agents=[agent],
         task_id=task_id,
         workspace_id=ws_id,
@@ -117,7 +124,7 @@ async def test_setnx_win_task_open_enqueues_job(make_task):
 
 async def test_setnx_win_task_not_open_releases_reservation(make_task):
     """Win the SETNX but task is no longer "open" → release key, no enqueue."""
-    session, redis, arq_queue = _make_deps()
+    task_repo, session, redis, arq_queue = _make_deps()
 
     task_id = uuid.uuid4()
     ws_id = uuid.uuid4()
@@ -130,7 +137,7 @@ async def test_setnx_win_task_not_open_releases_reservation(make_task):
     agent = _agent(skills={"python": 1.0})
 
     await score_and_reserve(
-        session=session,
+        task_repo=task_repo,
         agents=[agent],
         task_id=task_id,
         workspace_id=ws_id,
@@ -146,7 +153,7 @@ async def test_setnx_win_task_not_open_releases_reservation(make_task):
 
 async def test_setnx_win_task_missing_releases_reservation():
     """Win the SETNX but the Task row is gone → release key, no enqueue."""
-    session, redis, arq_queue = _make_deps()
+    task_repo, session, redis, arq_queue = _make_deps()
 
     task_id = uuid.uuid4()
     ws_id = uuid.uuid4()
@@ -157,7 +164,7 @@ async def test_setnx_win_task_missing_releases_reservation():
     agent = _agent(skills={"python": 1.0})
 
     await score_and_reserve(
-        session=session,
+        task_repo=task_repo,
         agents=[agent],
         task_id=task_id,
         workspace_id=ws_id,
@@ -176,14 +183,14 @@ async def test_setnx_win_task_missing_releases_reservation():
 
 async def test_setnx_loss_all_agents_no_enqueue():
     """All SETNX attempts fail → another worker won, no enqueue."""
-    session, redis, arq_queue = _make_deps()
+    task_repo, _session, redis, arq_queue = _make_deps()
 
     redis.set = AsyncMock(return_value=None)  # key already set
 
     agents = [_agent(skills={"python": 1.0}), _agent(skills={"python": 0.8})]
 
     await score_and_reserve(
-        session=session,
+        task_repo=task_repo,
         agents=agents,
         task_id=uuid.uuid4(),
         workspace_id=uuid.uuid4(),
@@ -198,7 +205,7 @@ async def test_setnx_loss_all_agents_no_enqueue():
 
 async def test_setnx_loss_on_first_win_on_second(make_task):
     """First agent loses SETNX; second agent wins and enqueues the job."""
-    session, redis, arq_queue = _make_deps()
+    task_repo, session, redis, arq_queue = _make_deps()
 
     task_id = uuid.uuid4()
     ws_id = uuid.uuid4()
@@ -213,7 +220,7 @@ async def test_setnx_loss_on_first_win_on_second(make_task):
     agent2 = _agent(skills={"python": 0.8}, influence=0.5)
 
     await score_and_reserve(
-        session=session,
+        task_repo=task_repo,
         agents=[agent1, agent2],
         task_id=task_id,
         workspace_id=ws_id,
@@ -236,7 +243,7 @@ async def test_setnx_loss_on_first_win_on_second(make_task):
 
 async def test_enqueue_failure_releases_reservation(make_task):
     """If enqueue_job raises, the Redis reservation key must be deleted."""
-    session, redis, arq_queue = _make_deps()
+    task_repo, session, redis, arq_queue = _make_deps()
 
     task_id = uuid.uuid4()
     ws_id = uuid.uuid4()
@@ -250,7 +257,7 @@ async def test_enqueue_failure_releases_reservation(make_task):
 
     with pytest.raises(RuntimeError, match="arq unavailable"):
         await score_and_reserve(
-            session=session,
+            task_repo=task_repo,
             agents=[agent],
             task_id=task_id,
             workspace_id=ws_id,

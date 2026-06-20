@@ -28,6 +28,8 @@ async def curate_memory(ctx: dict[str, Any]) -> None:
     """
     wctx = get_worker_context()
 
+    # Cross-workspace query — intentionally not on AgentRepository, which is workspace-scoped.
+    # This platform-admin query will likely graduate to a dedicated admin query interface.
     async with get_session() as session:
         agents = (
             (await session.execute(select(Agent).where(Agent.status == "active"))).scalars().all()

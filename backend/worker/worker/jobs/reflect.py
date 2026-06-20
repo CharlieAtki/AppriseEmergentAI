@@ -7,8 +7,9 @@ from datetime import UTC, datetime
 from typing import Any
 
 from core.intelligence.reflection.types import ReflectContext
-from core.models.agents import Agent
-from core.models.tasks import Task, TaskExecution
+from core.models.tasks import TaskExecution
+from core.repositories.agent_repository import AgentRepository
+from core.repositories.task_repository import TaskRepository
 
 from worker.context import get_worker_context
 from worker.span import ArqJobMeta, JobSpan
@@ -56,10 +57,15 @@ async def reflect(
         meta=meta,
     ) as span:
         # Load all state in one session. Session closes before any stage runs.
+        # Three separate queries because TaskExecution is raw (no repo, Gap 2). Once
+        # TaskExecutionRepository exists, get_for_reflection(execution_id) should load
+        # execution + selectinload(task, agent) in one round-trip via ORM graph traversal.
         async with span.session() as session:
-            task = await session.get(Task, uuid.UUID(task_id))
-            agent = await session.get(Agent, uuid.UUID(agent_id))
-            execution = await session.get(TaskExecution, uuid.UUID(execution_id))
+            task_repo = TaskRepository(session)
+            agent_repo = AgentRepository(session)
+            task = await task_repo.get_by_id(uuid.UUID(task_id))
+            agent = await agent_repo.get_by_id(uuid.UUID(agent_id))
+            execution = await session.get(TaskExecution, uuid.UUID(execution_id))  # raw — Gap 2
 
         if not task or not agent or not execution:
             logger.warning(

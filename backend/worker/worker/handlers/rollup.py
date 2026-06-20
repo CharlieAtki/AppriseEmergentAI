@@ -11,11 +11,13 @@ from core.eventing.activity.base import PublishFn
 from core.eventing.activity.task_logger import TaskActivityLogger
 from core.eventing.bus.handlers import EventHandler
 from core.eventing.events.task_events import TaskSnapshot, TaskUpdatedEvent
-from core.models.tasks import Task, TaskExecution
+from core.models.tasks import TaskExecution
+from core.repositories.task_repository import TaskRepository
 from sqlalchemy import select
 
 if TYPE_CHECKING:
     from arq import ArqRedis
+    from core.models.tasks import Task
     from sqlalchemy.ext.asyncio import AsyncSession
 
 logger = logging.getLogger(__name__)
@@ -104,32 +106,22 @@ class RollupSubtaskHandler(EventHandler[TaskUpdatedEvent]):
         parent_id = event.state.parent_task_id
         workspace_id = event.state.workspace_id
 
-        siblings = (
-            (
-                await session.execute(
-                    select(Task).where(
-                        Task.parent_task_id == parent_id,
-                        Task.workspace_id == workspace_id,
-                    )
-                )
-            )
-            .scalars()
-            .all()
-        )
+        task_repo = TaskRepository(session)
+        siblings = await task_repo.get_siblings(parent_id, workspace_id)
 
         if not siblings:
             return None, None, None, None
         if not all(TaskStateMachine.is_terminal(s.status) for s in siblings):
             return None, None, None, None
 
-        parent = await session.get(Task, parent_id)
+        parent = await task_repo.get_by_id(parent_id)
         if parent is None or TaskStateMachine.is_terminal(parent.status):
             return None, None, None, None  # already resolved — concurrent rollup guard
 
         before = TaskSnapshot.from_domain(parent)
         any_failed = any(s.status == "failed" for s in siblings)
         TaskStateMachine.transition(parent, "failed" if any_failed else "completed")
-        session.add(parent)
+        await task_repo.save(parent)
 
         execution_id: uuid.UUID | None = (
             await session.execute(

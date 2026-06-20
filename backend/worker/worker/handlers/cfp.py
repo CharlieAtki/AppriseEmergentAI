@@ -7,9 +7,8 @@ from typing import TYPE_CHECKING
 from core.database import get_session
 from core.eventing.bus.handlers import EventHandler
 from core.eventing.events.stream_events import CfpIssuedStreamEvent
-from core.models.agents import Agent
-from sqlalchemy import select
-from sqlalchemy.orm import selectinload
+from core.repositories.agent_repository import AgentRepository
+from core.repositories.task_repository import TaskRepository
 
 from worker.coordination.bidding import score_and_reserve
 
@@ -40,28 +39,18 @@ class CfpHandler(EventHandler[CfpIssuedStreamEvent]):
 
     async def handle(self, event: CfpIssuedStreamEvent) -> None:
         async with get_session() as session:
-            agents = (
-                (
-                    await session.execute(
-                        select(Agent)
-                        .where(
-                            Agent.workspace_id == event.workspace_id,
-                            Agent.status == "active",
-                            Agent.id != event.initiating_agent_id,  # excludes the routing agent
-                        )
-                        .options(selectinload(Agent.task_executions))
-                    )
-                )
-                .scalars()
-                .all()
+            task_repo = TaskRepository(session)
+            agent_repo = AgentRepository(session)
+            agents = await agent_repo.get_active_for_bidding(
+                event.workspace_id, exclude_id=event.initiating_agent_id
             )
 
             if not agents:
                 return
 
             await score_and_reserve(
-                session,
-                list(agents),
+                task_repo,
+                agents,
                 event.task_id,
                 event.workspace_id,
                 event.required_skills,

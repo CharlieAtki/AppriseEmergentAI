@@ -9,8 +9,9 @@ from typing import Any, Literal
 
 import httpx
 from core.database import get_session
-from core.models.tasks import Task, TaskExecution, WebhookDelivery
+from core.models.tasks import TaskExecution, WebhookDelivery
 from core.models.tenant import Workspace
+from core.repositories.task_repository import TaskRepository
 from pydantic import BaseModel, ConfigDict
 from sqlalchemy import select
 
@@ -123,7 +124,7 @@ async def deliver_webhook(
 
         external_ref = None
         if task_id:
-            task = await session.get(Task, task_id)
+            task = await TaskRepository(session).get_by_id(task_id)
             if task:
                 external_ref = task.external_ref
 

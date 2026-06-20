@@ -37,6 +37,9 @@ async def sweep_tasks(ctx: dict[str, Any]) -> None:
 
     transitioned: list[tuple[TaskSnapshot, Task]] = []
 
+    # Cross-workspace sweep queries — intentionally not on TaskRepository, which is
+    # workspace-scoped by design. These platform-admin queries will likely graduate
+    # to a dedicated admin query interface as operational tooling matures.
     async with get_session() as session:
         stuck_open = (
             (
