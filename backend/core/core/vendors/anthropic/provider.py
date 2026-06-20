@@ -15,6 +15,9 @@ class AnthropicProvider(VendorProvider):
     def build_model(self, model_id: str, **kwargs: object) -> BaseChatModel:
         from langchain_anthropic import ChatAnthropic
 
+        if self._config.api_key is None:
+            raise RuntimeError("ANTHROPIC__API_KEY is not configured")
+
         return ChatAnthropic(
             model=model_id,
             api_key=self._config.api_key.get_secret_value(),
