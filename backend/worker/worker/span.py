@@ -139,7 +139,6 @@ class JobSpan:
             json.dumps(event, default=str),
         )
 
-    @property
     def events(self) -> list[dict[str, object]]:
         """Accumulated events — written to TaskExecution.tool_trace on completion."""
         return list(self._events)
