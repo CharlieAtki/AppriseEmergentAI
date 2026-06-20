@@ -8,19 +8,19 @@ import os
 os.environ.setdefault("DATABASE__URL", "postgresql+asyncpg://test:test@localhost/test")
 os.environ.setdefault("ANTHROPIC__API_KEY", "test-key-not-real")
 
-from typing import Any
 import uuid
 from contextlib import asynccontextmanager
+from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-
 from core.eventing.events.task_events import TaskSnapshot, TaskUpdatedEvent
 
 
 @pytest.fixture
 def make_task():
     """Factory for lightweight Task-like stubs (no DB). Override fields via kwargs."""
+
     def _factory(status: str = "open", **kwargs) -> MagicMock:
         t = MagicMock()
         t.id = uuid.uuid4()
@@ -42,13 +42,17 @@ def make_task():
         for k, v in kwargs.items():
             setattr(t, k, v)
         return t
+
     return _factory
 
 
 @pytest.fixture
 def make_agent():
     """Factory for lightweight Agent-like stubs (no DB)."""
-    def _factory(skills: dict[str, float] | None = None, influence: float = 0.5, **kwargs) -> MagicMock:
+
+    def _factory(
+        skills: dict[str, float] | None = None, influence: float = 0.5, **kwargs
+    ) -> MagicMock:
         a = MagicMock()
         a.id = uuid.uuid4()
         a.workspace_id = uuid.uuid4()
@@ -61,12 +65,14 @@ def make_agent():
         for k, v in kwargs.items():
             setattr(a, k, v)
         return a
+
     return _factory
 
 
 @pytest.fixture
 def make_snapshot():
     """Factory for real TaskSnapshot instances with sensible defaults."""
+
     def _factory(**kwargs) -> TaskSnapshot:
         defaults: dict[str, Any] = dict(
             id=uuid.uuid4(),
@@ -88,6 +94,7 @@ def make_snapshot():
             execution_path=None,
         )
         return TaskSnapshot(**{**defaults, **kwargs})
+
     return _factory
 
 
@@ -98,6 +105,7 @@ def make_updated_event(make_snapshot):
     ``changed("status")`` returns True when before_status != after_status.
     Pass the same string for both to get a no-op status event.
     """
+
     def _factory(
         before_status: str,
         after_status: str,
@@ -108,6 +116,7 @@ def make_updated_event(make_snapshot):
         before = make_snapshot(status=before_status, workspace_id=ws)
         after = make_snapshot(status=after_status, workspace_id=ws, **after_kwargs)
         return TaskUpdatedEvent(state=after, before=before, workspace_id=ws)
+
     return _factory
 
 
@@ -127,6 +136,7 @@ def mock_session() -> AsyncMock:
 
 def make_session_patcher(module_path: str, session: AsyncMock, mocker):
     """Patch ``get_session`` in *module_path* to yield *session* as async CM."""
+
     @asynccontextmanager
     async def _ctx():
         yield session

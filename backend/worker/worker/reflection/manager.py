@@ -3,10 +3,11 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass
 
+from core.intelligence.llm_router import LLMRouter
 from core.intelligence.reflection.pipeline import PipelineStage
 from core.intelligence.reflection.types import PipelineResult, ReflectContext
-from core.intelligence.llm_router import LLMRouter
 from core.memory.agent_memory import AgentMemory
+
 from worker.reflection.stages import _stage_episodic, _stage_reflect, _stage_rules, _stage_skills
 
 logger = logging.getLogger(__name__)
@@ -16,9 +17,9 @@ logger = logging.getLogger(__name__)
 # rctx, independently of the other stages. Both rules and episodic share the same
 # full_reflect gate so stages_run accurately reflects what actually executed.
 REFLECT_PIPELINE: tuple[PipelineStage, ...] = (
-    PipelineStage("reflect",  fn=_stage_reflect),
-    PipelineStage("skills",   fn=_stage_skills),
-    PipelineStage("rules",    fn=_stage_rules,    gate=lambda ctx: ctx.full_reflect),
+    PipelineStage("reflect", fn=_stage_reflect),
+    PipelineStage("skills", fn=_stage_skills),
+    PipelineStage("rules", fn=_stage_rules, gate=lambda ctx: ctx.full_reflect),
     PipelineStage("episodic", fn=_stage_episodic, gate=lambda ctx: ctx.full_reflect),
 )
 
@@ -31,9 +32,9 @@ class ReflectionManager:
     Per-stage exceptions are caught and logged — a failing stage does not abort the pipeline.
     """
 
-    pipeline:   tuple[PipelineStage, ...]
+    pipeline: tuple[PipelineStage, ...]
     llm_router: LLMRouter
-    memory:     AgentMemory
+    memory: AgentMemory
 
     async def run(self, rctx: ReflectContext) -> PipelineResult:
         """Execute the pipeline stages in order, accumulating outputs into PipelineResult.
@@ -54,6 +55,8 @@ class ReflectionManager:
                 result = await stage.fn(rctx, result, self.llm_router, self.memory)
                 result.stages_run.append(stage.name)
             except Exception:
-                logger.exception("reflect stage=%s failed — continuing with partial result", stage.name)
+                logger.exception(
+                    "reflect stage=%s failed — continuing with partial result", stage.name
+                )
                 result.stages_failed.append(stage.name)
         return result

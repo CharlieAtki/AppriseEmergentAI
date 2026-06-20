@@ -4,17 +4,16 @@ from typing import TYPE_CHECKING
 
 from langchain_core.tools import tool
 
+from core.agents.tools._utils import _format_memory_items
 from core.agents.tools.registry import tool_registry
 
 if TYPE_CHECKING:
     from core.memory.agent_memory import AgentMemory
 
 
-def _factory(*, memory: "AgentMemory") -> object:
+def _factory(*, memory: AgentMemory) -> object:
     @tool
-    async def search_social_memory(
-        agent_id: str, workspace_id: str, peer_agent_id: str
-    ) -> str:
+    async def search_social_memory(agent_id: str, workspace_id: str, peer_agent_id: str) -> str:
         """Retrieve what this agent knows about a peer agent's capabilities and reliability.
 
         Use this when deciding whether to delegate to or collaborate with a specific peer.
@@ -26,10 +25,10 @@ def _factory(*, memory: "AgentMemory") -> object:
             workspace_id,
             f"observations about agent {peer_agent_id}",
         )
-        items = [ep for ep in ctx.social]
-        if not items:
-            return f"No observations recorded about agent {peer_agent_id}."
-        return "\n\n".join(f"[relevance {item.score:.2f}] {item.text}" for item in items)
+
+        if not ctx.social:
+            return "No observations found for this agent."
+        return _format_memory_items(ctx.social)
 
     return search_social_memory
 

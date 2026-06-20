@@ -122,7 +122,9 @@ class WorkspaceMetricsSnapshot(Base):
     )
 
     __table_args__ = (
-        sa.Index("ix_workspace_metrics_snapshots_workspace_id_recorded_at", "workspace_id", "recorded_at"),
+        sa.Index(
+            "ix_workspace_metrics_snapshots_workspace_id_recorded_at", "workspace_id", "recorded_at"
+        ),
     )
 
     workspace: Mapped[Workspace] = relationship()
@@ -165,7 +167,9 @@ class EmergenceEvent(Base):
     hub_agent: Mapped[Agent | None] = relationship(foreign_keys=[hub_agent_id])
 
     def __repr__(self) -> str:
-        return f"<EmergenceEvent id={self.id} type={self.event_type!r} gini={self.gini_coefficient}>"
+        return (
+            f"<EmergenceEvent id={self.id} type={self.event_type!r} gini={self.gini_coefficient}>"
+        )
 
 
 class ProceduralKnowledgeLog(Base):

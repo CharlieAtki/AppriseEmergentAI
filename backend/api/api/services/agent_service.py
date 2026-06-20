@@ -3,11 +3,10 @@ from __future__ import annotations
 import uuid
 from typing import TYPE_CHECKING
 
-from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
-
 from core.models.agents import Agent
 from core.models.tenant import Workspace
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 if TYPE_CHECKING:
     from api.schemas.agent import CreateAgentRequest, UpdateAgentRequest

@@ -4,12 +4,10 @@ All functions under test are pure (no I/O, no async). A regression here
 silently routes tasks to the wrong agent — the functions are highest risk for
 invisible logic drift.
 """
+
 from __future__ import annotations
 
-import math
-
 import pytest
-
 from core.coordination.contract_net import (
     _capacity_factor,
     _influence_factor,
@@ -19,8 +17,8 @@ from core.coordination.contract_net import (
     compute_bid_score,
 )
 
-
 # ── _skill_match ────────────────────────────────────────────────────────────
+
 
 def test_skill_match_perfect_overlap():
     """Agent fully covers all required skills → 1.0."""
@@ -71,6 +69,7 @@ def test_skill_match_clamped_above_one():
 
 # ── _capacity_factor ─────────────────────────────────────────────────────────
 
+
 def test_capacity_factor_idle():
     """Zero active tasks → full capacity (1.0)."""
     assert _capacity_factor(active_tasks=0, max_parallel=3) == pytest.approx(1.0)
@@ -97,6 +96,7 @@ def test_capacity_factor_partial():
 
 
 # ── _influence_factor ─────────────────────────────────────────────────────────
+
 
 def test_influence_factor_zero():
     """Influence = 0.0 → factor = 0.0 (no influence yet)."""
@@ -130,6 +130,7 @@ def test_influence_factor_monotone():
 
 # ── _personality_fit ──────────────────────────────────────────────────────────
 
+
 def test_personality_fit_no_personality():
     """No agent personality → neutral 0.5."""
     assert _personality_fit(agent_personality=None, task_domain_tags={"research": 1.0}) == 0.5
@@ -160,6 +161,7 @@ def test_personality_fit_orthogonal():
 
 # ── _seeded_jitter ────────────────────────────────────────────────────────────
 
+
 def test_seeded_jitter_deterministic():
     """Same (task_id, agent_id) always produces the same jitter."""
     j1 = _seeded_jitter("task-abc", "agent-xyz")
@@ -181,6 +183,7 @@ def test_seeded_jitter_varies_by_input():
 
 
 # ── compute_bid_score (integration of sub-functions) ─────────────────────────
+
 
 def test_compute_bid_score_above_zero():
     """Competent agent with matching skills scores well above zero."""

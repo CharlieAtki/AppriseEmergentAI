@@ -37,5 +37,6 @@ def build_prompt(rules: list[ProceduralRule]) -> list[dict[str, str]]:
 
 
 def parse(raw: str) -> CurateResponse:
-    from core.intelligence.prompts import strip_fences
+    from core.utils import strip_fences
+
     return CurateResponse.model_validate_json(strip_fences(raw))

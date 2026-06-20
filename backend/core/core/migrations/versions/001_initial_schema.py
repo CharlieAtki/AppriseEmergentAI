@@ -4,6 +4,7 @@ Revision ID: 001
 Revises:
 Create Date: 2026-05-16
 """
+
 from __future__ import annotations
 
 import sqlalchemy as sa
@@ -19,23 +20,35 @@ depends_on = None
 def upgrade() -> None:
     op.create_table(
         "organisations",
-        sa.Column("id", UUID(as_uuid=True), server_default=sa.text("gen_random_uuid()"), nullable=False),
+        sa.Column(
+            "id", UUID(as_uuid=True), server_default=sa.text("gen_random_uuid()"), nullable=False
+        ),
         sa.Column("clerk_org_id", sa.Text(), nullable=False),
         sa.Column("name", sa.Text(), nullable=True),
-        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False),
-        sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False),
+        sa.Column(
+            "created_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False
+        ),
+        sa.Column(
+            "updated_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False
+        ),
         sa.PrimaryKeyConstraint("id"),
         sa.UniqueConstraint("clerk_org_id"),
     )
 
     op.create_table(
         "users",
-        sa.Column("id", UUID(as_uuid=True), server_default=sa.text("gen_random_uuid()"), nullable=False),
+        sa.Column(
+            "id", UUID(as_uuid=True), server_default=sa.text("gen_random_uuid()"), nullable=False
+        ),
         sa.Column("clerk_user_id", sa.Text(), nullable=False),
         sa.Column("email", sa.Text(), nullable=True),
         sa.Column("name", sa.Text(), nullable=True),
-        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False),
-        sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False),
+        sa.Column(
+            "created_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False
+        ),
+        sa.Column(
+            "updated_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False
+        ),
         sa.PrimaryKeyConstraint("id"),
         sa.UniqueConstraint("clerk_user_id"),
     )
@@ -45,7 +58,9 @@ def upgrade() -> None:
         sa.Column("organisation_id", UUID(as_uuid=True), nullable=False),
         sa.Column("user_id", UUID(as_uuid=True), nullable=False),
         sa.Column("role", sa.Text(), nullable=False),
-        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False),
+        sa.Column(
+            "created_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False
+        ),
         sa.ForeignKeyConstraint(["organisation_id"], ["organisations.id"], ondelete="CASCADE"),
         sa.ForeignKeyConstraint(["user_id"], ["users.id"], ondelete="CASCADE"),
         sa.PrimaryKeyConstraint("organisation_id", "user_id"),
@@ -54,15 +69,21 @@ def upgrade() -> None:
 
     op.create_table(
         "workspaces",
-        sa.Column("id", UUID(as_uuid=True), server_default=sa.text("gen_random_uuid()"), nullable=False),
+        sa.Column(
+            "id", UUID(as_uuid=True), server_default=sa.text("gen_random_uuid()"), nullable=False
+        ),
         sa.Column("organisation_id", UUID(as_uuid=True), nullable=False),
         sa.Column("name", sa.Text(), nullable=False),
         sa.Column("status", sa.Text(), server_default=sa.text("'active'"), nullable=False),
         sa.Column("config", JSONB(), nullable=True),
         sa.Column("result_webhook_url", sa.Text(), nullable=True),
         sa.Column("webhook_secret", sa.Text(), nullable=True),
-        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False),
-        sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False),
+        sa.Column(
+            "created_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False
+        ),
+        sa.Column(
+            "updated_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False
+        ),
         sa.ForeignKeyConstraint(["organisation_id"], ["organisations.id"], ondelete="CASCADE"),
         sa.PrimaryKeyConstraint("id"),
     )
@@ -70,7 +91,9 @@ def upgrade() -> None:
 
     op.create_table(
         "api_keys",
-        sa.Column("id", UUID(as_uuid=True), server_default=sa.text("gen_random_uuid()"), nullable=False),
+        sa.Column(
+            "id", UUID(as_uuid=True), server_default=sa.text("gen_random_uuid()"), nullable=False
+        ),
         sa.Column("organisation_id", UUID(as_uuid=True), nullable=False),
         sa.Column("workspace_id", UUID(as_uuid=True), nullable=False),
         sa.Column("created_by_user_id", UUID(as_uuid=True), nullable=True),
@@ -81,7 +104,9 @@ def upgrade() -> None:
         sa.Column("last_used_at", sa.DateTime(timezone=True), nullable=True),
         sa.Column("expires_at", sa.DateTime(timezone=True), nullable=True),
         sa.Column("revoked", sa.Boolean(), server_default=sa.text("false"), nullable=False),
-        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False),
+        sa.Column(
+            "created_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False
+        ),
         sa.ForeignKeyConstraint(["organisation_id"], ["organisations.id"], ondelete="CASCADE"),
         sa.ForeignKeyConstraint(["workspace_id"], ["workspaces.id"], ondelete="CASCADE"),
         sa.ForeignKeyConstraint(["created_by_user_id"], ["users.id"], ondelete="SET NULL"),
@@ -92,7 +117,9 @@ def upgrade() -> None:
 
     op.create_table(
         "agents",
-        sa.Column("id", UUID(as_uuid=True), server_default=sa.text("gen_random_uuid()"), nullable=False),
+        sa.Column(
+            "id", UUID(as_uuid=True), server_default=sa.text("gen_random_uuid()"), nullable=False
+        ),
         sa.Column("organisation_id", UUID(as_uuid=True), nullable=False),
         sa.Column("workspace_id", UUID(as_uuid=True), nullable=False),
         sa.Column("name", sa.Text(), nullable=False),
@@ -100,8 +127,12 @@ def upgrade() -> None:
         sa.Column("skills", JSONB(), nullable=True),
         sa.Column("influence", sa.Float(), nullable=True),
         sa.Column("personality", JSONB(), nullable=True),
-        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False),
-        sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False),
+        sa.Column(
+            "created_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False
+        ),
+        sa.Column(
+            "updated_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False
+        ),
         sa.ForeignKeyConstraint(["organisation_id"], ["organisations.id"], ondelete="CASCADE"),
         sa.ForeignKeyConstraint(["workspace_id"], ["workspaces.id"], ondelete="CASCADE"),
         sa.PrimaryKeyConstraint("id"),
@@ -110,7 +141,9 @@ def upgrade() -> None:
 
     op.create_table(
         "tasks",
-        sa.Column("id", UUID(as_uuid=True), server_default=sa.text("gen_random_uuid()"), nullable=False),
+        sa.Column(
+            "id", UUID(as_uuid=True), server_default=sa.text("gen_random_uuid()"), nullable=False
+        ),
         sa.Column("organisation_id", UUID(as_uuid=True), nullable=False),
         sa.Column("workspace_id", UUID(as_uuid=True), nullable=False),
         sa.Column("parent_task_id", UUID(as_uuid=True), nullable=True),
@@ -125,14 +158,20 @@ def upgrade() -> None:
         sa.Column("domain_tags", JSONB(), nullable=True),
         sa.Column("external_ref", sa.Text(), nullable=True),
         sa.Column("idempotency_key", sa.Text(), nullable=True),
-        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False),
-        sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False),
+        sa.Column(
+            "created_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False
+        ),
+        sa.Column(
+            "updated_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False
+        ),
         sa.ForeignKeyConstraint(["organisation_id"], ["organisations.id"], ondelete="CASCADE"),
         sa.ForeignKeyConstraint(["workspace_id"], ["workspaces.id"], ondelete="CASCADE"),
         sa.ForeignKeyConstraint(["parent_task_id"], ["tasks.id"], ondelete="SET NULL"),
         sa.PrimaryKeyConstraint("id"),
     )
-    op.create_index("ix_tasks_workspace_id_status_created_at", "tasks", ["workspace_id", "status", "created_at"])
+    op.create_index(
+        "ix_tasks_workspace_id_status_created_at", "tasks", ["workspace_id", "status", "created_at"]
+    )
     op.create_index("ix_tasks_parent_task_id", "tasks", ["parent_task_id"])
     op.create_index(
         "uq_tasks_workspace_idempotency_key",
@@ -144,7 +183,9 @@ def upgrade() -> None:
 
     op.create_table(
         "task_executions",
-        sa.Column("id", UUID(as_uuid=True), server_default=sa.text("gen_random_uuid()"), nullable=False),
+        sa.Column(
+            "id", UUID(as_uuid=True), server_default=sa.text("gen_random_uuid()"), nullable=False
+        ),
         sa.Column("organisation_id", UUID(as_uuid=True), nullable=False),
         sa.Column("workspace_id", UUID(as_uuid=True), nullable=False),
         sa.Column("task_id", UUID(as_uuid=True), nullable=False),
@@ -163,11 +204,17 @@ def upgrade() -> None:
         sa.PrimaryKeyConstraint("id"),
     )
     op.create_index("ix_task_executions_task_id", "task_executions", ["task_id"])
-    op.create_index("ix_task_executions_workspace_id_completed_at", "task_executions", ["workspace_id", "completed_at"])
+    op.create_index(
+        "ix_task_executions_workspace_id_completed_at",
+        "task_executions",
+        ["workspace_id", "completed_at"],
+    )
 
     op.create_table(
         "webhook_deliveries",
-        sa.Column("id", UUID(as_uuid=True), server_default=sa.text("gen_random_uuid()"), nullable=False),
+        sa.Column(
+            "id", UUID(as_uuid=True), server_default=sa.text("gen_random_uuid()"), nullable=False
+        ),
         sa.Column("delivery_id", sa.Text(), nullable=False),
         sa.Column("organisation_id", UUID(as_uuid=True), nullable=False),
         sa.Column("workspace_id", UUID(as_uuid=True), nullable=False),
@@ -179,7 +226,9 @@ def upgrade() -> None:
         sa.Column("last_attempt_at", sa.DateTime(timezone=True), nullable=True),
         sa.Column("last_http_status", sa.Integer(), nullable=True),
         sa.Column("last_error", sa.Text(), nullable=True),
-        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False),
+        sa.Column(
+            "created_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False
+        ),
         sa.ForeignKeyConstraint(["organisation_id"], ["organisations.id"], ondelete="CASCADE"),
         sa.ForeignKeyConstraint(["workspace_id"], ["workspaces.id"], ondelete="CASCADE"),
         sa.ForeignKeyConstraint(["task_execution_id"], ["task_executions.id"], ondelete="CASCADE"),
@@ -194,7 +243,9 @@ def upgrade() -> None:
 
     op.create_table(
         "artifacts",
-        sa.Column("id", UUID(as_uuid=True), server_default=sa.text("gen_random_uuid()"), nullable=False),
+        sa.Column(
+            "id", UUID(as_uuid=True), server_default=sa.text("gen_random_uuid()"), nullable=False
+        ),
         sa.Column("organisation_id", UUID(as_uuid=True), nullable=False),
         sa.Column("workspace_id", UUID(as_uuid=True), nullable=False),
         sa.Column("title", sa.Text(), nullable=False),
@@ -202,8 +253,12 @@ def upgrade() -> None:
         sa.Column("artifact_type", sa.Text(), nullable=False),
         sa.Column("status", sa.Text(), server_default=sa.text("'draft'"), nullable=False),
         sa.Column("storage_ref", sa.Text(), nullable=True),
-        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False),
-        sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False),
+        sa.Column(
+            "created_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False
+        ),
+        sa.Column(
+            "updated_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False
+        ),
         sa.ForeignKeyConstraint(["organisation_id"], ["organisations.id"], ondelete="CASCADE"),
         sa.ForeignKeyConstraint(["workspace_id"], ["workspaces.id"], ondelete="CASCADE"),
         sa.PrimaryKeyConstraint("id"),
@@ -212,7 +267,9 @@ def upgrade() -> None:
 
     op.create_table(
         "artifact_operations",
-        sa.Column("id", UUID(as_uuid=True), server_default=sa.text("gen_random_uuid()"), nullable=False),
+        sa.Column(
+            "id", UUID(as_uuid=True), server_default=sa.text("gen_random_uuid()"), nullable=False
+        ),
         sa.Column("organisation_id", UUID(as_uuid=True), nullable=False),
         sa.Column("workspace_id", UUID(as_uuid=True), nullable=False),
         sa.Column("artifact_id", UUID(as_uuid=True), nullable=False),
@@ -229,12 +286,18 @@ def upgrade() -> None:
         sa.ForeignKeyConstraint(["assigned_agent_id"], ["agents.id"], ondelete="SET NULL"),
         sa.PrimaryKeyConstraint("id"),
     )
-    op.create_index("ix_artifact_operations_artifact_id_status", "artifact_operations", ["artifact_id", "status"])
+    op.create_index(
+        "ix_artifact_operations_artifact_id_status",
+        "artifact_operations",
+        ["artifact_id", "status"],
+    )
     op.create_index("ix_artifact_operations_task_id", "artifact_operations", ["task_id"])
 
     op.create_table(
         "artifact_contributions",
-        sa.Column("id", UUID(as_uuid=True), server_default=sa.text("gen_random_uuid()"), nullable=False),
+        sa.Column(
+            "id", UUID(as_uuid=True), server_default=sa.text("gen_random_uuid()"), nullable=False
+        ),
         sa.Column("organisation_id", UUID(as_uuid=True), nullable=False),
         sa.Column("workspace_id", UUID(as_uuid=True), nullable=False),
         sa.Column("artifact_id", UUID(as_uuid=True), nullable=False),
@@ -243,7 +306,9 @@ def upgrade() -> None:
         sa.Column("content_ref", sa.Text(), nullable=False),
         sa.Column("contribution_type", sa.Text(), nullable=False),
         sa.Column("quality_score", sa.Float(), nullable=True),
-        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False),
+        sa.Column(
+            "created_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False
+        ),
         sa.ForeignKeyConstraint(["organisation_id"], ["organisations.id"], ondelete="CASCADE"),
         sa.ForeignKeyConstraint(["workspace_id"], ["workspaces.id"], ondelete="CASCADE"),
         sa.ForeignKeyConstraint(["artifact_id"], ["artifacts.id"], ondelete="CASCADE"),
@@ -254,40 +319,58 @@ def upgrade() -> None:
 
     op.create_table(
         "skill_snapshots",
-        sa.Column("id", UUID(as_uuid=True), server_default=sa.text("gen_random_uuid()"), nullable=False),
+        sa.Column(
+            "id", UUID(as_uuid=True), server_default=sa.text("gen_random_uuid()"), nullable=False
+        ),
         sa.Column("organisation_id", UUID(as_uuid=True), nullable=False),
         sa.Column("workspace_id", UUID(as_uuid=True), nullable=False),
         sa.Column("agent_id", UUID(as_uuid=True), nullable=False),
         sa.Column("skills", JSONB(), nullable=False),
-        sa.Column("recorded_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False),
+        sa.Column(
+            "recorded_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False
+        ),
         sa.ForeignKeyConstraint(["organisation_id"], ["organisations.id"], ondelete="CASCADE"),
         sa.ForeignKeyConstraint(["workspace_id"], ["workspaces.id"], ondelete="CASCADE"),
         sa.ForeignKeyConstraint(["agent_id"], ["agents.id"], ondelete="CASCADE"),
         sa.PrimaryKeyConstraint("id"),
     )
-    op.create_index("ix_skill_snapshots_agent_id_recorded_at", "skill_snapshots", ["agent_id", "recorded_at"])
+    op.create_index(
+        "ix_skill_snapshots_agent_id_recorded_at", "skill_snapshots", ["agent_id", "recorded_at"]
+    )
 
     op.create_table(
         "influence_snapshots",
-        sa.Column("id", UUID(as_uuid=True), server_default=sa.text("gen_random_uuid()"), nullable=False),
+        sa.Column(
+            "id", UUID(as_uuid=True), server_default=sa.text("gen_random_uuid()"), nullable=False
+        ),
         sa.Column("organisation_id", UUID(as_uuid=True), nullable=False),
         sa.Column("workspace_id", UUID(as_uuid=True), nullable=False),
         sa.Column("agent_id", UUID(as_uuid=True), nullable=False),
         sa.Column("influence", sa.Float(), nullable=False),
-        sa.Column("recorded_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False),
+        sa.Column(
+            "recorded_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False
+        ),
         sa.ForeignKeyConstraint(["organisation_id"], ["organisations.id"], ondelete="CASCADE"),
         sa.ForeignKeyConstraint(["workspace_id"], ["workspaces.id"], ondelete="CASCADE"),
         sa.ForeignKeyConstraint(["agent_id"], ["agents.id"], ondelete="CASCADE"),
         sa.PrimaryKeyConstraint("id"),
     )
-    op.create_index("ix_influence_snapshots_agent_id_recorded_at", "influence_snapshots", ["agent_id", "recorded_at"])
+    op.create_index(
+        "ix_influence_snapshots_agent_id_recorded_at",
+        "influence_snapshots",
+        ["agent_id", "recorded_at"],
+    )
 
     op.create_table(
         "workspace_metrics_snapshots",
-        sa.Column("id", UUID(as_uuid=True), server_default=sa.text("gen_random_uuid()"), nullable=False),
+        sa.Column(
+            "id", UUID(as_uuid=True), server_default=sa.text("gen_random_uuid()"), nullable=False
+        ),
         sa.Column("workspace_id", UUID(as_uuid=True), nullable=False),
         sa.Column("metrics", JSONB(), nullable=False),
-        sa.Column("recorded_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False),
+        sa.Column(
+            "recorded_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False
+        ),
         sa.ForeignKeyConstraint(["workspace_id"], ["workspaces.id"], ondelete="CASCADE"),
         sa.PrimaryKeyConstraint("id"),
     )
@@ -299,27 +382,39 @@ def upgrade() -> None:
 
     op.create_table(
         "emergence_events",
-        sa.Column("id", UUID(as_uuid=True), server_default=sa.text("gen_random_uuid()"), nullable=False),
+        sa.Column(
+            "id", UUID(as_uuid=True), server_default=sa.text("gen_random_uuid()"), nullable=False
+        ),
         sa.Column("workspace_id", UUID(as_uuid=True), nullable=False),
         sa.Column("event_type", sa.Text(), nullable=False),
         sa.Column("gini_coefficient", sa.Float(), nullable=True),
         sa.Column("hub_agent_id", UUID(as_uuid=True), nullable=True),
-        sa.Column("recorded_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False),
+        sa.Column(
+            "recorded_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False
+        ),
         sa.ForeignKeyConstraint(["workspace_id"], ["workspaces.id"], ondelete="CASCADE"),
         sa.ForeignKeyConstraint(["hub_agent_id"], ["agents.id"], ondelete="SET NULL"),
         sa.PrimaryKeyConstraint("id"),
     )
-    op.create_index("ix_emergence_events_workspace_id_recorded_at", "emergence_events", ["workspace_id", "recorded_at"])
+    op.create_index(
+        "ix_emergence_events_workspace_id_recorded_at",
+        "emergence_events",
+        ["workspace_id", "recorded_at"],
+    )
 
     op.create_table(
         "procedural_knowledge_logs",
-        sa.Column("id", UUID(as_uuid=True), server_default=sa.text("gen_random_uuid()"), nullable=False),
+        sa.Column(
+            "id", UUID(as_uuid=True), server_default=sa.text("gen_random_uuid()"), nullable=False
+        ),
         sa.Column("workspace_id", UUID(as_uuid=True), nullable=False),
         sa.Column("agent_id", UUID(as_uuid=True), nullable=False),
         sa.Column("domain", sa.Text(), nullable=False),
         sa.Column("rule_text", sa.Text(), nullable=False),
         sa.Column("vector_store_ref", sa.Text(), nullable=True),
-        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False),
+        sa.Column(
+            "created_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False
+        ),
         sa.ForeignKeyConstraint(["workspace_id"], ["workspaces.id"], ondelete="CASCADE"),
         sa.ForeignKeyConstraint(["agent_id"], ["agents.id"], ondelete="CASCADE"),
         sa.PrimaryKeyConstraint("id"),

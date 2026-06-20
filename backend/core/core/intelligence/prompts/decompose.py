@@ -25,7 +25,7 @@ def build_prompt(agent: AgentContext, task: TaskEvaluationContext) -> list[dict]
         "- Subtasks should be narrower in scope than the parent — if a subtask still feels complex, break it further.\n"
         "- required_skills values are importance weights in [0.0, 1.0].\n"
         "- difficulty is in [1.0, 5.0].\n"
-        "- Aim for 2–6 subtasks. More than 6 is a sign the decomposition is too granular.\n\n"
+        "- Aim for 2-6 subtasks. More than 6 is a sign the decomposition is too granular.\n\n"
         'Respond with JSON: {"subtasks": [{"title": "...", "description": "...", '
         '"required_skills": {}, "difficulty": 2.0}, ...]}'
     )
@@ -41,5 +41,6 @@ def build_prompt(agent: AgentContext, task: TaskEvaluationContext) -> list[dict]
 
 
 def parse(raw: str) -> DecomposeResponse:
-    from core.intelligence.prompts import strip_fences
+    from core.utils import strip_fences
+
     return DecomposeResponse.model_validate_json(strip_fences(raw))

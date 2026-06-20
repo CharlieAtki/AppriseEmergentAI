@@ -1,16 +1,11 @@
 from __future__ import annotations
 
 import math
-from typing import TYPE_CHECKING
+from typing import Any
 
 from redis.asyncio import Redis
 
 from core.config import settings
-
-if TYPE_CHECKING:
-    from core.eventing.activity.task_stream_logger import TaskStreamLogger
-    from core.models.agents import Agent
-    from core.models.tasks import Task
 
 
 def _clamp01(x: float) -> float:
@@ -27,8 +22,7 @@ def _skill_match(
     if total_weight == 0.0:
         return 0.5
     weighted_sum = sum(
-        required_skills[skill] * _clamp01(agent_skills.get(skill, 0.0))
-        for skill in required_skills
+        required_skills[skill] * _clamp01(agent_skills.get(skill, 0.0)) for skill in required_skills
     )
     return weighted_sum / total_weight
 
@@ -59,8 +53,8 @@ def _cosine_similarity(a: dict[str, float], b: dict[str, float]) -> float:
 
 
 def _personality_fit(
-    agent_personality: dict | None,
-    task_domain_tags: dict | None,
+    agent_personality: dict[str, Any] | None,
+    task_domain_tags: dict[str, Any] | None,
 ) -> float:
     if not agent_personality or not task_domain_tags:
         return 0.5  # neutral when either side is absent
@@ -68,7 +62,7 @@ def _personality_fit(
     try:
         a = {k: float(v) for k, v in agent_personality.items()}
         b = {k: float(v) for k, v in task_domain_tags.items()}
-    except (TypeError, ValueError):
+    except TypeError, ValueError:
         return 0.5
     sim = _cosine_similarity(a, b)  # [-1, 1]
     return (sim + 1.0) / 2.0  # [0, 1]
@@ -86,8 +80,8 @@ def compute_bid_score(
     agent_influence: float,
     agent_active_tasks: int,
     required_skills: dict[str, float],
-    agent_personality: dict | None = None,
-    task_domain_tags: dict | None = None,
+    agent_personality: dict[str, Any] | None = None,
+    task_domain_tags: dict[str, Any] | None = None,
     *,
     task_id: str | None = None,
     agent_id: str | None = None,
@@ -147,26 +141,3 @@ async def attempt_reservation(
         ex=ttl_seconds,
     )
     return acquired is not None
-
-
-async def issue_cfp(
-    task: Task,
-    initiating_agent: Agent,
-    stream_logger: TaskStreamLogger,
-) -> None:
-    """Publish a Call for Proposals event to ``cfp.{workspace_id}.issued``.
-
-    This is a thin delegation to TaskStreamLogger.cfp_issued(). It exists as a
-    named coordination-layer entry point so the CFP concept stays visible here
-    rather than being buried in execute_task.
-
-    The caller (execute_task CFP branch) immediately follows this with
-    _release_to_pool(), which returns the task to ``"open"`` and publishes a
-    standard ``task.created`` event for re-bidding. Those are two distinct events:
-    this one signals that a CFP round was initiated (for a future subscriber);
-    the re-release triggers actual bidding now.
-
-    WARNING: No subscriber currently consumes the CFP stream. See
-    coordination-gaps.md gap 1 before making changes to this path.
-    """
-    await stream_logger.cfp_issued(task, initiating_agent)

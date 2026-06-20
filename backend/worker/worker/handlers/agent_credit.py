@@ -5,8 +5,6 @@ import uuid
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
-from sqlalchemy import func, select
-
 from core.config import settings
 from core.coordination.influence import compute_influence_ema
 from core.coordination.task_state import TaskStateMachine
@@ -16,6 +14,7 @@ from core.eventing.events.task_events import TaskUpdatedEvent
 from core.models.agents import Agent
 from core.models.observability import InfluenceSnapshot
 from core.models.tasks import Task, TaskExecution
+from sqlalchemy import func, select
 
 if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession
@@ -38,20 +37,22 @@ async def compute_delegation_credits(
     Credit signals:
       "decompose": full quality signal — the agent structured the problem; every subtask
                    outcome is a direct consequence of that structure.
-      "cfp":       quality × CFP_COORDINATOR_CREDIT (0.5) — the agent routed the task
+      "cfp":       quality * CFP_COORDINATOR_CREDIT (0.5) — the agent routed the task
                    but did not structure or execute it; partial credit for routing judgment.
 
     Multiple agents may appear (e.g. CFP initiator + decomposer in a CFP→Decompose chain).
     All are returned in a single query — one DB round-trip regardless of chain length.
     """
-    rows = (await session.execute(
-        select(TaskExecution.agent_id, TaskExecution.execution_path).where(
-            TaskExecution.task_id == task_id,
-            TaskExecution.workspace_id == workspace_id,
-            TaskExecution.execution_path.in_(["cfp", "decompose"]),
-            TaskExecution.status == "completed",
+    rows = (
+        await session.execute(
+            select(TaskExecution.agent_id, TaskExecution.execution_path).where(
+                TaskExecution.task_id == task_id,
+                TaskExecution.workspace_id == workspace_id,
+                TaskExecution.execution_path.in_(["cfp", "decompose"]),
+                TaskExecution.status == "completed",
+            )
         )
-    )).all()
+    ).all()
 
     result: list[tuple[uuid.UUID, float]] = []
     for agent_id, path in rows:
@@ -71,7 +72,7 @@ class AgentCreditHandler(EventHandler[TaskUpdatedEvent]):
 
     ── Executor credit ────────────────────────────────────────────────────────────
     Agent that self-executed the task. Signal: score_outcome() quality score.
-    Formula: EMA — new = base + 0.15 × (quality − base).
+    Formula: EMA — new = base + 0.15 * (quality - base).
     Gate: event.state.execution_path == "self_execute" AND quality_score not None.
 
     ── Coordinator credit ─────────────────────────────────────────────────────────
@@ -131,15 +132,19 @@ class AgentCreditHandler(EventHandler[TaskUpdatedEvent]):
 
         agent.influence = compute_influence_ema(agent.influence, event.state.quality_score)
         session.add(agent)
-        session.add(InfluenceSnapshot(
-            agent_id=agent.id,
-            organisation_id=agent.organisation_id,
-            workspace_id=agent.workspace_id,
-            influence=agent.influence,
-        ))
+        session.add(
+            InfluenceSnapshot(
+                agent_id=agent.id,
+                organisation_id=agent.organisation_id,
+                workspace_id=agent.workspace_id,
+                influence=agent.influence,
+            )
+        )
         logger.debug(
             "AgentCreditHandler executor: agent=%s influence=%.4f quality=%.3f",
-            event.state.executing_agent_id, agent.influence, event.state.quality_score,
+            event.state.executing_agent_id,
+            agent.influence,
+            event.state.quality_score,
         )
 
     async def _credit_coordinator(self, event: TaskUpdatedEvent, session: AsyncSession) -> None:
@@ -148,7 +153,10 @@ class AgentCreditHandler(EventHandler[TaskUpdatedEvent]):
             if event.state.quality_score is None:
                 return
             credits = await compute_delegation_credits(
-                event.state.id, event.state.workspace_id, event.state.quality_score, session,
+                event.state.id,
+                event.state.workspace_id,
+                event.state.quality_score,
+                session,
             )
         else:
             # Subtask: credit parent's delegation chain when all siblings are done.
@@ -160,15 +168,19 @@ class AgentCreditHandler(EventHandler[TaskUpdatedEvent]):
                 continue
             agent.influence = compute_influence_ema(agent.influence, quality_signal)
             session.add(agent)
-            session.add(InfluenceSnapshot(
-                agent_id=agent.id,
-                organisation_id=agent.organisation_id,
-                workspace_id=agent.workspace_id,
-                influence=agent.influence,
-            ))
+            session.add(
+                InfluenceSnapshot(
+                    agent_id=agent.id,
+                    organisation_id=agent.organisation_id,
+                    workspace_id=agent.workspace_id,
+                    influence=agent.influence,
+                )
+            )
             logger.debug(
                 "AgentCreditHandler coordinator: agent=%s influence=%.4f signal=%.3f",
-                agent_id, agent.influence, quality_signal,
+                agent_id,
+                agent.influence,
+                quality_signal,
             )
 
     async def _subtask_rollup_credits(
@@ -184,12 +196,18 @@ class AgentCreditHandler(EventHandler[TaskUpdatedEvent]):
         parent_id = event.state.parent_task_id
         workspace_id = event.state.workspace_id
 
-        siblings = (await session.execute(
-            select(Task).where(
-                Task.parent_task_id == parent_id,
-                Task.workspace_id == workspace_id,
+        siblings = (
+            (
+                await session.execute(
+                    select(Task).where(
+                        Task.parent_task_id == parent_id,
+                        Task.workspace_id == workspace_id,
+                    )
+                )
             )
-        )).scalars().all()
+            .scalars()
+            .all()
+        )
 
         if not siblings:
             return []
@@ -200,12 +218,14 @@ class AgentCreditHandler(EventHandler[TaskUpdatedEvent]):
         if not completed_ids:
             return []  # all siblings failed/expired — no quality signal
 
-        avg_quality: float | None = (await session.execute(
-            select(func.avg(TaskExecution.quality_score)).where(
-                TaskExecution.task_id.in_(completed_ids),
-                TaskExecution.status == "completed",
+        avg_quality: float | None = (
+            await session.execute(
+                select(func.avg(TaskExecution.quality_score)).where(
+                    TaskExecution.task_id.in_(completed_ids),
+                    TaskExecution.status == "completed",
+                )
             )
-        )).scalar()
+        ).scalar()
 
         if avg_quality is None:
             return []

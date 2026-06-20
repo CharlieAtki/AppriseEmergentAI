@@ -3,10 +3,9 @@ from __future__ import annotations
 import logging
 import uuid
 
-from sqlalchemy import select
-
 from core.coordination.skills import apply_skill_delta, compute_delta_magnitude
 from core.intelligence.call_types import CallType
+from core.intelligence.llm_router import LLMRouter
 from core.intelligence.prompts.reflection import reflect as reflect_prompt
 from core.intelligence.prompts.reflection.reflect import ExistingRule, ResultContext, TaskContext
 from core.intelligence.reflection.types import PipelineResult, ReflectContext
@@ -14,7 +13,8 @@ from core.memory.agent_memory import AgentMemory
 from core.memory.types import ProceduralRule
 from core.models.agents import Agent
 from core.models.observability import ProceduralKnowledgeLog, SkillSnapshot
-from core.intelligence.llm_router import LLMRouter
+from sqlalchemy import select
+
 from worker.span import current_span
 
 logger = logging.getLogger(__name__)
@@ -68,8 +68,10 @@ async def _stage_reflect(
     # Query each domain_tag separately and deduplicate by point ID so no rule appears twice.
     existing: list[ExistingRule] = []
     if rctx.full_reflect:
-        retrieval_domains = list(rctx.domain_tags.keys()) if rctx.domain_tags else (
-            [rctx.task_type] if rctx.task_type else []
+        retrieval_domains = (
+            list(rctx.domain_tags.keys())
+            if rctx.domain_tags
+            else ([rctx.task_type] if rctx.task_type else [])
         )
         seen_ids: set[str] = set()
         for d in retrieval_domains:  # full list needed here — retrieve across all tags
@@ -79,15 +81,19 @@ async def _stage_reflect(
                 if item.id not in seen_ids:
                     seen_ids.add(item.id)
                     rule = ProceduralRule.from_item(item)
-                    existing.append(ExistingRule(
-                        id=rule.id,
-                        domain=rule.domain,
-                        text=rule.text,
-                    ))
+                    existing.append(
+                        ExistingRule(
+                            id=rule.id,
+                            domain=rule.domain,
+                            text=rule.text,
+                        )
+                    )
 
     raw = await llm.complete(
         reflect_prompt.build_prompt(
-            task_ctx, result_ctx, rctx.heuristic_score,
+            task_ctx,
+            result_ctx,
+            rctx.heuristic_score,
             status=rctx.status,
             full_reflect=rctx.full_reflect,
             existing_rules=existing if existing else None,
@@ -97,17 +103,20 @@ async def _stage_reflect(
     )
     output = reflect_prompt.parse(raw)
 
-    result.skill_domains         = output.skill_domains
+    result.skill_domains = output.skill_domains
     result.new_skill_suggestions = output.new_skill_suggestions
-    result.rule                  = output.generalised_rule
-    result.verdict               = output.verdict
-    result.superseded_ids        = output.superseded_ids if output.superseded_ids else None
+    result.rule = output.generalised_rule
+    result.verdict = output.verdict
+    result.superseded_ids = output.superseded_ids if output.superseded_ids else None
 
-    await span.emit("reflect.classified", {
-        "skill_domains":  output.skill_domains,
-        "full_reflect":   rctx.full_reflect,
-        "rule_extracted": output.generalised_rule is not None,
-    })
+    await span.emit(
+        "reflect.classified",
+        {
+            "skill_domains": output.skill_domains,
+            "full_reflect": rctx.full_reflect,
+            "rule_extracted": output.generalised_rule is not None,
+        },
+    )
     return result
 
 
@@ -174,7 +183,8 @@ async def _stage_skills(
         if filtered_out:
             logger.warning(
                 "reflect _stage_skills: LLM named skills outside required set — dropped=%s execution=%s",
-                filtered_out, rctx.execution_id,
+                filtered_out,
+                rctx.execution_id,
             )
             await span.emit("skills.filtered", {"dropped": filtered_out})
 
@@ -184,13 +194,15 @@ async def _stage_skills(
 
         agent.skills = updated
         session.add(agent)
-        session.add(SkillSnapshot(
-            agent_id=agent.id,
-            organisation_id=rctx.organisation_id,
-            workspace_id=rctx.workspace_id,
-            skills=agent.skills,
-            execution_id=rctx.execution_id,
-        ))
+        session.add(
+            SkillSnapshot(
+                agent_id=agent.id,
+                organisation_id=rctx.organisation_id,
+                workspace_id=rctx.workspace_id,
+                skills=agent.skills,
+                execution_id=rctx.execution_id,
+            )
+        )
 
     return result
 
@@ -238,14 +250,16 @@ async def _stage_rules(
 
         if existing_log is None:
             log_id = uuid.uuid4()
-            session.add(ProceduralKnowledgeLog(
-                id=log_id,
-                workspace_id=rctx.workspace_id,
-                agent_id=rctx.agent_id,
-                domain=storage_domain,
-                rule_text=result.rule,
-                execution_id=rctx.execution_id,
-            ))
+            session.add(
+                ProceduralKnowledgeLog(
+                    id=log_id,
+                    workspace_id=rctx.workspace_id,
+                    agent_id=rctx.agent_id,
+                    domain=storage_domain,
+                    rule_text=result.rule,
+                    execution_id=rctx.execution_id,
+                )
+            )
         else:
             log_id = existing_log.id  # Postgres row exists; vector_store_ref=None — redo Qdrant
 
@@ -299,9 +313,7 @@ async def _stage_episodic(
     span = current_span()
     domains = ", ".join(rctx.domain_tags.keys()) if rctx.domain_tags else "none"
     desc = (rctx.task_description or "")[:500]
-    tool_names = ", ".join(
-        t.get("tool", "?") for t in list(rctx.tool_trace)[:12]
-    ) or "none"
+    tool_names = ", ".join(t.get("tool", "?") for t in list(rctx.tool_trace)[:12]) or "none"
 
     if rctx.status == "completed":
         artifact_summary = (rctx.artifact or "")[:300]
@@ -324,18 +336,21 @@ async def _stage_episodic(
         str(rctx.agent_id),
         str(rctx.workspace_id),
         {
-            "text":          text,
-            "task_id":       str(rctx.task_id),
-            "execution_id":  str(rctx.execution_id),
-            "task_type":     rctx.task_type,
-            "domain_tags":   rctx.domain_tags or {},
-            "difficulty":    rctx.difficulty,
+            "text": text,
+            "task_id": str(rctx.task_id),
+            "execution_id": str(rctx.execution_id),
+            "task_type": rctx.task_type,
+            "domain_tags": rctx.domain_tags or {},
+            "difficulty": rctx.difficulty,
             "quality_score": rctx.heuristic_score,
-            "status":        rctx.status,
+            "status": rctx.status,
         },
     )
-    await span.emit("reflect.episodic_written", {
-        "status":     rctx.status,
-        "step_count": rctx.step_count,
-    })
+    await span.emit(
+        "reflect.episodic_written",
+        {
+            "status": rctx.status,
+            "step_count": rctx.step_count,
+        },
+    )
     return result

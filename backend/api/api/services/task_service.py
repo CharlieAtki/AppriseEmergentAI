@@ -3,11 +3,10 @@ from __future__ import annotations
 import uuid
 from typing import TYPE_CHECKING
 
+from core.models.tasks import Task
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
-
-from core.models.tasks import Task
 
 if TYPE_CHECKING:
     from api.schemas.task import CreateTaskRequest
@@ -70,8 +69,6 @@ class TaskService:
 
     async def list(self, workspace_id: uuid.UUID) -> list[Task]:
         result = await self._session.execute(
-            select(Task)
-            .where(Task.workspace_id == workspace_id)
-            .order_by(Task.created_at.desc())
+            select(Task).where(Task.workspace_id == workspace_id).order_by(Task.created_at.desc())
         )
         return list(result.scalars().all())

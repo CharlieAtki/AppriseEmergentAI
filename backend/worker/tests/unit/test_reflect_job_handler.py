@@ -9,12 +9,12 @@ Any other combination is a no-op. Wrong gates would either trigger reflection
 on coordinator tasks (wasting LLM calls) or miss it on self-execute tasks
 (silently preventing learning).
 """
+
 from __future__ import annotations
 
 import uuid
 
 import pytest
-
 from worker.handlers.reflect_job import ReflectJobHandler
 
 
@@ -24,9 +24,11 @@ def _handler(arq_mock) -> ReflectJobHandler:
 
 # ── No-op cases ───────────────────────────────────────────────────────────────
 
+
 async def test_no_status_change_skips(make_updated_event, arq_mock):
     event = make_updated_event(
-        "completed", "completed",  # same → changed("status") = False
+        "completed",
+        "completed",  # same → changed("status") = False
         execution_path="self_execute",
         executing_agent_id=uuid.uuid4(),
         execution_id=uuid.uuid4(),
@@ -38,7 +40,8 @@ async def test_no_status_change_skips(make_updated_event, arq_mock):
 @pytest.mark.parametrize("status", ["open", "reserved", "executing", "expired"])
 async def test_non_learning_status_skips(make_updated_event, arq_mock, status):
     event = make_updated_event(
-        "open", status,
+        "open",
+        status,
         execution_path="self_execute",
         executing_agent_id=uuid.uuid4(),
         execution_id=uuid.uuid4(),
@@ -51,7 +54,8 @@ async def test_non_learning_status_skips(make_updated_event, arq_mock, status):
 async def test_non_self_execute_path_skips(make_updated_event, arq_mock, path):
     """Decompose and CFP tasks don't self-execute — no reflect needed."""
     event = make_updated_event(
-        "executing", "completed",
+        "executing",
+        "completed",
         execution_path=path,
         executing_agent_id=uuid.uuid4(),
         execution_id=uuid.uuid4(),
@@ -62,7 +66,8 @@ async def test_non_self_execute_path_skips(make_updated_event, arq_mock, path):
 
 async def test_missing_executing_agent_id_skips(make_updated_event, arq_mock):
     event = make_updated_event(
-        "executing", "completed",
+        "executing",
+        "completed",
         execution_path="self_execute",
         executing_agent_id=None,
         execution_id=uuid.uuid4(),
@@ -73,7 +78,8 @@ async def test_missing_executing_agent_id_skips(make_updated_event, arq_mock):
 
 async def test_missing_execution_id_skips(make_updated_event, arq_mock):
     event = make_updated_event(
-        "executing", "completed",
+        "executing",
+        "completed",
         execution_path="self_execute",
         executing_agent_id=uuid.uuid4(),
         execution_id=None,
@@ -84,6 +90,7 @@ async def test_missing_execution_id_skips(make_updated_event, arq_mock):
 
 # ── Enqueue cases ─────────────────────────────────────────────────────────────
 
+
 @pytest.mark.parametrize("status", ["completed", "failed"])
 async def test_self_execute_terminal_enqueues_reflect(make_updated_event, arq_mock, status):
     """Both 'completed' and 'failed' self-execute tasks must trigger reflection."""
@@ -91,7 +98,8 @@ async def test_self_execute_terminal_enqueues_reflect(make_updated_event, arq_mo
     exec_id = uuid.uuid4()
 
     event = make_updated_event(
-        "executing", status,
+        "executing",
+        status,
         execution_path="self_execute",
         executing_agent_id=agent_id,
         execution_id=exec_id,
@@ -106,7 +114,8 @@ async def test_enqueue_args_are_correct(make_updated_event, arq_mock):
     exec_id = uuid.uuid4()
 
     event = make_updated_event(
-        "executing", "completed",
+        "executing",
+        "completed",
         execution_path="self_execute",
         executing_agent_id=agent_id,
         execution_id=exec_id,

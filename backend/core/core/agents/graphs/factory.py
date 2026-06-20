@@ -15,9 +15,9 @@ if TYPE_CHECKING:
 
 
 def build_graph(
-    model_with_tools: "BaseChatModel",
-    tools: list["BaseTool"],
-) -> "CompiledStateGraph":
+    model_with_tools: BaseChatModel,
+    tools: list[BaseTool],
+) -> CompiledStateGraph:
     """Compile a reusable ReAct graph for one task type.
 
     Call once at worker startup per task type and store in ctx. Never call inside a job.

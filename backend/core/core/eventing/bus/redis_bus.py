@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 import json
-from typing import TYPE_CHECKING, AsyncIterator
+from collections.abc import AsyncIterator
+from typing import TYPE_CHECKING
 
 from redis.asyncio import Redis
 from redis.exceptions import ResponseError
@@ -9,7 +10,7 @@ from redis.exceptions import ResponseError
 if TYPE_CHECKING:
     from core.eventing.bus.common import StreamEvent
 
-# ToDo: Need to wire up ReisBus - Currently using InMemoryBus for testing until we have subs
+
 class RedisBus:
     """Redis Streams-backed event bus.
 

@@ -14,5 +14,14 @@ dependencies = [
     "clerk-backend-api>=5.0.7",
 ]
 
+[project.optional-dependencies]
+dev = ["ruff>=0.15", "mypy>=2.1"]
+
+[tool.mypy]
+python_version = "3.13"
+ignore_missing_imports = true
+check_untyped_defs = false
+warn_return_any = false
+
 [tool.hatch.build.targets.wheel]
 packages = ["api"]

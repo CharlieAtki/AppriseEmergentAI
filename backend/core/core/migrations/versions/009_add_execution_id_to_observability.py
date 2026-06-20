@@ -4,6 +4,7 @@ Revision ID: 009
 Revises: 008
 Create Date: 2026-06-02
 """
+
 from __future__ import annotations
 
 import sqlalchemy as sa
@@ -46,5 +47,7 @@ def downgrade() -> None:
     op.drop_index("uq_skill_snapshots_execution_id", table_name="skill_snapshots")
     op.drop_column("skill_snapshots", "execution_id")
 
-    op.drop_index("uq_procedural_knowledge_logs_execution_id", table_name="procedural_knowledge_logs")
+    op.drop_index(
+        "uq_procedural_knowledge_logs_execution_id", table_name="procedural_knowledge_logs"
+    )
     op.drop_column("procedural_knowledge_logs", "execution_id")

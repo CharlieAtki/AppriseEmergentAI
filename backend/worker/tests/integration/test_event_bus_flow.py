@@ -5,14 +5,12 @@ that the publish → handler → side-effect path works end-to-end. The goal is
 to catch regressions in bus routing, handler exception isolation, and MRO-based
 dispatch — none of which are testable by patching individual components.
 """
+
 from __future__ import annotations
 
 import asyncio
 import uuid
 from dataclasses import dataclass
-from unittest.mock import AsyncMock
-
-import pytest
 
 from core.eventing.bus import EventBus, EventHandler
 from core.eventing.bus.common import DomainEvent
@@ -20,13 +18,14 @@ from core.eventing.events.task_events import TaskUpdatedEvent
 from worker.handlers.reflect_job import ReflectJobHandler
 from worker.handlers.webhook import WebhookDeliveryHandler
 
-
 # ── Minimal tracking handler ──────────────────────────────────────────────────
+
 
 @dataclass
 class _Tracking(EventHandler):
     """Captures every event it handles."""
-    calls: list[DomainEvent] | None =None
+
+    calls: list[DomainEvent] | None = None
     should_raise: bool = False
 
     def __post_init__(self) -> None:
@@ -45,6 +44,7 @@ def _bus() -> EventBus:
 
 
 # ── Dispatch basics ───────────────────────────────────────────────────────────
+
 
 async def test_handler_receives_published_event(make_updated_event):
     bus = _bus()
@@ -95,7 +95,7 @@ async def test_unbound_event_type_not_dispatched(make_updated_event):
 
     # Publish a DomainEvent subclass the handler is NOT bound to
     from core.eventing.events.task_events import TaskCreatedEvent
-    from core.eventing.events.task_events import TaskSnapshot
+
     snapshot = make_updated_event("open", "open").state  # reuse snapshot factory
     event = TaskCreatedEvent(state=snapshot, workspace_id=uuid.uuid4())
 
@@ -107,9 +107,8 @@ async def test_unbound_event_type_not_dispatched(make_updated_event):
 
 # ── Real handler integration ──────────────────────────────────────────────────
 
-async def test_reflect_job_handler_enqueues_on_completed_self_execute(
-    make_updated_event, arq_mock
-):
+
+async def test_reflect_job_handler_enqueues_on_completed_self_execute(make_updated_event, arq_mock):
     """ReflectJobHandler wired to EventBus enqueues a reflect job."""
     bus = _bus()
     bus.bind(TaskUpdatedEvent, ReflectJobHandler(arq_queue=arq_mock))
@@ -117,7 +116,8 @@ async def test_reflect_job_handler_enqueues_on_completed_self_execute(
     agent_id = uuid.uuid4()
     exec_id = uuid.uuid4()
     event = make_updated_event(
-        "executing", "completed",
+        "executing",
+        "completed",
         execution_path="self_execute",
         executing_agent_id=agent_id,
         execution_id=exec_id,
@@ -138,7 +138,8 @@ async def test_reflect_job_handler_skips_decompose_path(make_updated_event, arq_
     bus.bind(TaskUpdatedEvent, ReflectJobHandler(arq_queue=arq_mock))
 
     event = make_updated_event(
-        "executing", "completed",
+        "executing",
+        "completed",
         execution_path="decompose",
         executing_agent_id=uuid.uuid4(),
         execution_id=uuid.uuid4(),
@@ -157,7 +158,8 @@ async def test_webhook_handler_enqueues_on_completed(make_updated_event, arq_moc
 
     exec_id = uuid.uuid4()
     event = make_updated_event(
-        "executing", "completed",
+        "executing",
+        "completed",
         execution_id=exec_id,
     )
 
@@ -176,7 +178,8 @@ async def test_webhook_handler_skips_failed_task(make_updated_event, arq_mock):
     bus.bind(TaskUpdatedEvent, WebhookDeliveryHandler(arq_queue=arq_mock))
 
     event = make_updated_event(
-        "executing", "failed",
+        "executing",
+        "failed",
         execution_id=uuid.uuid4(),
     )
 

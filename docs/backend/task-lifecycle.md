@@ -29,7 +29,7 @@ cross-process).
 
 ## Phase 0 — API ingestion
 
-**Entry point:** `POST /workspaces/{id}/tasks`  
+**Entry point:** `POST /workspaces/{id}/tasks`
 **File:** `api/api/routers/tasks.py`
 
 1. Auth middleware resolves `Clerk` JWT or `X-API-Key` → maps to internal `(org_id, workspace_id)`.
@@ -398,7 +398,7 @@ reflect(agent_id, task_id, workspace_id, execution_id, quality_score):
 
 ## Phase 5 — Emergence metrics (concurrent cron)
 
-**File:** `worker/worker/jobs/sample_metrics.py`  
+**File:** `worker/worker/jobs/sample_metrics.py`
 **Schedule:** every 15 seconds via ARQ cron
 
 Runs independently of task execution. For each active workspace with ≥ 2 agents:

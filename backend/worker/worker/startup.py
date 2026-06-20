@@ -38,10 +38,17 @@ async def startup(ctx: dict[str, Any]) -> None:
     logger.info("worker startup: building context...")
     wctx = await WorkerContext.build(arq_queue)
     init_worker_context(wctx)
-    logger.info("worker startup: context ready, graphs compiled for %d task types", len(wctx.graphs))
+    logger.info(
+        "worker startup: context ready, graphs compiled for %d task types", len(wctx.graphs)
+    )
 
-    from core.eventing.events.stream_events import CfpIssuedStreamEvent, TaskCompletedStreamEvent, TaskCreatedStreamEvent
+    from core.eventing.events.stream_events import (
+        CfpIssuedStreamEvent,
+        TaskCompletedStreamEvent,
+        TaskCreatedStreamEvent,
+    )
     from core.eventing.events.task_events import TaskUpdatedEvent
+
     from worker.handlers.agent_credit import AgentCreditHandler
     from worker.handlers.bidding import TaskBiddingHandler
     from worker.handlers.cfp import CfpHandler
@@ -52,40 +59,51 @@ async def startup(ctx: dict[str, Any]) -> None:
     from worker.subscriber import CFP_STREAM_REGISTRY, TASK_STREAM_REGISTRY, StreamSubscriber
 
     # In-process handlers: same-process side effects triggered by domain events
-    wctx.event_bus.bind(TaskUpdatedEvent, RollupSubtaskHandler(
-        arq_queue=wctx.arq_queue,
-        publish=wctx.event_bus.apublish,
-    ))
+    wctx.event_bus.bind(
+        TaskUpdatedEvent,
+        RollupSubtaskHandler(
+            arq_queue=wctx.arq_queue,
+            publish=wctx.event_bus.apublish,
+        ),
+    )
     wctx.event_bus.bind(TaskUpdatedEvent, AgentCreditHandler())
     wctx.event_bus.bind(TaskUpdatedEvent, ReflectJobHandler(arq_queue=wctx.arq_queue))
     wctx.event_bus.bind(TaskUpdatedEvent, WebhookDeliveryHandler(arq_queue=wctx.arq_queue))
 
     # Stream handlers: cross-process events deserialized from Redis Streams
-    wctx.event_bus.bind(TaskCreatedStreamEvent, TaskBiddingHandler(redis=wctx.redis, arq_queue=wctx.arq_queue))
+    wctx.event_bus.bind(
+        TaskCreatedStreamEvent, TaskBiddingHandler(redis=wctx.redis, arq_queue=wctx.arq_queue)
+    )
     wctx.event_bus.bind(TaskCompletedStreamEvent, SocialMemoryHandler(memory=wctx.memory))
-    wctx.event_bus.bind(CfpIssuedStreamEvent, CfpHandler(redis=wctx.redis, arq_queue=wctx.arq_queue))
+    wctx.event_bus.bind(
+        CfpIssuedStreamEvent, CfpHandler(redis=wctx.redis, arq_queue=wctx.arq_queue)
+    )
 
     logger.info("worker startup: event bus handlers registered")
 
     # Bridge: Redis Streams → in-process EventBus
-    wctx.event_bus.subscribe(StreamSubscriber(
-        bus=wctx.bus,
-        publish=wctx.event_bus.apublish,
-        stream="stream:task",
-        group="worker-group",
-        consumer=f"worker-{socket.gethostname()}-{os.getpid()}",
-        registry=TASK_STREAM_REGISTRY,
-        name="task",
-    ))
-    wctx.event_bus.subscribe(StreamSubscriber(
-        bus=wctx.bus,
-        publish=wctx.event_bus.apublish,
-        stream="stream:cfp",
-        group="cfp-group",
-        consumer=f"cfp-worker-{socket.gethostname()}-{os.getpid()}",
-        registry=CFP_STREAM_REGISTRY,
-        name="cfp",
-    ))
+    wctx.event_bus.subscribe(
+        StreamSubscriber(
+            bus=wctx.bus,
+            publish=wctx.event_bus.apublish,
+            stream="stream:task",
+            group="worker-group",
+            consumer=f"worker-{socket.gethostname()}-{os.getpid()}",
+            registry=TASK_STREAM_REGISTRY,
+            name="task",
+        )
+    )
+    wctx.event_bus.subscribe(
+        StreamSubscriber(
+            bus=wctx.bus,
+            publish=wctx.event_bus.apublish,
+            stream="stream:cfp",
+            group="cfp-group",
+            consumer=f"cfp-worker-{socket.gethostname()}-{os.getpid()}",
+            registry=CFP_STREAM_REGISTRY,
+            name="cfp",
+        )
+    )
     await wctx.event_bus.start_subscribers()
     logger.info("worker startup: task subscriber started")
 

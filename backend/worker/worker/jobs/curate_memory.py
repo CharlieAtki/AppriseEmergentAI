@@ -3,13 +3,13 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from sqlalchemy import select
-
 from core.database import get_session
 from core.intelligence.call_types import CallType
 from core.intelligence.prompts import curate as curate_prompt
 from core.memory.types import ProceduralRule
 from core.models.agents import Agent
+from sqlalchemy import select
+
 from worker.context import get_worker_context
 
 logger = logging.getLogger(__name__)
@@ -29,14 +29,14 @@ async def curate_memory(ctx: dict[str, Any]) -> None:
     wctx = get_worker_context()
 
     async with get_session() as session:
-        agents = (await session.execute(
-            select(Agent).where(Agent.status == "active")
-        )).scalars().all()
+        agents = (
+            (await session.execute(select(Agent).where(Agent.status == "active"))).scalars().all()
+        )
 
     archived_total = 0
     for agent in agents:
         workspace_id = str(agent.workspace_id)
-        agent_id     = str(agent.id)
+        agent_id = str(agent.id)
 
         all_rules = await wctx.memory.scroll_all_procedures(agent_id, workspace_id)
 
@@ -60,7 +60,8 @@ async def curate_memory(ctx: dict[str, Any]) -> None:
         archived_total += len(flagged_ids)
         logger.info(
             "curate_memory: archived %d rules for agent %s",
-            len(flagged_ids), agent_id,
+            len(flagged_ids),
+            agent_id,
         )
 
     logger.info("curate_memory: complete — %d rules archived total", archived_total)

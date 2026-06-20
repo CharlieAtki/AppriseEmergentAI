@@ -39,8 +39,6 @@ async def sync_models(session: AsyncSession, registry: ModelRegistry) -> None:
             .values(is_active=False, updated_at=func.now())
         )
     else:
-        await session.execute(
-            update(Model).values(is_active=False, updated_at=func.now())
-        )
+        await session.execute(update(Model).values(is_active=False, updated_at=func.now()))
 
     await session.commit()

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import dataclasses
 import uuid
+from typing import Any
 
 from core.eventing.bus import Snapshot, StateActionEvent, StateChangeEvent
 
@@ -13,7 +14,7 @@ class AgentSnapshot(Snapshot):
     organisation_id: uuid.UUID
     name: str
     status: str
-    skills: dict | None
+    skills: dict[str, Any] | None
     influence: float | None
 
 

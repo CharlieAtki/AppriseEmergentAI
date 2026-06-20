@@ -27,4 +27,4 @@ class AgentResponse(BaseModel):
     status: str
     skills: dict | None
     influence: float | None
-    created_at: datetime | None
+    created_at: datetime

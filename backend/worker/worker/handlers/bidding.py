@@ -4,13 +4,13 @@ import logging
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
-from sqlalchemy import select
-from sqlalchemy.orm import selectinload
-
 from core.database import get_session
 from core.eventing.bus.handlers import EventHandler
 from core.eventing.events.stream_events import TaskCreatedStreamEvent
 from core.models.agents import Agent
+from sqlalchemy import select
+from sqlalchemy.orm import selectinload
+
 from worker.coordination.bidding import score_and_reserve
 
 if TYPE_CHECKING:
@@ -42,11 +42,17 @@ class TaskBiddingHandler(EventHandler[TaskCreatedStreamEvent]):
 
     async def handle(self, event: TaskCreatedStreamEvent) -> None:
         async with get_session() as session:
-            agents = (await session.execute(
-                select(Agent)
-                .where(Agent.workspace_id == event.workspace_id, Agent.status == "active")
-                .options(selectinload(Agent.task_executions))
-            )).scalars().all()
+            agents = (
+                (
+                    await session.execute(
+                        select(Agent)
+                        .where(Agent.workspace_id == event.workspace_id, Agent.status == "active")
+                        .options(selectinload(Agent.task_executions))
+                    )
+                )
+                .scalars()
+                .all()
+            )
 
             if not agents:
                 return

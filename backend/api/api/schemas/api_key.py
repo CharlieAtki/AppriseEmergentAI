@@ -14,7 +14,7 @@ class CreateApiKeyRequest(BaseModel):
 
 class ApiKeyCreatedResponse(BaseModel):
     id: uuid.UUID
-    key: str          # raw key — shown ONCE, never stored or returned again
+    key: str  # raw key — shown ONCE, never stored or returned again
     key_prefix: str
     name: str
     scopes: list[str]

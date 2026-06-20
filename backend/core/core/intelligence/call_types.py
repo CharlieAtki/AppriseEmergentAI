@@ -1,12 +1,12 @@
 from __future__ import annotations
 
-from enum import Enum
+from enum import StrEnum
 
 
-class CallType(str, Enum):
-    EVALUATE      = "evaluate"
-    REFLECT       = "reflect"
-    DECOMPOSE     = "decompose"
-    ENRICH        = "enrich"
+class CallType(StrEnum):
+    EVALUATE = "evaluate"
+    REFLECT = "reflect"
+    DECOMPOSE = "decompose"
+    ENRICH = "enrich"
     CURATE_MEMORY = "curate_memory"
-    EXECUTE       = "execute"
+    EXECUTE = "execute"

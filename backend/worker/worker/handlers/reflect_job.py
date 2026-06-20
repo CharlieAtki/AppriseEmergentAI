@@ -49,5 +49,7 @@ class ReflectJobHandler(EventHandler[TaskUpdatedEvent]):
         )
         logger.debug(
             "ReflectJobHandler: enqueued reflect for agent=%s task=%s status=%s",
-            event.state.executing_agent_id, event.state.id, event.state.status,
+            event.state.executing_agent_id,
+            event.state.id,
+            event.state.status,
         )

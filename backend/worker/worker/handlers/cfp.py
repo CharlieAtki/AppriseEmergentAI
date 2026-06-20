@@ -4,13 +4,13 @@ import logging
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
-from sqlalchemy import select
-from sqlalchemy.orm import selectinload
-
 from core.database import get_session
 from core.eventing.bus.handlers import EventHandler
 from core.eventing.events.stream_events import CfpIssuedStreamEvent
 from core.models.agents import Agent
+from sqlalchemy import select
+from sqlalchemy.orm import selectinload
+
 from worker.coordination.bidding import score_and_reserve
 
 if TYPE_CHECKING:
@@ -40,15 +40,21 @@ class CfpHandler(EventHandler[CfpIssuedStreamEvent]):
 
     async def handle(self, event: CfpIssuedStreamEvent) -> None:
         async with get_session() as session:
-            agents = (await session.execute(
-                select(Agent)
-                .where(
-                    Agent.workspace_id == event.workspace_id,
-                    Agent.status == "active",
-                    Agent.id != event.initiating_agent_id,  # excludes the routing agent
+            agents = (
+                (
+                    await session.execute(
+                        select(Agent)
+                        .where(
+                            Agent.workspace_id == event.workspace_id,
+                            Agent.status == "active",
+                            Agent.id != event.initiating_agent_id,  # excludes the routing agent
+                        )
+                        .options(selectinload(Agent.task_executions))
+                    )
                 )
-                .options(selectinload(Agent.task_executions))
-            )).scalars().all()
+                .scalars()
+                .all()
+            )
 
             if not agents:
                 return

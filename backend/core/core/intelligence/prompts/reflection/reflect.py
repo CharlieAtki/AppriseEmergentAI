@@ -6,7 +6,7 @@ from typing import Any, Literal
 
 from pydantic import BaseModel
 
-from core.intelligence.prompts import strip_fences
+from core.utils import strip_fences
 
 logger = logging.getLogger(__name__)
 
@@ -15,18 +15,18 @@ logger = logging.getLogger(__name__)
 class TaskContext:
     """Task metadata passed to prompt builders. Extracted from ReflectContext."""
 
-    title:           str
-    description:     str | None
-    task_type:       str | None
+    title: str
+    description: str | None
+    task_type: str | None
     required_skills: dict[str, float]
-    difficulty:      float | None
+    difficulty: float | None
 
 
 @dataclass(frozen=True)
 class ResultContext:
     """Execution output passed to prompt builders. Extracted from ReflectContext."""
 
-    summary:    str                        # artifact text on success; error message on failure
+    summary: str  # artifact text on success; error message on failure
     tool_trace: tuple[dict[str, Any], ...]  # sequence of tool call dicts from the graph execution
 
 
@@ -38,9 +38,9 @@ class ExistingRule:
     point ID — returned in ``superseded_ids`` when this rule is replaced.
     """
 
-    id:     str
+    id: str
     domain: str
-    text:   str
+    text: str
 
 
 class ReflectOutput(BaseModel):
@@ -52,19 +52,19 @@ class ReflectOutput(BaseModel):
     default to None / empty list.
     """
 
-    skill_domains:         list[str]
+    skill_domains: list[str]
     new_skill_suggestions: list[str] = []
-    generalised_rule:      str | None = None
-    verdict:               Literal["supersedes", "complements", "contradicts"] | None = None
-    superseded_ids:        list[str] = []
+    generalised_rule: str | None = None
+    verdict: Literal["supersedes", "complements", "contradicts"] | None = None
+    superseded_ids: list[str] = []
 
 
 def build_prompt(
-    task:           TaskContext,
-    result:         ResultContext,
-    quality_score:  float,
-    status:         str,
-    full_reflect:   bool,
+    task: TaskContext,
+    result: ResultContext,
+    quality_score: float,
+    status: str,
+    full_reflect: bool,
     existing_rules: list[ExistingRule] | None = None,
 ) -> list[dict]:
     """Build the system+user message pair for the unified REFLECT call.
@@ -96,8 +96,7 @@ def build_prompt(
             "reflect prompt: tool_trace truncated from %d to 12 entries", len(tool_trace_list)
         )
     tool_summary = (
-        ", ".join(t.get("tool", "?") for t in tool_trace_list[:12])
-        if tool_trace_list else "none"
+        ", ".join(t.get("tool", "?") for t in tool_trace_list[:12]) if tool_trace_list else "none"
     )
 
     user = (

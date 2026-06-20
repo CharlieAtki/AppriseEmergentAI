@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import uuid
 from datetime import datetime
+from typing import Any
 
 import sqlalchemy as sa
 from sqlalchemy.dialects.postgresql import JSONB, UUID
@@ -37,13 +38,15 @@ class Task(Base, TimestampMixin):
     )
     title: Mapped[str] = mapped_column(sa.Text, nullable=False)
     description: Mapped[str | None] = mapped_column(sa.Text, nullable=True)
-    status: Mapped[str] = mapped_column(sa.Text, nullable=False, server_default=sa.text("'pending'"))
+    status: Mapped[str] = mapped_column(
+        sa.Text, nullable=False, server_default=sa.text("'pending'")
+    )
     priority: Mapped[str | None] = mapped_column(sa.Text, nullable=True)
     deadline_at: Mapped[datetime | None] = mapped_column(sa.DateTime(timezone=True), nullable=True)
     task_type: Mapped[str | None] = mapped_column(sa.Text, nullable=True)
-    required_skills: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+    required_skills: Mapped[dict[str, Any] | None] = mapped_column(JSONB, nullable=True)
     difficulty: Mapped[float | None] = mapped_column(sa.Float, nullable=True)
-    domain_tags: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+    domain_tags: Mapped[dict[str, Any] | None] = mapped_column(JSONB, nullable=True)
     external_ref: Mapped[str | None] = mapped_column(sa.Text, nullable=True)
     idempotency_key: Mapped[str | None] = mapped_column(sa.Text, nullable=True)
     coordinator_agent_id: Mapped[uuid.UUID | None] = mapped_column(
@@ -125,12 +128,14 @@ class TaskExecution(Base):
     status: Mapped[str] = mapped_column(sa.Text, nullable=False)
     quality_score: Mapped[float | None] = mapped_column(sa.Float, nullable=True)
     artifact: Mapped[str | None] = mapped_column(sa.Text, nullable=True)
-    tool_trace: Mapped[list | None] = mapped_column(JSONB, nullable=True)
+    tool_trace: Mapped[list[dict[str, Any]] | None] = mapped_column(JSONB, nullable=True)
     execution_path: Mapped[str | None] = mapped_column(sa.Text, nullable=True)
-    error: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+    error: Mapped[dict[str, Any] | None] = mapped_column(JSONB, nullable=True)
     started_at: Mapped[datetime | None] = mapped_column(sa.DateTime(timezone=True), nullable=True)
     completed_at: Mapped[datetime | None] = mapped_column(sa.DateTime(timezone=True), nullable=True)
-    reflect_completed_at: Mapped[datetime | None] = mapped_column(sa.DateTime(timezone=True), nullable=True)
+    reflect_completed_at: Mapped[datetime | None] = mapped_column(
+        sa.DateTime(timezone=True), nullable=True
+    )
 
     __table_args__ = (
         sa.Index("ix_task_executions_task_id", "task_id"),
@@ -176,10 +181,18 @@ class WebhookDelivery(Base, CreatedAtMixin):
         nullable=False,
     )
     target_url: Mapped[str] = mapped_column(sa.Text, nullable=False)
-    status: Mapped[str] = mapped_column(sa.Text, nullable=False, server_default=sa.text("'pending'"))
-    attempt_count: Mapped[int] = mapped_column(sa.Integer, nullable=False, server_default=sa.text("0"))
-    next_attempt_at: Mapped[datetime | None] = mapped_column(sa.DateTime(timezone=True), nullable=True)
-    last_attempt_at: Mapped[datetime | None] = mapped_column(sa.DateTime(timezone=True), nullable=True)
+    status: Mapped[str] = mapped_column(
+        sa.Text, nullable=False, server_default=sa.text("'pending'")
+    )
+    attempt_count: Mapped[int] = mapped_column(
+        sa.Integer, nullable=False, server_default=sa.text("0")
+    )
+    next_attempt_at: Mapped[datetime | None] = mapped_column(
+        sa.DateTime(timezone=True), nullable=True
+    )
+    last_attempt_at: Mapped[datetime | None] = mapped_column(
+        sa.DateTime(timezone=True), nullable=True
+    )
     last_http_status: Mapped[int | None] = mapped_column(sa.Integer, nullable=True)
     last_error: Mapped[str | None] = mapped_column(sa.Text, nullable=True)
 
@@ -195,4 +208,6 @@ class WebhookDelivery(Base, CreatedAtMixin):
     task_execution: Mapped[TaskExecution] = relationship(back_populates="webhook_delivery")
 
     def __repr__(self) -> str:
-        return f"<WebhookDelivery id={self.id} status={self.status!r} attempts={self.attempt_count}>"
+        return (
+            f"<WebhookDelivery id={self.id} status={self.status!r} attempts={self.attempt_count}>"
+        )

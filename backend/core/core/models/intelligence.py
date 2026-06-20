@@ -27,7 +27,9 @@ class Model(Base, TimestampMixin):
     __table_args__ = (sa.Index("ix_models_vendor", "vendor"),)
 
     def __repr__(self) -> str:
-        return f"<Model model_id={self.model_id!r} vendor={self.vendor!r} is_active={self.is_active}>"
+        return (
+            f"<Model model_id={self.model_id!r} vendor={self.vendor!r} is_active={self.is_active}>"
+        )
 
 
 class WorkspaceModelRouting(Base, TimestampMixin):

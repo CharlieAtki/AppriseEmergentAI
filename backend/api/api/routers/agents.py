@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import uuid
 
+from core.models.tenant import Workspace
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -19,7 +20,7 @@ def get_service(session: AsyncSession = Depends(get_db)) -> AgentService:
 @router.post("", response_model=AgentResponse, status_code=status.HTTP_201_CREATED)
 async def create_agent(
     body: CreateAgentRequest,
-    workspace=Depends(require_workspace("write")),
+    workspace: Workspace = Depends(require_workspace("write")),
     service: AgentService = Depends(get_service),
 ) -> AgentResponse:
     agent = await service.create(workspace=workspace, body=body)
@@ -28,7 +29,7 @@ async def create_agent(
 
 @router.get("", response_model=list[AgentResponse])
 async def list_agents(
-    workspace=Depends(require_workspace("read")),
+    workspace: Workspace = Depends(require_workspace("read")),
     service: AgentService = Depends(get_service),
 ) -> list[AgentResponse]:
     agents = await service.list(workspace_id=workspace.id)
@@ -38,7 +39,7 @@ async def list_agents(
 @router.get("/{agent_id}", response_model=AgentResponse)
 async def get_agent(
     agent_id: uuid.UUID,
-    workspace=Depends(require_workspace("read")),
+    workspace: Workspace = Depends(require_workspace("read")),
     service: AgentService = Depends(get_service),
 ) -> AgentResponse:
     agent = await service.get(workspace_id=workspace.id, agent_id=agent_id)
@@ -51,7 +52,7 @@ async def get_agent(
 async def update_agent(
     agent_id: uuid.UUID,
     body: UpdateAgentRequest,
-    workspace=Depends(require_workspace("write")),
+    workspace: Workspace = Depends(require_workspace("write")),
     service: AgentService = Depends(get_service),
 ) -> AgentResponse:
     agent = await service.get(workspace_id=workspace.id, agent_id=agent_id)

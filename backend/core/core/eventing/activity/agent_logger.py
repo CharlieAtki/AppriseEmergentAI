@@ -9,12 +9,18 @@ Logger methods read scalar attributes from their argument. This works even on
 detached SQLAlchemy instances, since SQLAlchemy keeps cached scalar values in
 ``__dict__`` after detach.
 """
+
 from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
 from core.eventing.activity.base import PublishFn
-from core.eventing.events.agent_events import AgentCreatedEvent, AgentDeletedEvent, AgentSnapshot, AgentUpdatedEvent
+from core.eventing.events.agent_events import (
+    AgentCreatedEvent,
+    AgentDeletedEvent,
+    AgentSnapshot,
+    AgentUpdatedEvent,
+)
 
 if TYPE_CHECKING:
     from core.models.agents import Agent

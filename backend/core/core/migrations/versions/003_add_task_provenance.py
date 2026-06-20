@@ -4,6 +4,7 @@ Revision ID: 003
 Revises: 002
 Create Date: 2026-05-23
 """
+
 from __future__ import annotations
 
 import sqlalchemy as sa
@@ -17,21 +18,33 @@ depends_on = None
 
 
 def upgrade() -> None:
-    op.add_column("tasks", sa.Column(
-        "coordinator_agent_id", UUID(as_uuid=True),
-        sa.ForeignKey("agents.id", ondelete="SET NULL"),
-        nullable=True,
-    ))
-    op.add_column("tasks", sa.Column(
-        "created_by_agent_id", UUID(as_uuid=True),
-        sa.ForeignKey("agents.id", ondelete="SET NULL"),
-        nullable=True,
-    ))
-    op.add_column("tasks", sa.Column(
-        "delegation_depth", sa.Integer(),
-        nullable=False,
-        server_default="0",
-    ))
+    op.add_column(
+        "tasks",
+        sa.Column(
+            "coordinator_agent_id",
+            UUID(as_uuid=True),
+            sa.ForeignKey("agents.id", ondelete="SET NULL"),
+            nullable=True,
+        ),
+    )
+    op.add_column(
+        "tasks",
+        sa.Column(
+            "created_by_agent_id",
+            UUID(as_uuid=True),
+            sa.ForeignKey("agents.id", ondelete="SET NULL"),
+            nullable=True,
+        ),
+    )
+    op.add_column(
+        "tasks",
+        sa.Column(
+            "delegation_depth",
+            sa.Integer(),
+            nullable=False,
+            server_default="0",
+        ),
+    )
     op.create_index("ix_tasks_coordinator_agent_id", "tasks", ["coordinator_agent_id"])
 
 

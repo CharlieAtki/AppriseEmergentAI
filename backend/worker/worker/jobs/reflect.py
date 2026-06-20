@@ -2,13 +2,14 @@ from __future__ import annotations
 
 import logging
 import uuid
-from datetime import datetime, timezone
 from collections.abc import Mapping
+from datetime import UTC, datetime
 from typing import Any
 
 from core.intelligence.reflection.types import ReflectContext
 from core.models.agents import Agent
 from core.models.tasks import Task, TaskExecution
+
 from worker.context import get_worker_context
 from worker.span import ArqJobMeta, JobSpan
 
@@ -48,20 +49,24 @@ async def reflect(
     wctx = get_worker_context()
     meta = ArqJobMeta.from_ctx(ctx)
     async with JobSpan(
-        uuid.UUID(agent_id), uuid.UUID(task_id), uuid.UUID(workspace_id),
+        uuid.UUID(agent_id),
+        uuid.UUID(task_id),
+        uuid.UUID(workspace_id),
         redis_publish=wctx.redis.publish,
         meta=meta,
     ) as span:
         # Load all state in one session. Session closes before any stage runs.
         async with span.session() as session:
-            task      = await session.get(Task, uuid.UUID(task_id))
-            agent     = await session.get(Agent, uuid.UUID(agent_id))
+            task = await session.get(Task, uuid.UUID(task_id))
+            agent = await session.get(Agent, uuid.UUID(agent_id))
             execution = await session.get(TaskExecution, uuid.UUID(execution_id))
 
         if not task or not agent or not execution:
             logger.warning(
                 "reflect: missing records — task=%s agent=%s execution=%s — skipping",
-                task_id, agent_id, execution_id,
+                task_id,
+                agent_id,
+                execution_id,
             )
             return
 
@@ -73,12 +78,10 @@ async def reflect(
 
         # Idempotency guard — safe on ARQ retry.
         if execution.reflect_completed_at is not None:
-            logger.info(
-                "reflect: already completed for execution=%s — skipping", execution_id
-            )
+            logger.info("reflect: already completed for execution=%s — skipping", execution_id)
             return
 
-        step_count   = len(execution.tool_trace) if execution.tool_trace else 0
+        step_count = len(execution.tool_trace) if execution.tool_trace else 0
         full_reflect = (task.difficulty or 1.0) >= 3.0 or step_count > 3
 
         rctx = ReflectContext(
@@ -105,14 +108,21 @@ async def reflect(
 
         result = await wctx.reflection_manager.run(rctx)
 
-        await span.emit("job.completed", {
-            "quality_score":  rctx.heuristic_score,
-            "stages_run":     result.stages_run,
-            "stages_failed":  result.stages_failed,
-        })
+        await span.emit(
+            "job.completed",
+            {
+                "quality_score": rctx.heuristic_score,
+                "stages_run": result.stages_run,
+                "stages_failed": result.stages_failed,
+            },
+        )
         logger.info(
             "reflect: agent=%s task=%s stages_run=%s stages_failed=%s quality_score=%.3f",
-            agent_id, task_id, result.stages_run, result.stages_failed, rctx.heuristic_score,
+            agent_id,
+            task_id,
+            result.stages_run,
+            result.stages_failed,
+            rctx.heuristic_score,
         )
 
         if result.stages_failed:
@@ -128,5 +138,5 @@ async def reflect(
         async with span.session() as session:
             exc = await session.get(TaskExecution, execution.id)
             if exc is not None:
-                exc.reflect_completed_at = datetime.now(tz=timezone.utc)
+                exc.reflect_completed_at = datetime.now(tz=UTC)
                 session.add(exc)
