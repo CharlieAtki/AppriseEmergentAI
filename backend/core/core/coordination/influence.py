@@ -24,5 +24,7 @@ def compute_influence_ema(
     ``current=None`` is treated as 0.0 — the starting influence of a new agent
     with no task history.
     """
+    if not 0.0 <= alpha <= 1.0:
+        raise ValueError("alpha must be within [0.0, 1.0]")
     base = current if current is not None else 0.0
     return base + alpha * (quality - base)

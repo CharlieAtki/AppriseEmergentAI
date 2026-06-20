@@ -334,7 +334,7 @@ async def _release_to_pool(
         execution.status = "completed"
         execution.execution_path = "cfp"
         execution.completed_at = datetime.now(UTC)
-        execution.tool_trace = span.events
+        execution.tool_trace = span.events()
         session.add(execution)
         # Only set coordinator if not already tracked — preserves grandparent coordinator
         # on tasks that were previously decomposed before being CFP'd.
@@ -370,7 +370,7 @@ async def _finalise_execution(
         execution.status = status
         execution.execution_path = execution_path
         execution.completed_at = datetime.now(UTC)
-        execution.tool_trace = span.events
+        execution.tool_trace = span.events()
         session.add(execution)
         TaskStateMachine.transition(task, "completed")
         session.add(task)
