@@ -11,9 +11,8 @@ from core.eventing.activity.base import PublishFn
 from core.eventing.activity.task_logger import TaskActivityLogger
 from core.eventing.bus.handlers import EventHandler
 from core.eventing.events.task_events import TaskSnapshot, TaskUpdatedEvent
-from core.models.tasks import TaskExecution
+from core.repositories.task_execution_repository import TaskExecutionRepository
 from core.repositories.task_repository import TaskRepository
-from sqlalchemy import select
 
 if TYPE_CHECKING:
     from arq import ArqRedis
@@ -107,6 +106,7 @@ class RollupSubtaskHandler(EventHandler[TaskUpdatedEvent]):
         workspace_id = event.state.workspace_id
 
         task_repo = TaskRepository(session)
+        execution_repo = TaskExecutionRepository(session)
         siblings = await task_repo.get_siblings(parent_id, workspace_id)
 
         if not siblings:
@@ -123,16 +123,7 @@ class RollupSubtaskHandler(EventHandler[TaskUpdatedEvent]):
         TaskStateMachine.transition(parent, "failed" if any_failed else "completed")
         await task_repo.save(parent)
 
-        execution_id: uuid.UUID | None = (
-            await session.execute(
-                select(TaskExecution.id)
-                .where(
-                    TaskExecution.task_id == parent_id,
-                    TaskExecution.execution_path == "decompose",
-                )
-                .limit(1)
-            )
-        ).scalar()
+        execution_id = await execution_repo.get_decompose_execution_id(parent_id)
 
         reflect_agent = parent.coordinator_agent_id or parent.created_by_agent_id
         return before, parent, reflect_agent, execution_id

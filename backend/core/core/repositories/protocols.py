@@ -6,7 +6,8 @@ from typing import Any, Protocol
 
 from core.models.agents import Agent
 from core.models.observability import ProceduralKnowledgeLog, SkillSnapshot
-from core.models.tasks import Task, TaskExecution
+from core.models.tasks import Task, TaskExecution, WebhookDelivery
+from core.models.tenant import Workspace
 
 
 class TaskRepositoryProtocol(Protocol):
@@ -166,6 +167,18 @@ class TaskExecutionRepositoryProtocol(Protocol):
     # Executions with execution_path in ("cfp", "decompose") for a given task.
     # Used by compute_delegation_credits to identify coordinating agents.
 
+    async def get_decompose_execution_id(self, task_id: uuid.UUID) -> uuid.UUID | None: ...
+
+    # Return the id of the decompose execution record for a task.
+    # Returns None if the task was not decomposed (self-execute or CFP chain).
+
+    async def get_avg_quality_for_completed_tasks(
+        self, task_ids: list[uuid.UUID]
+    ) -> float | None: ...
+
+    # Average quality_score across completed executions for the given Task PKs.
+    # Returns None if no completed executions exist.
+
     async def save(self, execution: TaskExecution) -> None: ...
 
     # Stages execution for persistence. On detached objects this is a merge —
@@ -249,3 +262,42 @@ class ProceduralKnowledgeRepositoryProtocol(Protocol):
     async def save(self, log: ProceduralKnowledgeLog) -> None: ...
 
     # Stage Phase 3 stamp — marks both Postgres and Qdrant writes as complete.
+
+
+class WorkspaceRepositoryProtocol(Protocol):
+    """Single-workspace PK lookup. Never use for cross-workspace admin queries.
+
+    Cross-workspace queries belong on WorkspaceAdminRepository (deferred until
+    the cron job layer is refactored). Importing WorkspaceAdminRepository is a
+    privilege signal — any file that does so touches all workspaces.
+    """
+
+    async def get_by_id(self, workspace_id: uuid.UUID) -> Workspace | None: ...
+
+    # Unscoped PK lookup — for internal worker paths only (e.g. deliver_webhook).
+    # Never call this from API routers — use a workspace-scoped query instead.
+
+
+class WebhookDeliveryRepositoryProtocol(Protocol):
+    """Read/write interface for WebhookDelivery.
+
+    Idempotency: get_by_delivery_id() checks for existing terminal records before
+    create() is called. Both run in the same session block so there is no TOCTOU gap.
+
+    create() generates delivery_id internally — caller captures delivery.delivery_id
+    as a local string inside the session block before the context manager exits.
+
+    No save() — session 2 mutations on the loaded record are auto-tracked by SQLAlchemy.
+    """
+
+    async def get_by_delivery_id(self, delivery_id: str) -> WebhookDelivery | None: ...
+
+    # Fetch by stable external dedupe key — for idempotency check and outcome recording.
+
+    async def create(
+        self,
+        organisation_id: uuid.UUID,
+        workspace_id: uuid.UUID,
+        task_execution_id: uuid.UUID,
+        target_url: str,
+    ) -> WebhookDelivery: ...

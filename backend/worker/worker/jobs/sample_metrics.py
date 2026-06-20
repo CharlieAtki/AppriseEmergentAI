@@ -1,3 +1,11 @@
+"""ARQ cron job — samples workspace-level emergence metrics.
+
+TODO: raw session calls (select(Workspace), session.add(WorkspaceMetricsSnapshot),
+session.add(EmergenceEvent)) to be migrated to WorkspaceAdminRepository,
+WorkspaceMetricsRepository, and EmergenceEventRepository when the cron job layer
+is refactored.
+"""
+
 from __future__ import annotations
 
 import logging

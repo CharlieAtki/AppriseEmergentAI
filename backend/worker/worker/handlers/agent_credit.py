@@ -11,12 +11,10 @@ from core.coordination.task_state import TaskStateMachine
 from core.database import get_session
 from core.eventing.bus.handlers import EventHandler
 from core.eventing.events.task_events import TaskUpdatedEvent
-from core.models.tasks import TaskExecution
 from core.repositories.agent_repository import AgentRepository
 from core.repositories.influence_repository import InfluenceRepository
 from core.repositories.task_execution_repository import TaskExecutionRepository
 from core.repositories.task_repository import TaskRepository
-from sqlalchemy import func, select
 
 if TYPE_CHECKING:
     from core.repositories.protocols import TaskExecutionRepositoryProtocol
@@ -204,14 +202,7 @@ class AgentCreditHandler(EventHandler[TaskUpdatedEvent]):
         if not completed_ids:
             return []  # all siblings failed/expired — no quality signal
 
-        avg_quality: float | None = (
-            await session.execute(
-                select(func.avg(TaskExecution.quality_score)).where(
-                    TaskExecution.task_id.in_(completed_ids),
-                    TaskExecution.status == "completed",
-                )
-            )
-        ).scalar()
+        avg_quality = await execution_repo.get_avg_quality_for_completed_tasks(completed_ids)
 
         if avg_quality is None:
             return []

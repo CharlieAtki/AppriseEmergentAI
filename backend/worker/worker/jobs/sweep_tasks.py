@@ -1,3 +1,11 @@
+"""ARQ cron job — expires stale tasks and releases stuck reservations.
+
+TODO: raw session calls (cross-workspace SELECT queries + session.add) to be migrated
+to TaskAdminRepository when the cron job layer is refactored. The SELECT queries are
+intentionally unscoped (platform-admin sweep); TaskAdminRepository will carry the
+same privilege-signal pattern as WorkspaceAdminRepository.
+"""
+
 from __future__ import annotations
 
 import logging

@@ -9,11 +9,11 @@ from typing import Any, Literal
 
 import httpx
 from core.database import get_session
-from core.models.tasks import TaskExecution, WebhookDelivery
-from core.models.tenant import Workspace
+from core.repositories.task_execution_repository import TaskExecutionRepository
 from core.repositories.task_repository import TaskRepository
+from core.repositories.webhook_delivery_repository import WebhookDeliveryRepository
+from core.repositories.workspace_repository import WorkspaceRepository
 from pydantic import BaseModel, ConfigDict
-from sqlalchemy import select
 
 from worker.context import get_worker_context
 
@@ -101,8 +101,12 @@ async def deliver_webhook(
     ws_uuid = uuid.UUID(workspace_id)
 
     async with get_session() as session:
-        execution = await session.get(TaskExecution, exec_uuid)
-        workspace = await session.get(Workspace, ws_uuid)
+        execution_repo = TaskExecutionRepository(session)
+        workspace_repo = WorkspaceRepository(session)
+        webhook_repo = WebhookDeliveryRepository(session)
+
+        execution = await execution_repo.get_by_id(exec_uuid)
+        workspace = await workspace_repo.get_by_id(ws_uuid)
 
         if execution is None or workspace is None:
             logger.warning(
@@ -129,11 +133,7 @@ async def deliver_webhook(
                 external_ref = task.external_ref
 
         if delivery_id is not None:
-            existing = (
-                await session.execute(
-                    select(WebhookDelivery).where(WebhookDelivery.delivery_id == delivery_id)
-                )
-            ).scalar_one_or_none()
+            existing = await webhook_repo.get_by_delivery_id(delivery_id)
             if existing is not None and existing.status in ("sent", "failed"):
                 logger.info(
                     "deliver_webhook: delivery=%s already terminal (status=%s), skipping",
@@ -143,16 +143,13 @@ async def deliver_webhook(
                 return
 
         if delivery_id is None:
-            delivery_id = f"dlv_{uuid.uuid4().hex}"
-            delivery = WebhookDelivery(
-                delivery_id=delivery_id,
+            delivery = await webhook_repo.create(
                 organisation_id=org_id,
                 workspace_id=ws_uuid,
                 task_execution_id=exec_uuid,
                 target_url=target_url,
-                status="pending",
             )
-            session.add(delivery)
+            delivery_id = delivery.delivery_id  # capture before session closes
 
     body = (
         _WebhookPayload(
@@ -192,10 +189,8 @@ async def deliver_webhook(
 
     try:
         async with get_session() as session:
-            result = await session.execute(
-                select(WebhookDelivery).where(WebhookDelivery.delivery_id == delivery_id)
-            )
-            record = result.scalar_one_or_none()
+            webhook_repo = WebhookDeliveryRepository(session)
+            record = await webhook_repo.get_by_delivery_id(delivery_id)
             if record is None:
                 return
 

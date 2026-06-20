@@ -3,7 +3,7 @@ from __future__ import annotations
 import uuid
 from datetime import UTC, datetime
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -85,6 +85,40 @@ class TaskExecutionRepository:
             )
         )
         return list(result.scalars().all())
+
+    async def get_decompose_execution_id(self, task_id: uuid.UUID) -> uuid.UUID | None:
+        """Return the id of the decompose execution record for a task.
+
+        Used by RollupSubtaskHandler to enqueue the reflect job for the coordinator.
+        Returns None if the task was not decomposed (self-execute or CFP chain).
+        """
+        return (
+            await self._session.execute(
+                select(TaskExecution.id)
+                .where(
+                    TaskExecution.task_id == task_id,
+                    TaskExecution.execution_path == "decompose",
+                )
+                .limit(1)
+            )
+        ).scalar()
+
+    async def get_avg_quality_for_completed_tasks(self, task_ids: list[uuid.UUID]) -> float | None:
+        """Average quality_score across completed executions for the given task IDs.
+
+        task_ids are Task PKs (not execution IDs) — matches TaskExecution.task_id.
+        Used by AgentCreditHandler._subtask_rollup_credits() to compute the quality
+        signal for coordinator agents after all subtasks complete.
+        Returns None if no completed executions exist.
+        """
+        return (
+            await self._session.execute(
+                select(func.avg(TaskExecution.quality_score)).where(
+                    TaskExecution.task_id.in_(task_ids),
+                    TaskExecution.status == "completed",
+                )
+            )
+        ).scalar()
 
     async def save(self, execution: TaskExecution) -> None:
         """Stage execution for persistence. async for interface consistency —
