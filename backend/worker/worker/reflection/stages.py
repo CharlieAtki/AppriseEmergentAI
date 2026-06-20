@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import logging
-import uuid
 
 from core.coordination.skills import apply_skill_delta, compute_delta_magnitude
 from core.intelligence.call_types import CallType
@@ -11,9 +10,9 @@ from core.intelligence.prompts.reflection.reflect import ExistingRule, ResultCon
 from core.intelligence.reflection.types import PipelineResult, ReflectContext
 from core.memory.agent_memory import AgentMemory
 from core.memory.types import ProceduralRule
-from core.models.observability import ProceduralKnowledgeLog, SkillSnapshot
 from core.repositories.agent_repository import AgentRepository
-from sqlalchemy import select
+from core.repositories.procedural_knowledge_repository import ProceduralKnowledgeRepository
+from core.repositories.skill_repository import SkillRepository
 
 from worker.span import current_span
 
@@ -152,15 +151,10 @@ async def _stage_skills(
 
     span = current_span()
     async with span.session() as session:
+        skill_repo = SkillRepository(session)
         # Idempotency guard — if a SkillSnapshot for this execution already exists,
         # the delta was applied on a previous attempt. Skip to avoid double-counting.
-        existing = await session.scalar(
-            select(SkillSnapshot).where(
-                SkillSnapshot.execution_id == rctx.execution_id,
-                SkillSnapshot.agent_id == rctx.agent_id,
-            )
-        )
-        if existing is not None:
+        if await skill_repo.get_by_execution(rctx.execution_id, rctx.agent_id) is not None:
             return result
 
         # AgentRepository constructed here because stages own their sessions via span.session().
@@ -198,14 +192,12 @@ async def _stage_skills(
 
         agent.skills = updated
         await agent_repo.save(agent)
-        session.add(  # raw — Gap 3 (SkillRepository)
-            SkillSnapshot(
-                agent_id=agent.id,
-                organisation_id=rctx.organisation_id,
-                workspace_id=rctx.workspace_id,
-                skills=agent.skills,
-                execution_id=rctx.execution_id,
-            )
+        await skill_repo.record(
+            agent_id=agent.id,
+            organisation_id=rctx.organisation_id,
+            workspace_id=rctx.workspace_id,
+            skills=agent.skills,
+            execution_id=rctx.execution_id,
         )
 
     return result
@@ -243,26 +235,19 @@ async def _stage_rules(
     # Phase 1: Postgres write — committed before Qdrant is touched.
     # If Qdrant later fails, the audit record is preserved with vector_store_ref=None.
     async with span.session() as session:
-        existing_log = await session.scalar(
-            select(ProceduralKnowledgeLog).where(
-                ProceduralKnowledgeLog.execution_id == rctx.execution_id
-            )
-        )
+        knowledge_repo = ProceduralKnowledgeRepository(session)
+        existing_log = await knowledge_repo.get_by_execution(rctx.execution_id)
 
         if existing_log is not None and existing_log.vector_store_ref is not None:
             return result  # both writes already completed on a previous attempt
 
         if existing_log is None:
-            log_id = uuid.uuid4()
-            session.add(  # raw — Gap 3 (ProceduralKnowledgeRepository)
-                ProceduralKnowledgeLog(
-                    id=log_id,
-                    workspace_id=rctx.workspace_id,
-                    agent_id=rctx.agent_id,
-                    domain=storage_domain,
-                    rule_text=result.rule,
-                    execution_id=rctx.execution_id,
-                )
+            log_id = await knowledge_repo.record(
+                workspace_id=rctx.workspace_id,
+                agent_id=rctx.agent_id,
+                domain=storage_domain,
+                rule_text=result.rule,
+                execution_id=rctx.execution_id,
             )
         else:
             log_id = existing_log.id  # Postgres row exists; vector_store_ref=None — redo Qdrant
@@ -280,10 +265,11 @@ async def _stage_rules(
 
     # Phase 3: stamp vector_store_ref — marks both writes as complete for idempotency.
     async with span.session() as session:
-        log = await session.get(ProceduralKnowledgeLog, log_id)
+        knowledge_repo = ProceduralKnowledgeRepository(session)
+        log = await knowledge_repo.get_by_id(log_id)
         if log is not None:
             log.vector_store_ref = point_id
-            session.add(log)  # raw — Gap 3 (ProceduralKnowledgeRepository)
+            await knowledge_repo.save(log)
 
     return result
 

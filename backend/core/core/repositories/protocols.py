@@ -5,6 +5,7 @@ from datetime import datetime
 from typing import Any, Protocol
 
 from core.models.agents import Agent
+from core.models.observability import ProceduralKnowledgeLog, SkillSnapshot
 from core.models.tasks import Task, TaskExecution
 
 
@@ -169,3 +170,82 @@ class TaskExecutionRepositoryProtocol(Protocol):
 
     # Stages execution for persistence. On detached objects this is a merge —
     # re-attaches the execution to the current session. async for interface consistency.
+
+
+class SkillRepositoryProtocol(Protocol):
+    """Read/write interface for SkillSnapshot audit records.
+
+    SkillSnapshot is a write-once audit record per task execution. get_by_execution()
+    is the application-level idempotency guard; the DB unique partial index on
+    execution_id is the backstop. record() never flushes or commits.
+    """
+
+    async def get_by_execution(
+        self, execution_id: uuid.UUID, agent_id: uuid.UUID
+    ) -> SkillSnapshot | None: ...
+
+    # Idempotency check — returns existing snapshot for this execution if present.
+
+    async def record(
+        self,
+        agent_id: uuid.UUID,
+        organisation_id: uuid.UUID,
+        workspace_id: uuid.UUID,
+        skills: dict[str, float],
+        execution_id: uuid.UUID,
+    ) -> None: ...
+
+    # Stage a SkillSnapshot for the audit trail. Does not flush or commit.
+
+
+class InfluenceRepositoryProtocol(Protocol):
+    """Write-only interface for InfluenceSnapshot audit records.
+
+    Multiple snapshots per task completion are expected (executor + coordinators).
+    No idempotency guard — each record() call adds a new audit row.
+    """
+
+    async def record(
+        self,
+        agent_id: uuid.UUID,
+        organisation_id: uuid.UUID,
+        workspace_id: uuid.UUID,
+        influence: float,
+    ) -> None: ...
+
+    # Stage an InfluenceSnapshot for the audit trail. Does not flush or commit.
+
+
+class ProceduralKnowledgeRepositoryProtocol(Protocol):
+    """Read/write interface for ProceduralKnowledgeLog — three-phase dual-write support.
+
+    Phase 1: record() inserts the audit row and returns its UUID.
+    Phase 2: Qdrant write (caller-owned).
+    Phase 3: get_by_id() + save() stamps vector_store_ref after Qdrant succeeds.
+
+    record() generates the UUID internally and returns it so the caller can bridge
+    Phase 1 and Phase 3 across separate session blocks.
+    """
+
+    async def get_by_execution(self, execution_id: uuid.UUID) -> ProceduralKnowledgeLog | None: ...
+
+    # Idempotency check — returns existing log for this execution if present.
+
+    async def get_by_id(self, log_id: uuid.UUID) -> ProceduralKnowledgeLog | None: ...
+
+    # PK lookup — used by Phase 3 to stamp vector_store_ref after Qdrant succeeds.
+
+    async def record(
+        self,
+        workspace_id: uuid.UUID,
+        agent_id: uuid.UUID,
+        domain: str,
+        rule_text: str,
+        execution_id: uuid.UUID,
+    ) -> uuid.UUID: ...
+
+    # Stage Phase 1 insert. Returns the generated log_id for use in Phase 3.
+
+    async def save(self, log: ProceduralKnowledgeLog) -> None: ...
+
+    # Stage Phase 3 stamp — marks both Postgres and Qdrant writes as complete.

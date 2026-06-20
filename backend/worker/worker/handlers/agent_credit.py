@@ -11,9 +11,9 @@ from core.coordination.task_state import TaskStateMachine
 from core.database import get_session
 from core.eventing.bus.handlers import EventHandler
 from core.eventing.events.task_events import TaskUpdatedEvent
-from core.models.observability import InfluenceSnapshot
 from core.models.tasks import TaskExecution
 from core.repositories.agent_repository import AgentRepository
+from core.repositories.influence_repository import InfluenceRepository
 from core.repositories.task_execution_repository import TaskExecutionRepository
 from core.repositories.task_repository import TaskRepository
 from sqlalchemy import func, select
@@ -125,15 +125,14 @@ class AgentCreditHandler(EventHandler[TaskUpdatedEvent]):
         if agent is None:
             return
 
+        influence_repo = InfluenceRepository(session)
         agent.influence = compute_influence_ema(agent.influence, event.state.quality_score)
         await agent_repo.save(agent)
-        session.add(  # raw — Gap 3 (InfluenceRepository)
-            InfluenceSnapshot(
-                agent_id=agent.id,
-                organisation_id=agent.organisation_id,
-                workspace_id=agent.workspace_id,
-                influence=agent.influence,
-            )
+        await influence_repo.record(
+            agent_id=agent.id,
+            organisation_id=agent.organisation_id,
+            workspace_id=agent.workspace_id,
+            influence=agent.influence,
         )
         logger.debug(
             "AgentCreditHandler executor: agent=%s influence=%.4f quality=%.3f",
@@ -159,19 +158,18 @@ class AgentCreditHandler(EventHandler[TaskUpdatedEvent]):
             credits = await self._subtask_rollup_credits(event, session, execution_repo)
 
         agent_repo = AgentRepository(session)
+        influence_repo = InfluenceRepository(session)
         for agent_id, quality_signal in credits:
             agent = await agent_repo.get_by_id(agent_id)
             if agent is None:
                 continue
             agent.influence = compute_influence_ema(agent.influence, quality_signal)
             await agent_repo.save(agent)
-            session.add(  # raw — Gap 3 (InfluenceRepository)
-                InfluenceSnapshot(
-                    agent_id=agent.id,
-                    organisation_id=agent.organisation_id,
-                    workspace_id=agent.workspace_id,
-                    influence=agent.influence,
-                )
+            await influence_repo.record(
+                agent_id=agent.id,
+                organisation_id=agent.organisation_id,
+                workspace_id=agent.workspace_id,
+                influence=agent.influence,
             )
             logger.debug(
                 "AgentCreditHandler coordinator: agent=%s influence=%.4f signal=%.3f",
