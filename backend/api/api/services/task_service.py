@@ -97,5 +97,5 @@ class TaskService:
         return TaskData.from_domain(task) if task is not None else None
 
     async def list(self, workspace_id: uuid.UUID) -> list[TaskData]:
-        tasks = await self._repo.list(workspace_id)
+        tasks = await self._repo.list_all(workspace_id)
         return [TaskData.from_domain(t) for t in tasks]

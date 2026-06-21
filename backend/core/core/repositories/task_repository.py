@@ -99,7 +99,7 @@ class TaskRepository:
         """
         return await self._session.get(Task, task_id, options=[selectinload(Task.subtasks)])
 
-    async def list(self, workspace_id: uuid.UUID) -> list[Task]:
+    async def list_all(self, workspace_id: uuid.UUID) -> list[Task]:
         result = await self._session.execute(
             select(Task).where(Task.workspace_id == workspace_id).order_by(Task.created_at.desc())
         )

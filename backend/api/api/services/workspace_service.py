@@ -68,7 +68,7 @@ class WorkspaceService:
         return WorkspaceData.from_domain(ws) if ws is not None else None
 
     async def list(self, org_id: uuid.UUID) -> list[WorkspaceData]:
-        workspaces = await self._repo.list(org_id=org_id)
+        workspaces = await self._repo.list_all(org_id=org_id)
         return [WorkspaceData.from_domain(ws) for ws in workspaces]
 
     async def update(self, ws: Workspace, cmd: UpdateWorkspaceCommand) -> WorkspaceData:

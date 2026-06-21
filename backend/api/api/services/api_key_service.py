@@ -88,7 +88,7 @@ class ApiKeyService:
         return ApiKeyData.from_domain(record), full_key
 
     async def list(self, workspace_id: uuid.UUID) -> list[ApiKeyData]:
-        records = await self._repo.list(workspace_id=workspace_id)
+        records = await self._repo.list_all(workspace_id=workspace_id)
         return [ApiKeyData.from_domain(r) for r in records]
 
     async def get(self, workspace_id: uuid.UUID, key_id: uuid.UUID) -> ApiKeyData | None:

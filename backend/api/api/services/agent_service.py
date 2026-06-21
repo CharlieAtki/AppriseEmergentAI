@@ -77,7 +77,7 @@ class AgentService:
         return AgentData.from_domain(agent) if agent is not None else None
 
     async def list(self, workspace_id: uuid.UUID) -> list[AgentData]:
-        agents = await self._repo.list(workspace_id=workspace_id)
+        agents = await self._repo.list_all(workspace_id=workspace_id)
         return [AgentData.from_domain(a) for a in agents]
 
     async def update(

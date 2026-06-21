@@ -72,7 +72,7 @@ class ApiKeyRepository:
         )
         return list(result.scalars().all())
 
-    async def list(self, workspace_id: uuid.UUID) -> list[ApiKey]:
+    async def list_all(self, workspace_id: uuid.UUID) -> list[ApiKey]:
         result = await self._session.execute(
             select(ApiKey)
             .where(ApiKey.workspace_id == workspace_id)

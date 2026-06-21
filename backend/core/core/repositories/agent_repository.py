@@ -120,7 +120,7 @@ class AgentRepository:
         result = await self._session.execute(select(Agent).where(*conditions))
         return list(result.scalars().all())
 
-    async def list(self, workspace_id: uuid.UUID) -> list[Agent]:
+    async def list_all(self, workspace_id: uuid.UUID) -> list[Agent]:
         result = await self._session.execute(
             select(Agent)
             .where(Agent.workspace_id == workspace_id)

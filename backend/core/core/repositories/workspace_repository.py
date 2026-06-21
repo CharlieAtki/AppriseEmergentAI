@@ -49,7 +49,7 @@ class WorkspaceRepository:
         Never call this from API routers — use get() instead."""
         return await self._session.get(Workspace, workspace_id)
 
-    async def list(self, org_id: uuid.UUID) -> list[Workspace]:
+    async def list_all(self, org_id: uuid.UUID) -> list[Workspace]:
         result = await self._session.execute(
             select(Workspace)
             .where(Workspace.organisation_id == org_id)

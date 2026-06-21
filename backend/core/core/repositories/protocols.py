@@ -50,7 +50,7 @@ class TaskRepositoryProtocol(Protocol):
     # Loads Task with the relationships needed by execute_task (subtasks).
     # Named for the use case, not the ORM operation — loading strategy is an impl detail.
 
-    async def list(self, workspace_id: uuid.UUID) -> list[Task]: ...
+    async def list_all(self, workspace_id: uuid.UUID) -> list[Task]: ...
 
     async def get_siblings(
         self, parent_task_id: uuid.UUID, workspace_id: uuid.UUID
@@ -114,7 +114,7 @@ class AgentRepositoryProtocol(Protocol):
 
     # Active agents, no eager load. exclude_id for social_memory (excludes the completer).
 
-    async def list(self, workspace_id: uuid.UUID) -> list[Agent]: ...
+    async def list_all(self, workspace_id: uuid.UUID) -> list[Agent]: ...
 
     async def update_fields(
         self,
@@ -285,7 +285,7 @@ class WorkspaceRepositoryProtocol(Protocol):
 
     # Unscoped PK lookup — for internal worker paths only. Never call from API routers.
 
-    async def list(self, org_id: uuid.UUID) -> list[Workspace]: ...
+    async def list_all(self, org_id: uuid.UUID) -> list[Workspace]: ...
 
     async def save(self, ws: Workspace) -> None: ...
 
@@ -345,7 +345,7 @@ class ApiKeyRepositoryProtocol(Protocol):
 
     async def get_by_key_prefix(self, key_prefix: str) -> list[ApiKey]: ...
 
-    async def list(self, workspace_id: uuid.UUID) -> list[ApiKey]: ...
+    async def list_all(self, workspace_id: uuid.UUID) -> list[ApiKey]: ...
 
 
 class OrganisationRepositoryProtocol(Protocol):
