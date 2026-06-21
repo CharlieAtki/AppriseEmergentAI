@@ -5,7 +5,7 @@ from datetime import datetime
 from typing import Any
 
 import sqlalchemy as sa
-from sqlalchemy.dialects.postgresql import JSONB, UUID
+from sqlalchemy.dialects.postgresql import ARRAY, JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from core.models.agents import Agent
@@ -128,6 +128,12 @@ class TaskExecution(Base):
     status: Mapped[str] = mapped_column(sa.Text, nullable=False)
     quality_score: Mapped[float | None] = mapped_column(sa.Float, nullable=True)
     artifact: Mapped[str | None] = mapped_column(sa.Text, nullable=True)
+    artifact_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        sa.ForeignKey("artifacts.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    skill_tags_used: Mapped[list[str] | None] = mapped_column(ARRAY(sa.Text), nullable=True)
     tool_trace: Mapped[list[dict[str, Any]] | None] = mapped_column(JSONB, nullable=True)
     execution_path: Mapped[str | None] = mapped_column(sa.Text, nullable=True)
     error: Mapped[dict[str, Any] | None] = mapped_column(JSONB, nullable=True)

@@ -14,5 +14,7 @@ class GraphState(TypedDict):
     workspace_id: str
     task_type: str
     tool_trace: list[dict]
-    artifact: str | None
+    artifact: str | None  # LLM's final text output
+    artifact_id: str | None  # UUID ref to artifacts table; set by file_write tool
     step_count: int
+    skill_tags_used: list[str]  # accumulated per tool call; feeds RL update in reflect job

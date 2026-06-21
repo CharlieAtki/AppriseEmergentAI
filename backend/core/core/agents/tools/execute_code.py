@@ -1,17 +1,39 @@
 from __future__ import annotations
 
-from langchain_core.tools import tool
+from collections.abc import Callable
 
+from core.agents.tools.definitions import AppriseToolDefinition, ToolCategory
 from core.agents.tools.registry import tool_registry
 
+DEFINITION = AppriseToolDefinition(
+    name="execute_code",
+    namespace="platform",
+    description="Execute code in a sandboxed environment and return the output.",
+    input_schema={
+        "type": "object",
+        "properties": {
+            "code": {"type": "string", "description": "The code to execute"},
+            "language": {
+                "type": "string",
+                "description": "Programming language (default: python)",
+                "default": "python",
+            },
+        },
+        "required": ["code"],
+    },
+    output_schema={"type": "string"},
+    category=ToolCategory.ENGINEERING,
+    task_types=frozenset({"code"}),
+    config_class=None,
+)
 
-def _factory(**_kwargs: object) -> object:
-    @tool
+
+def _factory(**_: object) -> Callable:
     async def execute_code(code: str, language: str = "python") -> str:
-        """Execute code in a sandboxed environment and return the output."""
+        # Phase 2: sandboxed code execution
         return "Code execution not yet implemented."
 
     return execute_code
 
 
-tool_registry.register("execute_code", _factory, task_types=frozenset({"code"}))
+tool_registry.register(DEFINITION, _factory)

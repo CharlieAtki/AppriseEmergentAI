@@ -14,6 +14,7 @@ if TYPE_CHECKING:
     from core.models.artifacts import Artifact
     from core.models.auth import ApiKey
     from core.models.tasks import Task
+    from core.models.tools import WorkspaceTool
 
 
 class Organisation(Base, TimestampMixin):
@@ -122,6 +123,10 @@ class Workspace(Base, TimestampMixin):
         cascade="all, delete-orphan",
     )
     artifacts: Mapped[list[Artifact]] = relationship(
+        back_populates="workspace",
+        cascade="all, delete-orphan",
+    )
+    tools: Mapped[list[WorkspaceTool]] = relationship(
         back_populates="workspace",
         cascade="all, delete-orphan",
     )

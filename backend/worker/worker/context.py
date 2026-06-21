@@ -3,17 +3,17 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
-from core.agents.graphs.factory import build_graph
+from core.agents.graphs.factory import build_universal_graph
+from core.agents.tools.artifact_store import LocalArtifactStore
 from core.agents.tools.registry import tool_registry
 from core.config import settings
 from core.database import get_session
 from core.eventing.bus.in_process_bus import EventBus
 from core.eventing.bus.redis_bus import RedisBus
-from core.intelligence.call_types import CallType
 from core.intelligence.llm_router import LLMRouter
 from core.intelligence.registry import registry
 from core.intelligence.routing_config import resolve_routing
-from core.intelligence.sync import sync_models
+from core.intelligence.sync import sync_models, sync_tools
 from core.memory.agent_memory import AgentMemory
 from core.memory.collections import ensure_collections
 from core.memory.resilient_client import ResilientQdrantClient
@@ -26,6 +26,7 @@ from redis.asyncio import Redis
 
 if TYPE_CHECKING:
     from arq import ArqRedis
+    from core.agents.tools.artifact_store import ArtifactStore
     from core.eventing.bus.protocols import SubscribableBusProtocol
     from langgraph.graph.state import CompiledStateGraph
 
@@ -34,7 +35,7 @@ if TYPE_CHECKING:
 
 @dataclass(frozen=True)
 class WorkerContext:
-    graphs: dict[str, CompiledStateGraph]  # keyed by task_type
+    graphs: dict[str, CompiledStateGraph]  # single key: "universal"
     bus: SubscribableBusProtocol  # Redis Streams — durable task events
     redis: Redis  # raw Redis — Pub/Sub + SETNX reservations
     arq_queue: ArqRedis  # ARQ job queue — enqueue_job()
@@ -42,11 +43,14 @@ class WorkerContext:
     llm_router: LLMRouter  # routes all LLM calls by CallType
     event_bus: EventBus  # in-process — same-process side effects
     reflection_manager: ReflectionManager  # post-execution learning pipeline
+    artifact_store: ArtifactStore  # artifact bytes storage
 
     @classmethod
     async def build(cls, arq_queue: ArqRedis) -> WorkerContext:
         # 1. Self-registration side effects — importing is registering
         import core.agents.tools.execute_code
+        import core.agents.tools.file_read
+        import core.agents.tools.file_write
         import core.agents.tools.search_episodic
         import core.agents.tools.search_procedural
         import core.agents.tools.search_social
@@ -56,9 +60,10 @@ class WorkerContext:
         import core.vendors.azure
         import core.vendors.ollama  # noqa: F401
 
-        # 2. Sync in-memory model registry → DB models table
+        # 2. Sync in-memory registries → DB tables
         async with get_session() as session:
             await sync_models(session, registry)
+            await sync_tools(session, tool_registry)
 
         # 3. Build LLMRouter with all vendor providers
         routing_cfg = resolve_routing(settings.intelligence.routing, workspace_overrides=None)
@@ -82,16 +87,9 @@ class WorkerContext:
         qdrant = ResilientQdrantClient(_raw_qdrant)
         memory = AgentMemory(qdrant)
 
-        # 5. Compile one graph per task type — expensive, done ONCE per process.
-        # Task types come from settings.worker.task_types — extend there, not here.
-        model = llm_router.get_chat_model(CallType.EXECUTE)
-        graphs: dict[str, CompiledStateGraph] = {}
-        for task_type in settings.worker.task_types:
-            tools = tool_registry.build_for_task_type(task_type, memory=memory)
-            graphs[task_type] = build_graph(
-                model_with_tools=model.bind_tools(tools),
-                tools=tools,
-            )
+        # 5. Compile one universal graph — expensive, done ONCE per process.
+        # Model and tools are injected per-task via RunnableConfig.configurable in execute_task.
+        graphs: dict[str, CompiledStateGraph] = {"universal": build_universal_graph()}
 
         # 6. Two separate Redis connections — Streams bus vs raw Pub/Sub + locks
         redis = Redis.from_url(settings.redis.url, decode_responses=True)
@@ -111,6 +109,8 @@ class WorkerContext:
             memory=memory,
         )
 
+        artifact_store = LocalArtifactStore()
+
         return cls(
             graphs=graphs,
             bus=bus,
@@ -120,6 +120,7 @@ class WorkerContext:
             llm_router=llm_router,
             event_bus=event_bus,
             reflection_manager=reflection_manager,
+            artifact_store=artifact_store,
         )
 
 
