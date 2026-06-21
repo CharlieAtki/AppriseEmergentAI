@@ -5,15 +5,16 @@ from collections.abc import Callable
 from typing import TYPE_CHECKING
 from uuid import UUID
 
-from core.agents.tools.definitions import AppriseToolDefinition, ToolCategory
-from core.agents.tools.registry import tool_registry
+from core.agents.tooling.definitions import AppriseToolDefinition, ToolCategory
+from core.agents.tooling.registry import tool_registry
 
 if TYPE_CHECKING:
-    from core.agents.tools.artifact_store import ArtifactStore
+    from core.agents.tooling.artifact_store import ArtifactStore
 
 DEFINITION = AppriseToolDefinition(
     name="file_write",
     namespace="platform",
+    display_name="File Write",
     description=(
         "Write text content to the artifact store. "
         "Returns JSON with artifact_id and storage_ref for later retrieval via file_read."

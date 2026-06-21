@@ -1,3 +1,26 @@
+"""In-memory tool registry and per-task tool builder.
+
+**Separation of concerns**
+
+``ToolRegistry`` owns two things only:
+  1. The in-memory catalog — a ``(namespace, name) → ToolEntry`` map populated at import
+     time via ``register()``.
+  2. Assembling per-task ``BaseTool`` instances — ``build_for_task_type()`` queries the
+     workspace's enabled tools via ``ToolRepository`` (data access), then applies closure
+     injection and LangChain conversion here (tool construction).
+
+Data access is deliberately delegated to ``ToolRepository``. The registry never holds a
+session or runs SQLAlchemy directly — that would conflate the in-memory catalog layer
+with the persistence layer and duplicate the JOIN logic already in the repository.
+
+**Self-registration**
+
+Importing a tool module IS registering it. Each tool file calls
+``tool_registry.register(DEFINITION, _factory)`` at module level as a side effect.
+``WorkerContext.build()`` imports them explicitly; the registry is populated before
+``sync_tools()`` and ``build_for_task_type()`` are ever called.
+"""
+
 from __future__ import annotations
 
 from collections.abc import Callable
@@ -5,17 +28,14 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 from uuid import UUID
 
-from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
-
-from core.agents.tools.definitions import CATEGORY_SKILL_TAGS, AppriseToolDefinition
-from core.models.tools import Tool, WorkspaceTool
+from core.agents.tooling.definitions import CATEGORY_SKILL_TAGS, AppriseToolDefinition
 
 if TYPE_CHECKING:
     from langchain_core.tools import BaseTool
 
-    from core.agents.tools.artifact_store import ArtifactStore
+    from core.agents.tooling.artifact_store import ArtifactStore
     from core.memory.agent_memory import AgentMemory
+    from core.repositories.tool_repository import ToolRepository
 
 
 @dataclass(frozen=True)
@@ -47,24 +67,22 @@ class ToolRegistry:
         memory: AgentMemory,
         agent_id: UUID,
         organisation_id: UUID,
-        session: AsyncSession,
+        repo: ToolRepository,
         artifact_store: ArtifactStore | None = None,
     ) -> tuple[list[BaseTool], list[ToolEntry]]:
-        """Query enabled workspace tools and build LangChain BaseTool instances.
+        """Build per-task LangChain BaseTool instances for the workspace's enabled tools.
 
-        Only tools registered in both the in-memory registry and the workspace_tools
-        table are returned. Config JSONB is parsed into the typed config_class at this
-        boundary — never passed as raw dict downstream.
+        Data access is delegated to ``repo`` (ToolRepository owns the query). This method
+        owns: task_type filtering, config parsing at the boundary (raw JSONB → typed
+        config_class), closure injection, and LangChain tool construction.
+
+        Only tools present in both the in-memory registry and the workspace_tools table
+        are returned. Config JSONB → typed config_class conversion happens here — never
+        passed as a raw dict downstream (Q16).
 
         # Phase 2 optimisation: cache per workspace_id with short TTL when throughput warrants it.
         """
-        result = await session.execute(
-            select(WorkspaceTool, Tool)
-            .join(Tool, WorkspaceTool.tool_id == Tool.id)
-            .where(WorkspaceTool.workspace_id == workspace_id)
-            .where(Tool.is_active.is_(True))
-        )
-        rows = result.all()
+        rows = await repo.list_enabled_for_workspace(workspace_id)
 
         built_tools: list[BaseTool] = []
         active_entries: list[ToolEntry] = []

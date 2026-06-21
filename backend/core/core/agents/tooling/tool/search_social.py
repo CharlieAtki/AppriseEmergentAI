@@ -4,9 +4,9 @@ from collections.abc import Callable
 from typing import TYPE_CHECKING
 from uuid import UUID
 
-from core.agents.tools._utils import _format_memory_items
-from core.agents.tools.definitions import AppriseToolDefinition, ToolCategory
-from core.agents.tools.registry import tool_registry
+from core.agents.tooling._utils import _format_memory_items
+from core.agents.tooling.definitions import AppriseToolDefinition, ToolCategory
+from core.agents.tooling.registry import tool_registry
 
 if TYPE_CHECKING:
     from core.memory.agent_memory import AgentMemory
@@ -14,6 +14,7 @@ if TYPE_CHECKING:
 DEFINITION = AppriseToolDefinition(
     name="search_social_memory",
     namespace="platform",
+    display_name="Search Social Memory",
     description=(
         "Retrieve what this agent knows about a peer agent's capabilities and reliability. "
         "Use when deciding whether to delegate to or collaborate with a specific peer."

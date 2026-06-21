@@ -1,11 +1,24 @@
+"""Outcome scoring for completed graph runs.
+
+**SoC:** scoring is a pure function — no I/O, no async, no DB reads. All signal
+comes from ``GraphState``, which is passed in by the job layer after ``ainvoke()``
+returns. The job layer (``execute_task``) owns persistence; this module owns the
+quality formula only.
+
+``GraphState`` fields are accessed via direct subscription (``state["key"]``), not
+``state.get("key")``. Every field is guaranteed present by ``build_initial_state()``.
+
+**Phase 2 replacement:** swap the body of ``score_outcome()`` for an LLM-as-judge call.
+The interface ``(state: GraphState) -> float`` must remain stable — the job layer and
+reflection pipeline both depend on it.
+"""
+
 from __future__ import annotations
 
 from core.agents.graphs.state import GraphState
 from core.config import settings
 
-# NOTE: Phase 2 replacement point.
 # Deterministic proxy: artifact presence (60%), step efficiency (25%), tool engagement (15%).
-# Replace body with LLM-as-judge scoring in Phase 2. Interface (state -> float) must remain stable.
 
 _W_ARTIFACT = 0.60
 _W_STEPS = 0.25
@@ -28,12 +41,12 @@ def score_outcome(state: GraphState) -> float:
         step efficiency    0.25  — did it finish well within the step limit?
         tool engagement    0.15  — did the agent use tools? (neutral if none used)
     """
-    artifact_score = 1.0 if (state.get("artifact") or state.get("artifact_id")) else 0.1
+    artifact_score = 1.0 if (state["artifact"] or state["artifact_id"]) else 0.1
 
     ratio = state["step_count"] / settings.intelligence.max_graph_steps
     step_score = _clamp01(1.0 - ratio * 0.6)
 
-    traces = state.get("tool_trace") or []
+    traces = state["tool_trace"]
     tool_score = min(1.0, len(traces) / 3.0) if traces else 0.5
 
     return _clamp01(_W_ARTIFACT * artifact_score + _W_STEPS * step_score + _W_TOOLS * tool_score)

@@ -3,8 +3,8 @@ from __future__ import annotations
 from collections.abc import Callable
 from dataclasses import dataclass
 
-from core.agents.tools.definitions import AppriseToolDefinition, ToolCategory
-from core.agents.tools.registry import tool_registry
+from core.agents.tooling.definitions import AppriseToolDefinition, ToolCategory
+from core.agents.tooling.registry import tool_registry
 
 
 @dataclass(frozen=True)
@@ -15,6 +15,7 @@ class WebSearchConfig:
 DEFINITION = AppriseToolDefinition(
     name="web_search",
     namespace="platform",
+    display_name="Web Search",
     description="Search the web for information relevant to the current task.",
     input_schema={
         "type": "object",

@@ -15,6 +15,12 @@ class ToolRepository:
 
     Transaction contract: never calls commit(). enable() flushes to populate DB-generated
     fields. All other methods never flush.
+
+    Two read methods serve different callers:
+      list_catalog_with_workspace_status() — outer join; used by the API service layer to
+          return the full catalog with per-workspace enabled/disabled status.
+      list_enabled_for_workspace()          — inner join; used by ToolRegistry at job time
+          to build only the tools that are actually enabled for the workspace.
     """
 
     def __init__(self, session: AsyncSession) -> None:
@@ -34,6 +40,23 @@ class ToolRepository:
             .order_by(Tool.category, Tool.name)
         )
         return [(tool, wt) for tool, wt in result.all()]
+
+    async def list_enabled_for_workspace(
+        self, workspace_id: uuid.UUID
+    ) -> list[tuple[WorkspaceTool, Tool]]:
+        """Return (WorkspaceTool, Tool) pairs for all active tools enabled in the workspace.
+
+        Inner join — only tools with a workspace_tools row are returned. Used by
+        ToolRegistry.build_for_task_type() to resolve the per-task tool set without
+        direct SQLAlchemy access in the registry layer.
+        """
+        result = await self._session.execute(
+            select(WorkspaceTool, Tool)
+            .join(Tool, WorkspaceTool.tool_id == Tool.id)
+            .where(WorkspaceTool.workspace_id == workspace_id)
+            .where(Tool.is_active.is_(True))
+        )
+        return list(result.all())
 
     async def get_tool(self, tool_id: uuid.UUID) -> Tool | None:
         return await self._session.get(Tool, tool_id)

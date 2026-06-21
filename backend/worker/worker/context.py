@@ -4,8 +4,8 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 from core.agents.graphs.factory import build_universal_graph
-from core.agents.tools.artifact_store import LocalArtifactStore
-from core.agents.tools.registry import tool_registry
+from core.agents.tooling.artifact_store import LocalArtifactStore
+from core.agents.tooling.registry import tool_registry
 from core.config import settings
 from core.database import get_session
 from core.eventing.bus.in_process_bus import EventBus
@@ -26,7 +26,7 @@ from redis.asyncio import Redis
 
 if TYPE_CHECKING:
     from arq import ArqRedis
-    from core.agents.tools.artifact_store import ArtifactStore
+    from core.agents.tooling.artifact_store import ArtifactStore
     from core.eventing.bus.protocols import SubscribableBusProtocol
     from langgraph.graph.state import CompiledStateGraph
 
@@ -48,13 +48,13 @@ class WorkerContext:
     @classmethod
     async def build(cls, arq_queue: ArqRedis) -> WorkerContext:
         # 1. Self-registration side effects — importing is registering
-        import core.agents.tools.execute_code
-        import core.agents.tools.file_read
-        import core.agents.tools.file_write
-        import core.agents.tools.search_episodic
-        import core.agents.tools.search_procedural
-        import core.agents.tools.search_social
-        import core.agents.tools.web_search
+        import core.agents.tooling.tool.execute_code
+        import core.agents.tooling.tool.file_read
+        import core.agents.tooling.tool.file_write
+        import core.agents.tooling.tool.search_episodic
+        import core.agents.tooling.tool.search_procedural
+        import core.agents.tooling.tool.search_social
+        import core.agents.tooling.tool.web_search
         import core.vendors.anthropic
         import core.vendors.aws
         import core.vendors.azure

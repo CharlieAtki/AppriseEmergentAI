@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING, Any
 from core.agents.agent import build_initial_state
 from core.agents.graphs.state import GraphState
 from core.agents.scoring import score_outcome
-from core.agents.tools.registry import tool_registry
+from core.agents.tooling.registry import tool_registry
 from core.config import settings
 from core.coordination.decompose import decompose_and_publish
 from core.coordination.task_context import MAX_DELEGATION_DEPTH, TaskContext
@@ -24,6 +24,7 @@ from core.intelligence.prompts.evaluate import EvaluateResponse
 from core.repositories.agent_repository import AgentRepository
 from core.repositories.task_execution_repository import TaskExecutionRepository
 from core.repositories.task_repository import TaskRepository
+from core.repositories.tool_repository import ToolRepository
 from langchain_core.runnables import RunnableConfig
 
 from worker.context import get_worker_context
@@ -225,7 +226,7 @@ async def execute_task(
                     memory=wctx.memory,
                     agent_id=agent.id,
                     organisation_id=agent.organisation_id,
-                    session=session,
+                    repo=ToolRepository(session),
                     artifact_store=wctx.artifact_store,
                 )
             model_with_tools = wctx.llm_router.get_chat_model(CallType.EXECUTE).bind_tools(tools)

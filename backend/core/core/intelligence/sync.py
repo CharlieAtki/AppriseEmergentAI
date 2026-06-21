@@ -11,7 +11,7 @@ from core.models.intelligence import Model
 from core.models.tools import Tool
 
 if TYPE_CHECKING:
-    from core.agents.tools.registry import ToolRegistry
+    from core.agents.tooling.registry import ToolRegistry
 
 
 async def sync_models(session: AsyncSession, registry: ModelRegistry) -> None:
@@ -61,11 +61,11 @@ async def sync_tools(session: AsyncSession, registry: ToolRegistry) -> None:
             .values(
                 namespace=defn.namespace,
                 name=defn.name,
-                display_name=defn.name.replace("_", " ").title(),
+                display_name=defn.display_name,
                 description=defn.description,
                 category=defn.category.value,
                 tool_type="platform",
-                config_schema=None,
+                config_schema=defn.config_json_schema(),
                 task_types=list(defn.task_types),
                 is_active=True,
             )
@@ -75,6 +75,7 @@ async def sync_tools(session: AsyncSession, registry: ToolRegistry) -> None:
                     "is_active": True,
                     "description": pg_insert(Tool).excluded.description,
                     "display_name": pg_insert(Tool).excluded.display_name,
+                    "config_schema": pg_insert(Tool).excluded.config_schema,
                     "task_types": pg_insert(Tool).excluded.task_types,
                     "updated_at": func.now(),
                 },
