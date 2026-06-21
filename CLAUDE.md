@@ -21,7 +21,7 @@ Every structural question resolves from this. If you are writing an LLM call ins
 ### Three processes, three responsibilities
 
 | Process | Does | Never |
-|---|---|---|
+| --- | --- | --- |
 | `api/` | validate, store, enqueue, query | LLM calls, LangGraph, agent decisions |
 | `worker/` | LLM calls, graph execution, scoring, memory writes | serve HTTP, business-level validation |
 | `core/` | shared models, coordination, eventing, intelligence, memory | own an entrypoint or run directly |
@@ -36,8 +36,6 @@ Every structural question resolves from this. If you are writing an LLM call ins
 
 ### Intelligence layer — six files, six jobs
 
-Each file in `core/intelligence/` has exactly one responsibility. Do not expand these:
-
 | File | Single job |
 |---|---|
 | `registry.py` | In-memory model catalog. Stores `ModelEntry` dicts. Nothing else. |
@@ -45,7 +43,79 @@ Each file in `core/intelligence/` has exactly one responsibility. Do not expand 
 | `routing_config.py` | Merges platform defaults + workspace overrides into a routing table. |
 | `llm_router.py` | Dispatches LLM calls. Resolves model, builds client, applies semaphore. |
 | `call_types.py` | Enum of call types. No logic. |
-| `prompts/` | One file per call type. Returns a prompt string. No dispatch, no parsing of responses beyond its own type. |
+| `prompts/` | One file per call type. Returns a prompt string. No dispatch, no response parsing. |
+
+---
+
+## Service layer (`api/`)
+
+### Commands, DTOs, ORM boundary
+
+Every `api/` service follows one pattern: **Command in → ORM stays inside → DTO out**. The ORM model never crosses the service boundary into a router.
+
+```python
+# correct — router builds a Command; service returns a DTO
+cmd = CreateTaskCommand(workspace_id=workspace.id, title=body.title, ...)
+task: TaskData = await service.create(cmd)
+return TaskResponse.model_validate(task)
+
+# wrong — ORM returned from service, leaks into router
+task: Task = await service.create(body)
+```
+
+### Commands (write intents)
+
+Frozen dataclasses defined in the service file. The router constructs them from HTTP input; the service never imports from `api/schemas/`.
+
+```python
+@dataclass(frozen=True)
+class CreateTaskCommand:
+    workspace_id: uuid.UUID
+    title: str
+    ...
+```
+
+Read operations take primitive IDs only — no Command needed.
+
+### DTOs with explicit `from_domain()`
+
+Frozen dataclasses defined in the service file. Use an explicit allowlist in `from_domain()` rather than introspection — this is the only safe pattern when fields must be excluded for security.
+
+```python
+@dataclass(frozen=True)
+class WorkspaceData:
+    id: uuid.UUID
+    name: str
+    # webhook_secret intentionally absent — HMAC key, never in API responses
+
+    @classmethod
+    def from_domain(cls, ws: Workspace) -> WorkspaceData:
+        return cls(id=ws.id, name=ws.name, ...)  # explicit — no getattr loop
+```
+
+`Snapshot` subclasses in `core/eventing/` use type-hint introspection because they capture everything. Service DTOs use explicit mapping because they exclude sensitive fields. Do not conflate these two patterns.
+
+### ORM in, DTO out for updates
+
+`require_workspace()` in `deps.py` is auth infrastructure — it provides the Workspace ORM model as an auth token. Pass it directly to the service's `update()` method to avoid a second DB read. The service accepts ORM in and returns DTO out.
+
+```python
+async def update(self, ws: Workspace, cmd: UpdateWorkspaceCommand) -> WorkspaceData:
+    # ws loaded by require_workspace() — no second DB read needed
+    ...
+    return WorkspaceData.from_domain(ws)
+```
+
+### Hard rules for services
+
+- Services never call `session.commit()` — the caller (router) commits when needed.
+- Services never import from `api/schemas/` — the boundary runs between schemas and services.
+- Services never raise `HTTPException` — return `None` and let the router decide the status code.
+- Response schemas must have `model_config = {"from_attributes": True}` so `model_validate(dto)` works on frozen dataclasses.
+
+### The session.commit() exception in `create_task`
+
+`create_task` commits explicitly before `arq_queue.enqueue_job()`. This is the only router that does this. The worker's fresh session must see the task row before the job runs. `service` and `session` share the same `AsyncSession` via FastAPI dep deduplication — committing the session also commits the service's writes.
 
 ---
 
@@ -53,7 +123,7 @@ Each file in `core/intelligence/` has exactly one responsibility. Do not expand 
 
 ### Pure functions for pure logic
 
-Bid scoring, skill matching, capacity factors, influence transforms — these are pure functions. They take values and return values. No I/O, no async, no DB reads.
+Bid scoring, skill matching, capacity factors, influence transforms — these are pure functions. No I/O, no async, no DB reads.
 
 ```python
 # correct — pure function, all state passed in by the caller
@@ -63,15 +133,13 @@ def compute_bid_score(agent_skills, agent_influence, ...) -> float: ...
 async def compute_bid_score(agent_id, task_id, session) -> float: ...
 ```
 
-The caller (worker job) is responsible for loading state. The function is responsible for the math.
-
 ### No LLM in the coordination layer
 
-`core/coordination/` is deterministic. `compute_bid_score`, `attempt_reservation`, `TaskStateMachine` — none of these call an LLM or read the database. Bid scoring uses only values the caller passes in.
+`core/coordination/` is deterministic. `compute_bid_score`, `attempt_reservation`, `TaskStateMachine` — none call an LLM or read the database.
 
 ### No preprocessing — memory retrieval is a tool call
 
-Agents retrieve episodic, procedural, and social memory mid-execution via tool calls. It is not injected upfront. This is what makes a specialist different from an agent with good context.
+Agents retrieve episodic, procedural, and social memory mid-execution via tool calls. It is not injected upfront.
 
 ---
 
@@ -79,7 +147,7 @@ Agents retrieve episodic, procedural, and social memory mid-execution via tool c
 
 ### Interfaces over concrete types
 
-The bus is typed against `BusProtocol`, not `RedisBus`. The worker uses `SubscribableBusProtocol`. Tests swap in `InMemoryBus`. No concrete bus class bleeds into coordination or job logic.
+The bus is typed against `BusProtocol`, not `RedisBus`. Tests swap in `InMemoryBus`. Vendor implementations satisfy `VendorProvider` ABC. `LLMRouter` works against the ABC, not any specific vendor SDK.
 
 ```python
 # correct — decoupled from transport
@@ -89,25 +157,16 @@ async def decompose_and_publish(agent, parent_task, subtask_specs, session, bus:
 async def decompose_and_publish(..., redis: Redis): ...
 ```
 
-Vendor implementations satisfy `VendorProvider` ABC. `LLMRouter` works against the ABC, not any specific vendor SDK.
-
 ### Self-registration over central wiring
 
-Importing a vendor package is the act of registering it. `core/vendors/anthropic/__init__.py` calls `registry.add_model(...)` as a module-level side effect. There is no central list of vendors.
-
-```python
-# core/vendors/anthropic/__init__.py — registration is the import
-registry.add_model("anthropic/claude-haiku-4-5-20251001", vendor="anthropic", ...)
-```
-
-Adding a vendor: create the package and add one import line to the lifespan hook. That is the complete change.
+Importing a vendor package is the act of registering it. `core/vendors/anthropic/__init__.py` calls `registry.add_model(...)` as a module-level side effect. Adding a vendor: create the package and add one import line to the lifespan hook.
 
 ### Parse external dicts at the boundary — never spelunk them downstream
 
-Any external system that hands you a raw `dict` (ARQ job context, webhook payload, Redis Stream message) must be parsed into a **frozen dataclass** at the entry point. No downstream code ever calls `.get("key")` on these dicts directly.
+Any external system that hands you a raw `dict` (ARQ job context, webhook payload, Redis Stream message) must be parsed into a **frozen dataclass** at the entry point.
 
 ```python
-# correct — one classmethod owns ARQ's dict keys; everything else uses typed fields
+# correct — one classmethod owns ARQ's dict keys
 @dataclass(frozen=True)
 class ArqJobMeta:
     job_id:  str | None
@@ -119,67 +178,46 @@ class ArqJobMeta:
 
 # wrong — dict-spelunking scattered through job functions
 job_id  = ctx.get("job_id")
-job_try = ctx.get("job_try", 1)
 ```
 
 ### Inject the minimum surface — not the full context
 
-When a class or function needs one thing from a larger object, accept only that thing — not the object. This applies equally to constructors and helper functions. It makes the dependency explicit, eliminates hidden globals, and makes the unit trivial to test.
+When a class or function needs one thing from a larger object, accept only that thing — not the object. The activity logger pattern is the canonical example: loggers receive `PublishFn`, not the bus.
 
 ```python
-# correct — JobSpan only needs to publish; inject that one method
-class JobSpan:
-    def __init__(self, ..., redis_publish: Callable[[str, str], Awaitable[None]]) -> None: ...
-
-# wrong — JobSpan holds the whole WorkerContext just to call one method on it
-class JobSpan:
-    def __init__(self, ...) -> None:
-        self._wctx = get_worker_context()
-```
-
-The same rule applies to helper functions:
-
-```python
-# correct — function only needs redis.delete; accept that object
-async def _release_to_pool(span, execution, task, redis: Redis, ...) -> None:
-    await redis.delete(f"reservation:{task.workspace_id}:{task.id}")
+# correct — only needs redis.delete; inject that object
+async def _release_to_pool(span, execution, task, redis: Redis, ...) -> None: ...
 
 # wrong — receives full WorkerContext just to call one method
-async def _release_to_pool(span, execution, task, wctx: WorkerContext, ...) -> None:
-    await wctx.redis.delete(...)
+async def _release_to_pool(span, execution, task, wctx: WorkerContext, ...) -> None: ...
 ```
-
-The activity logger pattern is the canonical example: loggers receive `PublishFn`, not the bus.
 
 ### ContextVar for ambient state — never thread it as a parameter
 
-Infrastructure that sets itself on a `ContextVar` at entry (e.g. `JobSpan`) must be retrieved via the accessor at the site that needs it. Never pass it as a function argument through intermediate layers — that defeats the ContextVar entirely.
+Infrastructure that sets itself on a `ContextVar` at entry (e.g. `JobSpan`) must be retrieved via the accessor at the site that needs it. Never pass it as a function argument through intermediate layers.
 
 ```python
-# correct — any async code in the same task retrieves the active span directly
+# correct
 span = current_span()
 await span.emit(...)
 
 # wrong — span threaded through every layer despite being on a ContextVar
-result = await manager.run(rctx, span)
 result = await stage.fn(rctx, result, llm, memory, span)
 ```
 
 ### Stage and handler functions take domain objects only
 
-Stage functions, handler `handle()` methods, and coordination functions receive domain values (ORM objects, snapshots, scalars) — never infrastructure (span, session factory, bus, worker context). Infrastructure is resolved at the layer that owns it.
+Stage functions and handler `handle()` methods receive domain values (ORM objects, snapshots, scalars) — never infrastructure (span, session factory, bus, worker context).
 
 ```python
-# correct — domain objects only; span retrieved via ContextVar inside the stage
+# correct — infrastructure resolved at the owning layer
 async def _stage_reflect(rctx: ReflectContext, result: PipelineResult, llm: LLMRouter, memory: AgentMemory) -> PipelineResult: ...
 
-# wrong — infrastructure threaded in as an argument
+# wrong
 async def _stage_reflect(rctx, result, llm, memory, span: JobSpan) -> PipelineResult: ...
 ```
 
 ### TYPE_CHECKING for circular avoidance
-
-Use `TYPE_CHECKING` guards for imports that would create circular dependencies. The import only runs for the type checker, not at runtime.
 
 ```python
 from __future__ import annotations
@@ -190,7 +228,7 @@ if TYPE_CHECKING:
 
 ### Workspace-scoped Redis keys
 
-Every Redis key that varies by workspace must include `workspace_id`. The reservation lock key is the most critical:
+Every Redis key that varies by workspace must include `workspace_id`:
 
 ```python
 f"reservation:{workspace_id}:{task_id}"   # correct
@@ -208,157 +246,58 @@ f"reservation:{task_id}"                   # wrong — cross-workspace collision
 | In-process | `EventBus` | asyncio | Same-process side effects: audit logging, cache invalidation, metrics |
 | Cross-process | `RedisBus` | Redis Streams | Durable task coordination events (`task.created`, `task.completed`) |
 
-`EventBus` does not survive process restart and never should — it is for side effects the current process cares about. `RedisBus` is for events that must reach other processes or survive crashes. Never conflate them.
+`EventBus` does not survive process restart. `RedisBus` is for events that must reach other processes or survive crashes. Never conflate them.
 
 ### Producers never touch the bus directly
-
-Domain code never calls `bus.apublish()` directly. The only legitimate way to publish an event is through an activity logger:
 
 ```python
 # correct — logger is the only producer interface
 await logger.created(task)
 
 # wrong — domain code coupling to the event model
-await bus.apublish(TaskCreatedEvent(state=TaskSnapshot.from_domain(task), workspace_id=task.workspace_id))
+await bus.apublish(TaskCreatedEvent(...))
 ```
 
-The logger facade's only job is to construct the right event from a SQLAlchemy model and hand it to a `PublishFn` callable. It knows nothing about handlers, dispatch, or who is listening.
-
-### One activity logger per domain area
-
-```
-core/eventing/activity/task_logger.py    ← TaskActivityLogger
-core/eventing/activity/agent_logger.py   ← AgentActivityLogger
-```
-
-Loggers receive `PublishFn = Callable[[DomainEvent], Awaitable[None]]` at construction — never the bus directly. This is the smallest possible surface area and makes them trivial to test with `AsyncMock()`.
-
-```python
-# correct — standalone logger, holds publish callable
-class TaskActivityLogger:
-    def __init__(self, publish: PublishFn) -> None: ...
-
-# wrong — logger holds the bus
-class TaskActivityLogger:
-    def __init__(self, bus: EventBus) -> None: ...
-```
-
-Method names describe the domain action, not generic CRUD. The class name already scopes the entity:
-
-```python
-await logger.created(task)          # not logger.task_created(task)
-await logger.updated(before, task)  # not logger.task_updated(before, task)
-await logger.deleted(task)          # not logger.task_deleted(task)
-```
+Loggers receive `PublishFn = Callable[[DomainEvent], Awaitable[None]]` at construction — never the bus directly. Method names describe the domain action (`logger.created`, `logger.updated`, `logger.deleted`).
 
 ### Snapshots must be taken before the session closes
 
-`XSnapshot.from_domain(orm_model)` reads already-loaded scalar attributes by name. It does not trigger lazy loads. Call it while the ORM object is still attached to an open session and before you mutate it:
-
 ```python
-# correct — before snapshot captured before mutation; logger snapshots after internally
+# correct — before snapshot captured before mutation
 before = TaskSnapshot.from_domain(task)
 task.status = "in_progress"
 await logger.updated(before, task)
 
-# wrong — snapshot taken after mutation; before and after read the same mutated state
+# wrong — snapshot taken after mutation
 task.status = "in_progress"
-before = TaskSnapshot.from_domain(task)   # too late — already mutated
-await logger.updated(before, task)
+before = TaskSnapshot.from_domain(task)   # reads mutated state
 ```
 
-`from_domain` also handles nested snapshots (`SnapshotSubclass | None` fields) and snapshot collections (`tuple[SnapshotSubclass, ...]`) via type-hint introspection. Override it on the concrete class when field names diverge or values need transformation.
+`Snapshot.from_domain()` uses type-hint introspection to map all fields by name. Override it when field names diverge or values need transformation. This is distinct from service DTOs which use explicit allowlist mapping — see the Service layer section.
 
 ### Events live in `core/eventing/events/`, import nothing from the domain
 
-```
-core/eventing/events/task_events.py    ← TaskSnapshot, TaskCreatedEvent, TaskUpdatedEvent, TaskDeletedEvent
-core/eventing/events/agent_events.py   ← AgentSnapshot, AgentCreatedEvent, AgentUpdatedEvent, AgentDeletedEvent
-```
+Event files import only from `core/eventing/bus/common.py` and stdlib. This keeps the event model dependency-free and importable in isolation.
 
-Event files import only from `core/eventing/bus/common.py` and stdlib. No ORM imports, no bus imports, no activity logger imports. This is what keeps the event model dependency-free and importable in isolation.
+### Handler registration
 
-### Handler registration and composition
-
-All handlers run fire-and-forget. Compose behaviour at the registration site using the wrappers in `core/eventing/bus/handlers.py`:
-
-```python
-# basic fire-and-forget
-bus.bind(TaskCreatedEvent, AuditLogHandler())
-
-# bind one handler to multiple event types
-bus.bind([TaskCreatedEvent, AgentCreatedEvent], MetricsHandler())
-
-# retry on transient failures
-bus.bind(AgentDeletedEvent, Retry(CleanupHandler(), retry_on=(OperationalError,)))
-
-# sync handler wrapped for async dispatch
-bus.bind(AgentDeletedEvent, SyncToAsync(ComplianceHandler()))
-
-# predicate gate — handler only runs when condition is true
-bus.bind(TaskCreatedEvent, Filtering(AuditLogHandler(), predicate=lambda e: e.state.workspace_id == REGULATED_WS))
-```
-
-Handlers are registered once at startup — never at request time.
-
-### Wiring
-
-**FastAPI** — bus lives on `app.state.bus`; dep factories in `api/deps.py` inject `apublish` into loggers at request time:
-
-```python
-def get_event_publisher(bus: EventBus = Depends(get_bus)) -> PublishFn:
-    return bus.apublish
-
-def get_task_activity_logger(publish: PublishFn = Depends(get_event_publisher)) -> TaskActivityLogger:
-    return TaskActivityLogger(publish)
-```
-
-**Worker** — construct loggers directly from `WorkerContext`:
-
-```python
-logger = TaskActivityLogger(wctx.event_bus.apublish)
-```
-
-Call `await bus.drain_pending()` in both FastAPI and ARQ shutdown hooks to drain in-flight fire-and-forget tasks before the process exits.
-
-### Single responsibility in the event layer
-
-- `TaskActivityLogger` only constructs and publishes task events — no DB access, no handler logic
-- `EventHandler` implementations only handle — they do not publish back onto the bus
-- Snapshots only capture state — `from_domain` reads attributes and nothing else
-- `EventBus` only dispatches — it does not know what events mean or what to do with them
+All handlers run fire-and-forget, registered once at startup via `bus.bind()`. Use wrappers from `core/eventing/bus/handlers.py`: `Retry`, `SyncToAsync`, `Filtering`. Call `await bus.drain_pending()` in both FastAPI and ARQ shutdown hooks.
 
 ---
 
-## Single responsibility per class and function
+## Single responsibility
 
-### `ModelRegistry` only registers
-
-`ModelRegistry` maps `model_id → ModelEntry`. It does not build models. It does not read from the database. It does not know what a `VendorProvider` is.
-
-### `sync_models()` only syncs
-
-`sync_models()` reconciles the in-memory registry against the `models` Postgres table. It runs once at startup. It is never called at request time.
-
-### `resolve_routing()` only merges configs
-
-`resolve_routing()` takes platform defaults and workspace overrides and returns a merged routing table. It does not dispatch anything.
-
-### `LLMRouter` only dispatches
-
-`LLMRouter` resolves a model from the routing table, builds it via the vendor provider (cached after first call), and invokes it. It does not register models. It does not know which models exist globally — only what the catalog and routing table say.
-
-### `TaskStateMachine` only guards transitions
-
-`TaskStateMachine.transition()` validates the status change and applies it. It does not load from the database, publish events, or update related records. The caller does those.
-
-### `decompose_and_publish()` only persists and publishes
-
-The caller (worker job) generates `subtask_specs` — either via LLM or heuristic. `decompose_and_publish()` only writes subtasks to Postgres and publishes events. It does not call the LLM. The session is not committed here; the caller commits so all writes land in one transaction.
-
-### Routers are thin
-
-API routers validate input and call a service function or write to the database. Business logic does not live in routers. If you are writing conditional agent logic in a router, it belongs in the worker.
+| Class / function | Does | Never |
+| --- | --- | --- |
+| `ModelRegistry` | Maps `model_id → ModelEntry` | Builds models, reads DB, knows about vendors |
+| `sync_models()` | Reconciles registry → DB at startup | Runs at request time |
+| `resolve_routing()` | Merges platform defaults + workspace overrides | Dispatches anything |
+| `LLMRouter` | Resolves model, builds client, invokes it | Registers models, knows global catalog |
+| `TaskStateMachine` | Validates and applies status transitions | Loads from DB, publishes events |
+| `decompose_and_publish()` | Writes subtasks + publishes events | Calls the LLM, commits the session |
+| `XActivityLogger` | Constructs and publishes events | DB access, handler logic |
+| API routers | Validate input, call service, translate to HTTP | Business logic, LLM calls |
+| Service classes | Accept Commands, return DTOs | Commit sessions, import HTTP schemas |
 
 ---
 
@@ -366,81 +305,33 @@ API routers validate input and call a service function or write to the database.
 
 ### No bare container types — always parameterise
 
-`dict`, `tuple`, `list` are never acceptable as standalone annotations. Always supply type arguments.
-
 ```python
-# correct
-ctx:    dict[str, Any]
-events: list[dict[str, object]]
-trace:  tuple[dict[str, Any], ...]
-
-# wrong
-ctx:    dict
-events: list
-trace:  tuple
+ctx: dict[str, Any]      # correct
+ctx: dict                 # wrong
 ```
 
 ### Use `collections.abc` for structural types
 
-Import `Callable`, `Awaitable`, `AsyncGenerator`, `AsyncIterator`, `Mapping` from `collections.abc`, but not from `typing`. Both are legal but `collections.abc` is the canonical location in Python 3.9+.
-
-```python
-# correct
-from collections.abc import AsyncGenerator, Awaitable, Callable, Mapping
-
-# wrong
-from typing import Callable
-```
+Import `Callable`, `Awaitable`, `AsyncGenerator`, `AsyncIterator`, `Mapping` from `collections.abc`, not `typing`.
 
 ### Read-only mappings typed as `Mapping`, not `dict`
 
-When a parameter or field is only ever read from (never mutated), use `Mapping[K, V]` from `collections.abc`. It makes the read-only contract explicit and lets callers pass any mapping type (dict, MappingProxyType, custom).
-
-```python
-# correct — registry is looked up, never written to
-registry: Mapping[str, type[StreamEvent]]
-TASK_STREAM_REGISTRY: Mapping[str, type[StreamEvent]] = {"task.created": TaskCreatedStreamEvent}
-
-# wrong — implies mutability that isn't needed or guaranteed
-registry: dict[str, type[StreamEvent]]
-```
-
-### Parameterise `Token` from `contextvars`
-
-`ContextVar.set()` returns `Token[T]`. Annotate the stored token with its full type, so the checker can verify `reset()` is called with the right token.
-
-```python
-# correct
-_token: Token[JobSpan] | None = None
-
-# wrong — bare Token loses the type parameter
-_token: Token | None = None
-```
+When a parameter or field is only ever read from, use `Mapping[K, V]`. Makes the read-only contract explicit.
 
 ### Named exceptions for distinguishable catch clauses
 
-Raise a named subclass rather than a bare `RuntimeError` when callers need to catch a specific failure mode without catching everything.
+Raise a named subclass rather than a bare `RuntimeError` when callers need to catch a specific failure mode.
 
 ```python
-# correct — callers can catch NoActiveSpanError specifically
 class NoActiveSpanError(RuntimeError): ...
 raise NoActiveSpanError("No active JobSpan — called outside a job context")
-
-# wrong — bare RuntimeError catches too broadly
-raise RuntimeError("No active span")
 ```
 
 ### Single source of truth for domain invariants
 
-Never redefine a constant that a domain class already owns. Use the class method.
-
 ```python
-# correct
-TaskStateMachine.is_terminal(status)
-
-# wrong — duplicates the invariant and will drift
-TERMINAL_STATUSES = frozenset({"completed", "failed", "expired"})
-status in TERMINAL_STATUSES
+TaskStateMachine.is_terminal(status)   # correct
+status in TERMINAL_STATUSES             # wrong — duplicates the invariant and will drift
 ```
 
 ---
@@ -459,58 +350,52 @@ await queue.enqueue_job("execute_task", agent_id=agent_id, task_id=task_id, work
 
 ### LLM calls only in the worker
 
-All LLM calls for agent reasoning go through `LLMRouter` and are invoked from `worker/jobs/` only. The API may make a single lightweight LLM call for task enrichment, isolated in its own path. Never add LLM calls to routers or middleware.
+All LLM calls for agent reasoning go through `LLMRouter` and are invoked from `worker/jobs/` only. Never add LLM calls to routers or middleware.
 
 ### registry.py must stay dependency-free
 
-`core/intelligence/registry.py` has no DB import, no vendor SDK, no credentials, no settings import. It cannot fail to import. Protect this invariant — any circular import between the registry and a vendor package causes silent registration failure.
+`core/intelligence/registry.py` has no DB import, no vendor SDK, no credentials, no settings import. Any circular import between the registry and a vendor package causes silent registration failure.
 
 ### Chroma always uses the HTTP client
 
 ```python
-# correct
-client = chromadb.HttpClient(url="http://chroma:8001")
-
-# wrong — creates a local directory, silently puts memories in the wrong place
-client = chromadb.Client()
+client = chromadb.HttpClient(url="http://chroma:8001")   # correct
+client = chromadb.Client()                                 # wrong — creates local directory
 ```
 
 ### Alembic for every schema change
 
-Every change to a `core/models/` class that affects the database schema needs a migration file committed in the same PR. Generate with:
+Every change to a `core/models/` class that affects the database schema needs a migration file in the same PR:
 ```bash
 cd core && alembic revision --autogenerate -m "describe the change"
 ```
-Never run `ALTER TABLE` directly.
 
 ### webhook_secret is a credential, not a hash
 
-`workspace.webhook_secret` is stored as plaintext in the database. This is correct and unavoidable — HMAC signing requires the raw secret to compute each signature, unlike a password which only ever needs to be verified. The implication: treat `webhook_secret` like a private key. Never include it in API responses, never log it, and never SELECT it except in the job that signs deliveries.
+`workspace.webhook_secret` is stored as plaintext — HMAC signing requires the raw secret. Treat it like a private key: never include it in API responses, never log it, never SELECT it except in the job that signs deliveries. It is excluded from `WorkspaceData` for this reason.
 
 ### Config changes touch both files
 
-`config.py` defaults apply everywhere `.env` is absent. `.env` wins at runtime. Update both in the same commit. A gap between them silently breaks CI and fresh clones.
+`config.py` defaults apply everywhere `.env` is absent. `.env` wins at runtime. Update both in the same commit.
 
 ### LangGraph graphs compile at worker startup
 
-Graph compilation is expensive. Compile in the ARQ `startup()` hook and reuse across all jobs in the process. Never compile inside a job function.
+Compile in the ARQ `startup()` hook and reuse across all jobs. Never compile inside a job function.
 
 ---
 
 ## Comments
 
-Default to writing no comments. Add one only when the **why** is non-obvious: a hidden constraint, a subtle invariant, a workaround for a specific bug, behaviour that would surprise a reader.
-
-Do not explain what the code does. Well-named identifiers do that. Do not reference the current task, ticket, or caller — those belong in the PR description and rot as the codebase evolves.
+Default to writing no comments. Add one only when the **why** is non-obvious: a hidden constraint, a subtle invariant, a workaround for a specific bug, behaviour that would surprise a reader. Never write multi-paragraph docstrings or multi-line comment blocks — one short line max.
 
 ---
 
 ## Development notes
 
-- Ollama must run natively on the host OS, not inside Docker. Docker on Mac/Windows has no access to Metal/CUDA GPU. For development without a local GPU, use `LLM_BACKEND=anthropic`.
+- Ollama must run natively on the host OS, not inside Docker. For development without a local GPU, use `LLM_BACKEND=anthropic`.
 - Auth middleware maps Clerk claims (`clerk_user_id`, `clerk_org_id`) → internal UUIDs. Downstream code trusts `request.state.org_id` and never re-validates Clerk tokens.
 - The `models` table is written only by `sync_models()` at startup. Never write to it at request time.
-- Workspace routing config (`workspace_model_routing`) is the only place per-workspace model preferences live. Never embed workspace preferences in the registry.
+- Workspace routing config (`workspace_model_routing`) is the only place per-workspace model preferences live.
 
 ---
 
@@ -518,7 +403,7 @@ Do not explain what the code does. Well-named identifiers do that. Do not refere
 
 ### Issue tracker
 
-Issues live in GitHub Issues; external PRs are not a triage surface. See `docs/agents/issue-tracker.md`.
+Issues live in GitHub Issues. See `docs/agents/issue-tracker.md`.
 
 ### Triage labels
 

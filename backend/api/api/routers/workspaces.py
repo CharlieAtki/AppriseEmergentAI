@@ -7,7 +7,11 @@ from fastapi import APIRouter, Depends, HTTPException, Request, status
 
 from api.deps import get_workspace_service, require_workspace
 from api.schemas.workspace import CreateWorkspaceRequest, UpdateWorkspaceRequest, WorkspaceResponse
-from api.services.workspace_service import WorkspaceService
+from api.services.workspace_service import (
+    CreateWorkspaceCommand,
+    UpdateWorkspaceCommand,
+    WorkspaceService,
+)
 
 router = APIRouter()
 
@@ -18,8 +22,12 @@ async def create_workspace(
     request: Request,
     service: WorkspaceService = Depends(get_workspace_service),
 ) -> WorkspaceResponse:
-    org_id = request.state.auth.org_id
-    ws = await service.create(org_id=org_id, body=body)
+    cmd = CreateWorkspaceCommand(
+        org_id=request.state.auth.org_id,
+        name=body.name,
+        config=body.config,
+    )
+    ws = await service.create(cmd)
     return WorkspaceResponse.model_validate(ws)
 
 
@@ -49,10 +57,18 @@ async def get_workspace(
 @router.patch("/{workspace_id}", response_model=WorkspaceResponse)
 async def update_workspace(
     body: UpdateWorkspaceRequest,
+    # workspace ORM provided by require_workspace() auth dep — passed directly to avoid a second DB read.
     workspace: Workspace = Depends(require_workspace("write")),
     service: WorkspaceService = Depends(get_workspace_service),
 ) -> WorkspaceResponse:
-    ws = await service.update(workspace, body)
+    cmd = UpdateWorkspaceCommand(
+        name=body.name,
+        status=body.status,
+        result_webhook_url=body.result_webhook_url,
+        webhook_secret=body.webhook_secret,
+        config=body.config,
+    )
+    ws = await service.update(workspace, cmd)
     return WorkspaceResponse.model_validate(ws)
 
 

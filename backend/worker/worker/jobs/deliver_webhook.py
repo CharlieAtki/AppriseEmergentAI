@@ -16,6 +16,7 @@ from core.repositories.workspace_repository import WorkspaceRepository
 from pydantic import BaseModel, ConfigDict
 
 from worker.context import get_worker_context
+from worker.span import ArqJobMeta
 
 logger = logging.getLogger(__name__)
 
@@ -97,6 +98,10 @@ async def deliver_webhook(
     never include it in API responses, never log it, never SELECT it outside this job.
     """
     wctx = get_worker_context()
+    meta = ArqJobMeta.from_ctx(ctx)
+    logger.debug(
+        "deliver_webhook: execution=%s job_id=%s try=%d", execution_id, meta.job_id, meta.job_try
+    )
     exec_uuid = uuid.UUID(execution_id)
     ws_uuid = uuid.UUID(workspace_id)
 

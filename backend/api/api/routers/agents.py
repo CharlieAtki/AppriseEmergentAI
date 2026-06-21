@@ -3,11 +3,11 @@ from __future__ import annotations
 import uuid
 
 from core.models.tenant import Workspace
-from core.repositories.agent_repository import AgentRepository
 from fastapi import APIRouter, Depends, HTTPException, status
 
-from api.deps import get_agent_repo, require_workspace
+from api.deps import get_agent_service, require_workspace
 from api.schemas.agent import AgentResponse, CreateAgentRequest, UpdateAgentRequest
+from api.services.agent_service import AgentService, CreateAgentCommand, UpdateAgentCommand
 
 router = APIRouter()
 
@@ -16,24 +16,25 @@ router = APIRouter()
 async def create_agent(
     body: CreateAgentRequest,
     workspace: Workspace = Depends(require_workspace("write")),
-    repo: AgentRepository = Depends(get_agent_repo),
+    service: AgentService = Depends(get_agent_service),
 ) -> AgentResponse:
-    agent = await repo.create(
+    cmd = CreateAgentCommand(
         workspace_id=workspace.id,
         organisation_id=workspace.organisation_id,
         name=body.name,
         skills=body.skills,
         personality=body.personality,
     )
+    agent = await service.create(cmd)
     return AgentResponse.model_validate(agent)
 
 
 @router.get("", response_model=list[AgentResponse])
 async def list_agents(
     workspace: Workspace = Depends(require_workspace("read")),
-    repo: AgentRepository = Depends(get_agent_repo),
+    service: AgentService = Depends(get_agent_service),
 ) -> list[AgentResponse]:
-    agents = await repo.list(workspace_id=workspace.id)
+    agents = await service.list(workspace_id=workspace.id)
     return [AgentResponse.model_validate(a) for a in agents]
 
 
@@ -41,9 +42,9 @@ async def list_agents(
 async def get_agent(
     agent_id: uuid.UUID,
     workspace: Workspace = Depends(require_workspace("read")),
-    repo: AgentRepository = Depends(get_agent_repo),
+    service: AgentService = Depends(get_agent_service),
 ) -> AgentResponse:
-    agent = await repo.get(agent_id, workspace.id)
+    agent = await service.get(agent_id, workspace.id)
     if agent is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Agent not found")
     return AgentResponse.model_validate(agent)
@@ -54,10 +55,10 @@ async def update_agent(
     agent_id: uuid.UUID,
     body: UpdateAgentRequest,
     workspace: Workspace = Depends(require_workspace("write")),
-    repo: AgentRepository = Depends(get_agent_repo),
+    service: AgentService = Depends(get_agent_service),
 ) -> AgentResponse:
-    agent = await repo.get(agent_id, workspace.id)
+    cmd = UpdateAgentCommand(name=body.name, status=body.status)
+    agent = await service.update(agent_id, workspace.id, cmd)
     if agent is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Agent not found")
-    agent = await repo.update_fields(agent, name=body.name, status=body.status)
     return AgentResponse.model_validate(agent)

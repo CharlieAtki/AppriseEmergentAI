@@ -19,7 +19,9 @@ from fastapi import Depends, HTTPException, Request, status
 from redis.asyncio import Redis
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from api.services.agent_service import AgentService
 from api.services.api_key_service import ApiKeyService
+from api.services.task_service import TaskService
 from api.services.workspace_service import WorkspaceService
 
 
@@ -72,6 +74,14 @@ def get_workspace_service(
     repo: WorkspaceRepository = Depends(get_workspace_repo),
 ) -> WorkspaceService:
     return WorkspaceService(repo)
+
+
+def get_task_service(repo: TaskRepository = Depends(get_task_repo)) -> TaskService:
+    return TaskService(repo)
+
+
+def get_agent_service(repo: AgentRepository = Depends(get_agent_repo)) -> AgentService:
+    return AgentService(repo)
 
 
 def get_api_key_repo(session: AsyncSession = Depends(get_db)) -> ApiKeyRepository:

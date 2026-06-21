@@ -6,12 +6,12 @@ import uuid
 from arq import ArqRedis
 from core.intelligence.enrichment import EnrichmentOverrides
 from core.models.tenant import Workspace
-from core.repositories.task_repository import TaskRepository
 from fastapi import APIRouter, Depends, Header, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from api.deps import get_arq_queue, get_db, get_task_repo, require_workspace
+from api.deps import get_arq_queue, get_db, get_task_service, require_workspace
 from api.schemas.task import CreateTaskRequest, TaskCreatedResponse, TaskResponse
+from api.services.task_service import CreateTaskCommand, TaskService
 
 router = APIRouter()
 
@@ -21,41 +21,40 @@ async def create_task(
     body: CreateTaskRequest,
     idempotency_key_header: str | None = Header(None, alias="Idempotency-Key"),
     workspace: Workspace = Depends(require_workspace("write")),
-    repo: TaskRepository = Depends(get_task_repo),
+    service: TaskService = Depends(get_task_service),
     session: AsyncSession = Depends(get_db),
     arq_queue: ArqRedis = Depends(get_arq_queue),
 ) -> TaskCreatedResponse:
     """Create a task and enqueue enrichment as a durable ARQ job.
 
     Commits the task row explicitly before enqueuing enrich_task so the job's
-    fresh session is guaranteed to see it. repo and session share the same
+    fresh session is guaranteed to see it. service and session share the same
     AsyncSession instance — FastAPI deduplicates Depends(get_db).
     """
-    task = await repo.create(
+    cmd = CreateTaskCommand(
         workspace_id=workspace.id,
         organisation_id=workspace.organisation_id,
         title=body.title,
         description=body.description,
-        status="enriching",
         task_type=body.task_type,
         priority=body.priority,
         deadline_at=body.deadline_at,
         external_ref=body.external_ref,
         idempotency_key=idempotency_key_header,
-    )
-    await session.commit()
-
-    ov_dict = (
-        dataclasses.asdict(
+        overrides=(
             EnrichmentOverrides(
                 task_type=body.overrides.task_type,
                 required_skills=body.overrides.required_skills,
                 difficulty=body.overrides.difficulty,
             )
-        )
-        if body.overrides
-        else None
+            if body.overrides
+            else None
+        ),
     )
+    task = await service.create(cmd)
+    await session.commit()
+
+    ov_dict = dataclasses.asdict(cmd.overrides) if cmd.overrides else None
     await arq_queue.enqueue_job(
         "enrich_task",
         task_id=str(task.id),
@@ -69,9 +68,9 @@ async def create_task(
 async def get_task(
     task_id: uuid.UUID,
     workspace: Workspace = Depends(require_workspace("read")),
-    repo: TaskRepository = Depends(get_task_repo),
+    service: TaskService = Depends(get_task_service),
 ) -> TaskResponse:
-    task = await repo.get(task_id, workspace.id)
+    task = await service.get(task_id, workspace.id)
     if task is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Task not found")
     return TaskResponse.model_validate(task)
@@ -80,7 +79,7 @@ async def get_task(
 @router.get("", response_model=list[TaskResponse])
 async def list_tasks(
     workspace: Workspace = Depends(require_workspace("read")),
-    repo: TaskRepository = Depends(get_task_repo),
+    service: TaskService = Depends(get_task_service),
 ) -> list[TaskResponse]:
-    tasks = await repo.list(workspace.id)
+    tasks = await service.list(workspace.id)
     return [TaskResponse.model_validate(t) for t in tasks]
