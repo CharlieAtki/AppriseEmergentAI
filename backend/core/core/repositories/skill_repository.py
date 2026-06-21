@@ -52,7 +52,7 @@ class SkillRepository:
                 agent_id=agent_id,
                 organisation_id=organisation_id,
                 workspace_id=workspace_id,
-                skills=skills,
+                skills=dict(skills),
                 execution_id=execution_id,
             )
         )
