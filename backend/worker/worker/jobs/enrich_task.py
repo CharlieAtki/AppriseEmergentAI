@@ -56,7 +56,17 @@ async def enrich_task(
             )
             return
 
-        result = await enrich(task.title, task.description, wctx.llm_router, overrides_obj)
+        title = task.title
+        description = task.description
+
+    result = await enrich(title, description, wctx.llm_router, overrides_obj)
+
+    async with get_session() as session:
+        task_repo = TaskRepository(session)
+        task = await task_repo.get_by_id(uuid.UUID(task_id))
+        if task is None:
+            logger.warning("enrich_task: task=%s not found on write — skipping", task_id)
+            return
         task.required_skills = result.required_skills
         task.difficulty = result.difficulty
         task.task_type = result.task_type

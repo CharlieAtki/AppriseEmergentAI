@@ -12,10 +12,15 @@ from core.eventing.bus.in_process_bus import EventBus
 from core.intelligence.llm_router import LLMRouter
 from core.models.tenant import Workspace
 from core.repositories.agent_repository import AgentRepository
+from core.repositories.api_key_repository import ApiKeyRepository
 from core.repositories.task_repository import TaskRepository
+from core.repositories.workspace_repository import WorkspaceRepository
 from fastapi import Depends, HTTPException, Request, status
 from redis.asyncio import Redis
 from sqlalchemy.ext.asyncio import AsyncSession
+
+from api.services.api_key_service import ApiKeyService
+from api.services.workspace_service import WorkspaceService
 
 
 def get_bus(request: Request) -> EventBus:
@@ -59,6 +64,24 @@ def get_agent_repo(session: AsyncSession = Depends(get_db)) -> AgentRepository:
     return AgentRepository(session)
 
 
+def get_workspace_repo(session: AsyncSession = Depends(get_db)) -> WorkspaceRepository:
+    return WorkspaceRepository(session)
+
+
+def get_workspace_service(
+    repo: WorkspaceRepository = Depends(get_workspace_repo),
+) -> WorkspaceService:
+    return WorkspaceService(repo)
+
+
+def get_api_key_repo(session: AsyncSession = Depends(get_db)) -> ApiKeyRepository:
+    return ApiKeyRepository(session)
+
+
+def get_api_key_service(repo: ApiKeyRepository = Depends(get_api_key_repo)) -> ApiKeyService:
+    return ApiKeyService(repo)
+
+
 def get_arq_queue(request: Request) -> ArqRedis:
     return request.app.state.arq_queue  # type: ignore[no-any-return]
 
@@ -80,7 +103,7 @@ def require_workspace(permission: str = "write") -> Callable[..., Awaitable[Work
         if org_id is None:
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Unauthorised")
 
-        ws = await session.get(Workspace, workspace_id)
+        ws = await WorkspaceRepository(session).get_by_id(workspace_id)
         if ws is None or ws.organisation_id != org_id:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Workspace not found")
 

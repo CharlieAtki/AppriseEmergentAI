@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import uuid
 from datetime import UTC, datetime
+from typing import Any
 
 from pydantic import BaseModel, Field, field_validator
 
@@ -63,7 +64,7 @@ class TaskResponse(BaseModel):
     deadline_at: datetime | None
     external_ref: str | None
     idempotency_key: str | None
-    required_skills: dict | None
+    required_skills: dict[str, float] | None
     difficulty: float | None
-    domain_tags: dict | None
+    domain_tags: dict[str, Any] | None
     created_at: datetime | None

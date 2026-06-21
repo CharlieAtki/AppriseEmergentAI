@@ -1,48 +1,32 @@
 from __future__ import annotations
 
-import uuid
 from typing import TYPE_CHECKING
 
 from core.models.tenant import Workspace
-from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
+from core.repositories.workspace_repository import WorkspaceRepository
 
 if TYPE_CHECKING:
+    import uuid
+
     from api.schemas.workspace import CreateWorkspaceRequest, UpdateWorkspaceRequest
 
 
 class WorkspaceService:
-    def __init__(self, session: AsyncSession) -> None:
-        self._session = session
+    def __init__(self, repo: WorkspaceRepository) -> None:
+        self._repo = repo
 
     async def create(
         self,
         org_id: uuid.UUID,
         body: CreateWorkspaceRequest,
     ) -> Workspace:
-        ws = Workspace(
-            organisation_id=org_id,
-            name=body.name,
-            status="active",
-            config=body.config,
-        )
-        self._session.add(ws)
-        await self._session.flush()
-        return ws
+        return await self._repo.create(org_id=org_id, name=body.name, config=body.config)
 
     async def get(self, org_id: uuid.UUID, workspace_id: uuid.UUID) -> Workspace | None:
-        ws = await self._session.get(Workspace, workspace_id)
-        if ws is None or ws.organisation_id != org_id:
-            return None
-        return ws
+        return await self._repo.get(org_id=org_id, workspace_id=workspace_id)
 
     async def list(self, org_id: uuid.UUID) -> list[Workspace]:
-        result = await self._session.execute(
-            select(Workspace)
-            .where(Workspace.organisation_id == org_id)
-            .order_by(Workspace.created_at.desc())
-        )
-        return list(result.scalars().all())
+        return await self._repo.list(org_id=org_id)
 
     async def update(self, ws: Workspace, body: UpdateWorkspaceRequest) -> Workspace:
         if body.name is not None:
@@ -55,9 +39,8 @@ class WorkspaceService:
             ws.webhook_secret = body.webhook_secret
         if body.config is not None:
             ws.config = body.config
-        await self._session.flush()
+        await self._repo.save(ws)
         return ws
 
     async def delete(self, ws: Workspace) -> None:
-        await self._session.delete(ws)
-        await self._session.flush()
+        await self._repo.delete(ws)

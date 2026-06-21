@@ -5,9 +5,10 @@ from datetime import datetime
 from typing import Any, Protocol
 
 from core.models.agents import Agent
+from core.models.auth import ApiKey
 from core.models.observability import ProceduralKnowledgeLog, SkillSnapshot
 from core.models.tasks import Task, TaskExecution, WebhookDelivery
-from core.models.tenant import Workspace
+from core.models.tenant import Organisation, User, Workspace
 
 
 class TaskRepositoryProtocol(Protocol):
@@ -265,17 +266,30 @@ class ProceduralKnowledgeRepositoryProtocol(Protocol):
 
 
 class WorkspaceRepositoryProtocol(Protocol):
-    """Single-workspace PK lookup. Never use for cross-workspace admin queries.
+    """Read/write interface for Workspace persistence.
 
-    Cross-workspace queries belong on WorkspaceAdminRepository (deferred until
-    the cron job layer is refactored). Importing WorkspaceAdminRepository is a
-    privilege signal — any file that does so touches all workspaces.
+    API paths: use get(org_id, workspace_id) — org ownership enforced in SQL.
+    Worker paths: use get_by_id(workspace_id) — caller already owns the ID by construction.
+    Cross-workspace admin queries belong on WorkspaceAdminRepository (deferred).
     """
+
+    async def create(
+        self, org_id: uuid.UUID, name: str, config: dict[str, Any] | None
+    ) -> Workspace: ...
+
+    async def get(self, org_id: uuid.UUID, workspace_id: uuid.UUID) -> Workspace | None: ...
+
+    # Org-scoped lookup — enforces tenant ownership in SQL. Use in all API paths.
 
     async def get_by_id(self, workspace_id: uuid.UUID) -> Workspace | None: ...
 
-    # Unscoped PK lookup — for internal worker paths only (e.g. deliver_webhook).
-    # Never call this from API routers — use a workspace-scoped query instead.
+    # Unscoped PK lookup — for internal worker paths only. Never call from API routers.
+
+    async def list(self, org_id: uuid.UUID) -> list[Workspace]: ...
+
+    async def save(self, ws: Workspace) -> None: ...
+
+    async def delete(self, ws: Workspace) -> None: ...
 
 
 class WebhookDeliveryRepositoryProtocol(Protocol):
@@ -301,3 +315,46 @@ class WebhookDeliveryRepositoryProtocol(Protocol):
         task_execution_id: uuid.UUID,
         target_url: str,
     ) -> WebhookDelivery: ...
+
+
+class ApiKeyRepositoryProtocol(Protocol):
+    """Read/write interface for ApiKey persistence.
+
+    create() flushes internally — record.id is DB-generated and needed immediately.
+    get() is workspace-scoped; get_by_id() is unscoped for internal auth paths.
+    get_by_key_prefix() returns candidates for bcrypt validation — never the matched key directly.
+    Transaction contract: never calls commit(). Only create() flushes.
+    """
+
+    async def create(
+        self,
+        organisation_id: uuid.UUID,
+        workspace_id: uuid.UUID,
+        created_by_user_id: uuid.UUID | None,
+        name: str,
+        key_hash: str,
+        key_prefix: str,
+        key_sha256: str,
+        scopes: list[str] | None,
+        expires_at: datetime | None,
+    ) -> ApiKey: ...
+
+    async def get(self, workspace_id: uuid.UUID, key_id: uuid.UUID) -> ApiKey | None: ...
+
+    async def get_by_id(self, key_id: uuid.UUID) -> ApiKey | None: ...
+
+    async def get_by_key_prefix(self, key_prefix: str) -> list[ApiKey]: ...
+
+    async def list(self, workspace_id: uuid.UUID) -> list[ApiKey]: ...
+
+
+class OrganisationRepositoryProtocol(Protocol):
+    """Read-only Clerk identity lookup for Organisation."""
+
+    async def get_by_clerk_org_id(self, clerk_org_id: str) -> Organisation | None: ...
+
+
+class UserRepositoryProtocol(Protocol):
+    """Read-only Clerk identity lookup for User."""
+
+    async def get_by_clerk_user_id(self, clerk_user_id: str) -> User | None: ...

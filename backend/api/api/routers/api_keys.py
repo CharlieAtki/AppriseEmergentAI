@@ -5,17 +5,12 @@ import uuid
 from core.models.tenant import Workspace
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from redis.asyncio import Redis
-from sqlalchemy.ext.asyncio import AsyncSession
 
-from api.deps import get_db, get_redis, require_workspace
+from api.deps import get_api_key_service, get_redis, require_workspace
 from api.schemas.api_key import ApiKeyCreatedResponse, ApiKeyResponse, CreateApiKeyRequest
 from api.services.api_key_service import ApiKeyService
 
 router = APIRouter()
-
-
-def get_service(session: AsyncSession = Depends(get_db)) -> ApiKeyService:
-    return ApiKeyService(session)
 
 
 @router.post("", response_model=ApiKeyCreatedResponse, status_code=status.HTTP_201_CREATED)
@@ -23,7 +18,7 @@ async def create_api_key(
     body: CreateApiKeyRequest,
     request: Request,
     workspace: Workspace = Depends(require_workspace("write")),
-    service: ApiKeyService = Depends(get_service),
+    service: ApiKeyService = Depends(get_api_key_service),
 ) -> ApiKeyCreatedResponse:
     user_id: uuid.UUID | None = getattr(request.state.auth, "user_id", None)
     record, raw_key = await service.create(workspace=workspace, user_id=user_id, body=body)
@@ -39,7 +34,7 @@ async def create_api_key(
 @router.get("", response_model=list[ApiKeyResponse])
 async def list_api_keys(
     workspace: Workspace = Depends(require_workspace("read")),
-    service: ApiKeyService = Depends(get_service),
+    service: ApiKeyService = Depends(get_api_key_service),
 ) -> list[ApiKeyResponse]:
     records = await service.list(workspace_id=workspace.id)
     return [ApiKeyResponse.model_validate(r) for r in records]
@@ -49,7 +44,7 @@ async def list_api_keys(
 async def revoke_api_key(
     key_id: uuid.UUID,
     workspace: Workspace = Depends(require_workspace("write")),
-    service: ApiKeyService = Depends(get_service),
+    service: ApiKeyService = Depends(get_api_key_service),
     redis: Redis = Depends(get_redis),
 ) -> None:
     record = await service.get(workspace_id=workspace.id, key_id=key_id)

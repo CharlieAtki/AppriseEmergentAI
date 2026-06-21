@@ -7,21 +7,18 @@ from typing import TYPE_CHECKING
 
 import bcrypt as _bcrypt
 from core.models.auth import ApiKey
-from core.models.tenant import Workspace
-from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
-
-from api.services.auth_service import revoke_api_key
+from core.repositories.api_key_repository import ApiKeyRepository
 
 if TYPE_CHECKING:
+    from core.models.tenant import Workspace
     from redis.asyncio import Redis
 
     from api.schemas.api_key import CreateApiKeyRequest
 
 
 class ApiKeyService:
-    def __init__(self, session: AsyncSession) -> None:
-        self._session = session
+    def __init__(self, repo: ApiKeyRepository) -> None:
+        self._repo = repo
 
     async def create(
         self,
@@ -42,7 +39,7 @@ class ApiKeyService:
         key_sha256 = hashlib.sha256(full_key.encode()).hexdigest()
         key_prefix = f"apk_live_{token[:8]}"
 
-        record = ApiKey(
+        record = await self._repo.create(
             organisation_id=workspace.organisation_id,
             workspace_id=workspace.id,
             created_by_user_id=user_id,
@@ -53,23 +50,15 @@ class ApiKeyService:
             scopes=body.scopes,
             expires_at=body.expires_at,
         )
-        self._session.add(record)
-        await self._session.flush()
         return record, full_key
 
     async def list(self, workspace_id: uuid.UUID) -> list[ApiKey]:
-        result = await self._session.execute(
-            select(ApiKey)
-            .where(ApiKey.workspace_id == workspace_id)
-            .order_by(ApiKey.created_at.desc())
-        )
-        return list(result.scalars().all())
+        return await self._repo.list(workspace_id=workspace_id)
 
     async def get(self, workspace_id: uuid.UUID, key_id: uuid.UUID) -> ApiKey | None:
-        record = await self._session.get(ApiKey, key_id)
-        if record is None or record.workspace_id != workspace_id:
-            return None
-        return record
+        return await self._repo.get(workspace_id=workspace_id, key_id=key_id)
 
     async def revoke(self, key: ApiKey, redis: Redis) -> None:
-        await revoke_api_key(key_id=key.id, session=self._session, redis=redis)
+        key.revoked = True
+        if key.key_sha256:
+            await redis.delete(f"apikey_valid:{key.key_sha256}")

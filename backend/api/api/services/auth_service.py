@@ -3,16 +3,17 @@ from __future__ import annotations
 import hashlib
 import uuid
 from datetime import UTC, datetime
-from typing import Literal
+from typing import TYPE_CHECKING, Any, Literal
 
 import bcrypt as _bcrypt
-from core.models.auth import ApiKey
-from core.models.tenant import Organisation, User
 from fastapi import HTTPException, status
 from pydantic import BaseModel
-from redis.asyncio import Redis
-from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
+
+if TYPE_CHECKING:
+    from core.repositories.api_key_repository import ApiKeyRepository
+    from core.repositories.org_repository import OrganisationRepository
+    from core.repositories.user_repository import UserRepository
+    from redis.asyncio import Redis
 
 
 class ApiKeyPayload(BaseModel):
@@ -35,7 +36,7 @@ def _sha256(raw_key: str) -> str:
 async def validate_api_key(
     raw_key: str,
     redis: Redis,
-    session: AsyncSession,
+    api_key_repo: ApiKeyRepository,
 ) -> ApiKeyPayload:
     sha = _sha256(raw_key)
     cache_key = f"apikey_valid:{sha}"
@@ -49,14 +50,9 @@ async def validate_api_key(
     # at most a handful of rows; bcrypt.verify is the authoritative check.
     # raw_key format: "apk_live_{token}" — skip the 9-char prefix, take 8 chars of token.
     key_prefix = f"apk_live_{raw_key[9:17]}"
-    result = await session.execute(
-        select(ApiKey).where(
-            ApiKey.key_prefix == key_prefix,
-            ApiKey.revoked.is_(False),
-        )
-    )
-    candidates = result.scalars().all()
-    record: ApiKey | None = None
+    candidates = await api_key_repo.get_by_key_prefix(key_prefix)
+
+    record = None
     for candidate in candidates:
         if _bcrypt.checkpw(raw_key.encode(), candidate.key_hash.encode()):
             record = candidate
@@ -82,46 +78,19 @@ async def validate_api_key(
 
 
 async def validate_clerk_token(
-    claims: dict,
-    session: AsyncSession,
+    claims: dict[str, Any],
+    org_repo: OrganisationRepository,
+    user_repo: UserRepository,
 ) -> UserPayload:
     clerk_org_id: str = claims.get("org_id", "")
     clerk_user_id: str = claims.get("sub", "")
 
-    org_result = await session.execute(
-        select(Organisation).where(Organisation.clerk_org_id == clerk_org_id)
-    )
-    org = org_result.scalar_one_or_none()
+    org = await org_repo.get_by_clerk_org_id(clerk_org_id)
     if org is None:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Unauthorised")
 
-    user_result = await session.execute(select(User).where(User.clerk_user_id == clerk_user_id))
-    user = user_result.scalar_one_or_none()
+    user = await user_repo.get_by_clerk_user_id(clerk_user_id)
     if user is None:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Unauthorised")
 
     return UserPayload(org_id=org.id, user_id=user.id)
-
-
-async def revoke_api_key(
-    key_id: uuid.UUID,
-    session: AsyncSession,
-    redis: Redis,
-) -> None:
-    """Revoke an API key and immediately invalidate its Redis cache entry.
-
-    Sets revoked=True in Postgres, then deletes the cached validation result
-    so the revocation takes effect on the next request rather than after the
-    5-minute cache TTL.
-
-    key_sha256 may be None for keys created before migration 005. Those keys
-    fall back to eventual-consistency revocation via the TTL — the DB flag is
-    still set correctly and will catch any cache-miss validation.
-    """
-    record = await session.get(ApiKey, key_id)
-    if record is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="API key not found")
-    record.revoked = True
-    await session.commit()
-    if record.key_sha256:
-        await redis.delete(f"apikey_valid:{record.key_sha256}")

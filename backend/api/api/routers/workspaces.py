@@ -4,24 +4,19 @@ import uuid
 
 from core.models.tenant import Workspace
 from fastapi import APIRouter, Depends, HTTPException, Request, status
-from sqlalchemy.ext.asyncio import AsyncSession
 
-from api.deps import get_db, require_workspace
+from api.deps import get_workspace_service, require_workspace
 from api.schemas.workspace import CreateWorkspaceRequest, UpdateWorkspaceRequest, WorkspaceResponse
 from api.services.workspace_service import WorkspaceService
 
 router = APIRouter()
 
 
-def get_service(session: AsyncSession = Depends(get_db)) -> WorkspaceService:
-    return WorkspaceService(session)
-
-
 @router.post("", response_model=WorkspaceResponse, status_code=status.HTTP_201_CREATED)
 async def create_workspace(
     body: CreateWorkspaceRequest,
     request: Request,
-    service: WorkspaceService = Depends(get_service),
+    service: WorkspaceService = Depends(get_workspace_service),
 ) -> WorkspaceResponse:
     org_id = request.state.auth.org_id
     ws = await service.create(org_id=org_id, body=body)
@@ -31,7 +26,7 @@ async def create_workspace(
 @router.get("", response_model=list[WorkspaceResponse])
 async def list_workspaces(
     request: Request,
-    service: WorkspaceService = Depends(get_service),
+    service: WorkspaceService = Depends(get_workspace_service),
 ) -> list[WorkspaceResponse]:
     org_id = request.state.auth.org_id
     workspaces = await service.list(org_id=org_id)
@@ -42,7 +37,7 @@ async def list_workspaces(
 async def get_workspace(
     workspace_id: uuid.UUID,
     request: Request,
-    service: WorkspaceService = Depends(get_service),
+    service: WorkspaceService = Depends(get_workspace_service),
 ) -> WorkspaceResponse:
     org_id = request.state.auth.org_id
     ws = await service.get(org_id=org_id, workspace_id=workspace_id)
@@ -55,7 +50,7 @@ async def get_workspace(
 async def update_workspace(
     body: UpdateWorkspaceRequest,
     workspace: Workspace = Depends(require_workspace("write")),
-    service: WorkspaceService = Depends(get_service),
+    service: WorkspaceService = Depends(get_workspace_service),
 ) -> WorkspaceResponse:
     ws = await service.update(workspace, body)
     return WorkspaceResponse.model_validate(ws)
@@ -64,6 +59,6 @@ async def update_workspace(
 @router.delete("/{workspace_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_workspace(
     workspace: Workspace = Depends(require_workspace("write")),
-    service: WorkspaceService = Depends(get_service),
+    service: WorkspaceService = Depends(get_workspace_service),
 ) -> None:
     await service.delete(workspace)
