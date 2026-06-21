@@ -5,6 +5,8 @@ from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 from typing import Any
 
+from arq import create_pool
+from arq.connections import RedisSettings
 from core.config import settings as core_settings
 from core.eventing.activity.task_stream_logger import TaskStreamLogger
 from core.eventing.bus.in_process_bus import EventBus
@@ -39,6 +41,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
     bus = EventBus(loop=loop)
     redis_bus = await RedisBus.create(core_settings.redis.url)
     redis = Redis.from_url(core_settings.redis.url, decode_responses=True)
+    arq_queue = await create_pool(RedisSettings.from_dsn(core_settings.redis.url))
 
     from core.vendors.anthropic.provider import AnthropicProvider
 
@@ -57,6 +60,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
     app.state.redis_bus = redis_bus
     app.state.redis = redis
     app.state.llm_router = llm_router
+    app.state.arq_queue = arq_queue
     # Clerk SDK instance — used by AuthMiddleware to verify human user JWTs.
     # bearer_auth is the Clerk secret key; the SDK fetches Clerk's public JWKS
     # on first verify call and caches them, so subsequent verifications are local
@@ -71,6 +75,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
     await bus.drain_pending()
     await redis_bus.close()
     await redis.aclose()
+    await arq_queue.aclose()
 
 
 app = FastAPI(lifespan=lifespan)

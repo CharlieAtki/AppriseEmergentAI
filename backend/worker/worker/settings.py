@@ -7,6 +7,7 @@ from core.config import settings as core_settings
 from worker.jobs import (
     curate_memory,
     deliver_webhook,
+    enrich_task,
     execute_task,
     reflect,
     sample_metrics,
@@ -49,7 +50,7 @@ class WorkerSettings:
     # Jobs that are explicitly enqueued by handlers at runtime.
     # Cron-only jobs (sample_metrics, sweep_tasks, curate_memory) are NOT listed
     # here — ARQ registers them from cron_jobs automatically.
-    functions = [execute_task, reflect, deliver_webhook]
+    functions = [execute_task, reflect, deliver_webhook, enrich_task]
 
     cron_jobs = [
         cron(sample_metrics, second=_metrics_seconds),  # default: every 15 s

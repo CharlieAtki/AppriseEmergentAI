@@ -1,74 +1,104 @@
 from __future__ import annotations
 
 import uuid
-from typing import TYPE_CHECKING
+from collections.abc import Mapping
+from dataclasses import dataclass
+from datetime import datetime
+from typing import TYPE_CHECKING, Any
 
-from core.models.tasks import Task
-from sqlalchemy import select
-from sqlalchemy.exc import IntegrityError
-from sqlalchemy.ext.asyncio import AsyncSession
+from core.intelligence.enrichment import EnrichmentOverrides
+from core.repositories.task_repository import TaskRepository
 
 if TYPE_CHECKING:
-    from api.schemas.task import CreateTaskRequest
+    from core.models.tasks import Task
+
+
+@dataclass(frozen=True)
+class CreateTaskCommand:
+    """Immutable write intent — router constructs this from HTTP input; service never imports HTTP schemas."""
+
+    workspace_id: uuid.UUID
+    organisation_id: uuid.UUID
+    title: str
+    description: str | None
+    task_type: str | None
+    priority: str | None
+    deadline_at: datetime | None
+    external_ref: str | None
+    idempotency_key: str | None
+    overrides: EnrichmentOverrides | None
+
+
+@dataclass(frozen=True)
+class TaskData:
+    """ORM boundary DTO — the Task ORM model never leaves the service layer; callers hold this instead."""
+
+    id: uuid.UUID
+    workspace_id: uuid.UUID
+    organisation_id: uuid.UUID
+    status: str
+    title: str
+    description: str | None
+    task_type: str | None
+    priority: str | None
+    deadline_at: datetime | None
+    external_ref: str | None
+    idempotency_key: str | None
+    required_skills: Mapping[str, float] | None
+    difficulty: float | None
+    domain_tags: Mapping[str, Any] | None
+    created_at: datetime | None
+
+    @classmethod
+    def from_domain(cls, task: Task) -> TaskData:
+        # Explicit field mapping — mirrors TaskContext.from_task(); no hidden ORM introspection.
+        return cls(
+            id=task.id,
+            workspace_id=task.workspace_id,
+            organisation_id=task.organisation_id,
+            status=task.status,
+            title=task.title,
+            description=task.description,
+            task_type=task.task_type,
+            priority=task.priority,
+            deadline_at=task.deadline_at,
+            external_ref=task.external_ref,
+            idempotency_key=task.idempotency_key,
+            required_skills=dict(task.required_skills)
+            if task.required_skills is not None
+            else None,
+            difficulty=task.difficulty,
+            domain_tags=dict(task.domain_tags) if task.domain_tags is not None else None,
+            created_at=task.created_at,
+        )
 
 
 class TaskService:
-    def __init__(self, session: AsyncSession) -> None:
-        self._session = session
+    """Task lifecycle boundary — accepts Commands, returns TaskData; ORM never escapes."""
 
-    async def commit(self) -> None:
-        await self._session.commit()
+    def __init__(self, repo: TaskRepository) -> None:
+        self._repo = repo
 
-    async def create(
-        self,
-        workspace_id: uuid.UUID,
-        organisation_id: uuid.UUID,
-        body: CreateTaskRequest,
-        idempotency_key: str | None = None,
-    ) -> Task:
-        task = Task(
-            workspace_id=workspace_id,
-            organisation_id=organisation_id,
-            title=body.title,
-            description=body.description,
+    async def create(self, cmd: CreateTaskCommand) -> TaskData:
+        # Status starts as "enriching" — the enrich_task worker job transitions it forward.
+        task = await self._repo.create(
+            workspace_id=cmd.workspace_id,
+            organisation_id=cmd.organisation_id,
+            title=cmd.title,
+            description=cmd.description,
             status="enriching",
-            task_type=body.task_type,
-            priority=body.priority,
-            deadline_at=body.deadline_at,
-            external_ref=body.external_ref,
-            idempotency_key=idempotency_key,
+            task_type=cmd.task_type,
+            priority=cmd.priority,
+            deadline_at=cmd.deadline_at,
+            external_ref=cmd.external_ref,
+            idempotency_key=cmd.idempotency_key,
         )
-        self._session.add(task)
-        try:
-            await self._session.flush()
-        except IntegrityError:
-            await self._session.rollback()
-            if idempotency_key:
-                existing = await self._get_by_idempotency_key(workspace_id, idempotency_key)
-                if existing:
-                    return existing
-            raise
-        return task
+        return TaskData.from_domain(task)
 
-    async def _get_by_idempotency_key(
-        self, workspace_id: uuid.UUID, idempotency_key: str
-    ) -> Task | None:
-        result = await self._session.execute(
-            select(Task).where(
-                Task.workspace_id == workspace_id,
-                Task.idempotency_key == idempotency_key,
-            )
-        )
-        return result.scalar_one_or_none()
+    async def get(self, task_id: uuid.UUID, workspace_id: uuid.UUID) -> TaskData | None:
+        task = await self._repo.get(task_id, workspace_id)
+        return TaskData.from_domain(task) if task is not None else None
 
-    async def get(self, workspace_id: uuid.UUID, task_id: uuid.UUID) -> Task | None:
-        result = await self._session.execute(
-            select(Task).where(Task.id == task_id, Task.workspace_id == workspace_id)
-        )
-        return result.scalar_one_or_none()
-
-    async def list(self, workspace_id: uuid.UUID) -> list[Task]:
-        result = await self._session.execute(
-            select(Task).where(Task.workspace_id == workspace_id).order_by(Task.created_at.desc())
-        )
-        return list(result.scalars().all())
+    async def list(self, workspace_id: uuid.UUID) -> list[TaskData]:
+        tasks = await self._repo.list_all(workspace_id)
+        return [TaskData.from_domain(t) for t in tasks]

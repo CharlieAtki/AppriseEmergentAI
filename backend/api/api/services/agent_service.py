@@ -1,52 +1,95 @@
 from __future__ import annotations
 
 import uuid
-from typing import TYPE_CHECKING
+from collections.abc import Mapping
+from dataclasses import dataclass
+from datetime import datetime
+from typing import TYPE_CHECKING, Any
 
-from core.models.agents import Agent
-from core.models.tenant import Workspace
-from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
+from core.repositories.agent_repository import AgentRepository
 
 if TYPE_CHECKING:
-    from api.schemas.agent import CreateAgentRequest, UpdateAgentRequest
+    from core.models.agents import Agent
+
+
+@dataclass(frozen=True)
+class CreateAgentCommand:
+    """Immutable write intent — router constructs this from HTTP input; service never imports HTTP schemas."""
+
+    workspace_id: uuid.UUID
+    organisation_id: uuid.UUID
+    name: str
+    skills: Mapping[str, float] | None
+    personality: Mapping[str, Any] | None
+
+
+@dataclass(frozen=True)
+class UpdateAgentCommand:
+    """Partial update intent — None fields are skipped; only supplied fields are written."""
+
+    name: str | None
+    status: str | None
+
+
+@dataclass(frozen=True)
+class AgentData:
+    """ORM boundary DTO — the Agent ORM model never leaves the service layer; callers hold this instead."""
+
+    id: uuid.UUID
+    workspace_id: uuid.UUID
+    name: str
+    status: str
+    skills: Mapping[str, float] | None
+    influence: float | None
+    created_at: datetime
+
+    @classmethod
+    def from_domain(cls, agent: Agent) -> AgentData:
+        # Explicit field mapping — mirrors TaskContext.from_task(); no hidden ORM introspection.
+        return cls(
+            id=agent.id,
+            workspace_id=agent.workspace_id,
+            name=agent.name,
+            status=agent.status,
+            skills=dict(agent.skills) if agent.skills is not None else None,
+            influence=agent.influence,
+            created_at=agent.created_at,
+        )
 
 
 class AgentService:
-    def __init__(self, session: AsyncSession) -> None:
-        self._session = session
+    """Agent lifecycle boundary — accepts Commands, returns AgentData; ORM never escapes."""
 
-    async def create(self, workspace: Workspace, body: CreateAgentRequest) -> Agent:
-        agent = Agent(
-            workspace_id=workspace.id,
-            organisation_id=workspace.organisation_id,
-            name=body.name,
-            status="active",
-            skills=body.skills,
-            personality=body.personality,
+    def __init__(self, repo: AgentRepository) -> None:
+        self._repo = repo
+
+    async def create(self, cmd: CreateAgentCommand) -> AgentData:
+        agent = await self._repo.create(
+            workspace_id=cmd.workspace_id,
+            organisation_id=cmd.organisation_id,
+            name=cmd.name,
+            skills=cmd.skills,
+            personality=cmd.personality,
         )
-        self._session.add(agent)
-        await self._session.flush()
-        return agent
+        return AgentData.from_domain(agent)
 
-    async def get(self, workspace_id: uuid.UUID, agent_id: uuid.UUID) -> Agent | None:
-        agent = await self._session.get(Agent, agent_id)
-        if agent is None or agent.workspace_id != workspace_id:
+    async def get(self, agent_id: uuid.UUID, workspace_id: uuid.UUID) -> AgentData | None:
+        agent = await self._repo.get(agent_id, workspace_id)
+        return AgentData.from_domain(agent) if agent is not None else None
+
+    async def list(self, workspace_id: uuid.UUID) -> list[AgentData]:
+        agents = await self._repo.list_all(workspace_id=workspace_id)
+        return [AgentData.from_domain(a) for a in agents]
+
+    async def update(
+        self,
+        agent_id: uuid.UUID,
+        workspace_id: uuid.UUID,
+        cmd: UpdateAgentCommand,
+    ) -> AgentData | None:
+        # Returns None so the router decides the HTTP status code; no 404 raised here.
+        agent = await self._repo.get(agent_id, workspace_id)
+        if agent is None:
             return None
-        return agent
-
-    async def list(self, workspace_id: uuid.UUID) -> list[Agent]:
-        result = await self._session.execute(
-            select(Agent)
-            .where(Agent.workspace_id == workspace_id)
-            .order_by(Agent.created_at.desc())
-        )
-        return list(result.scalars().all())
-
-    async def update(self, agent: Agent, body: UpdateAgentRequest) -> Agent:
-        if body.name is not None:
-            agent.name = body.name
-        if body.status is not None:
-            agent.status = body.status
-        await self._session.flush()
-        return agent
+        agent = await self._repo.update_fields(agent, name=cmd.name, status=cmd.status)
+        return AgentData.from_domain(agent)

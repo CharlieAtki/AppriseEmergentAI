@@ -8,19 +8,18 @@ from typing import TYPE_CHECKING, Any
 from core.config import settings
 from core.coordination.contract_net import attempt_reservation, compute_bid_score
 from core.coordination.task_state import TaskStateMachine
-from core.models.tasks import Task
 
 if TYPE_CHECKING:
     from arq import ArqRedis
     from core.models.agents import Agent
+    from core.repositories.protocols import TaskRepositoryProtocol
     from redis.asyncio import Redis
-    from sqlalchemy.ext.asyncio import AsyncSession
 
 logger = logging.getLogger(__name__)
 
 
 async def score_and_reserve(
-    session: AsyncSession,
+    task_repo: TaskRepositoryProtocol,
     agents: list[Agent],
     task_id: uuid.UUID,
     workspace_id: uuid.UUID,
@@ -64,7 +63,7 @@ async def score_and_reserve(
     for agent, score in scored:
         won = await attempt_reservation(redis, workspace_id_str, task_id_str, str(agent.id))
         if won:
-            task = await session.get(Task, task_id)
+            task = await task_repo.get_by_id(task_id)
             if task is None or task.status != "open":
                 observed = "missing" if task is None else task.status
                 logger.warning(
@@ -77,8 +76,8 @@ async def score_and_reserve(
                 await redis.delete(f"reservation:{workspace_id_str}:{task_id_str}")
             else:
                 TaskStateMachine.transition(task, "reserved")
-                session.add(task)
-                await session.flush()
+                await task_repo.save(task)
+                await task_repo.flush()  # must precede enqueue_job — ensures task.id is committed before worker picks it up
                 try:
                     await arq_queue.enqueue_job(
                         "execute_task",

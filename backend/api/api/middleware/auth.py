@@ -3,6 +3,9 @@ from __future__ import annotations
 from collections.abc import Awaitable, Callable
 
 from core.database import get_session
+from core.repositories.api_key_repository import ApiKeyRepository
+from core.repositories.org_repository import OrganisationRepository
+from core.repositories.user_repository import UserRepository
 from fastapi import Request
 from fastapi.responses import JSONResponse
 from starlette.middleware.base import BaseHTTPMiddleware
@@ -45,7 +48,7 @@ class AuthMiddleware(BaseHTTPMiddleware):
             try:
                 async with get_session() as session:
                     redis = request.app.state.redis
-                    payload = await validate_api_key(api_key, redis, session)
+                    payload = await validate_api_key(api_key, redis, ApiKeyRepository(session))
             except Exception:
                 return JSONResponse({"error": "Unauthorised"}, status_code=401)
             request.state.auth = payload
@@ -66,7 +69,11 @@ class AuthMiddleware(BaseHTTPMiddleware):
                 if not req_state.is_signed_in or req_state.payload is None:
                     return JSONResponse({"error": "Unauthorised"}, status_code=401)
                 async with get_session() as session:
-                    payload = await validate_clerk_token(req_state.payload, session)
+                    payload = await validate_clerk_token(
+                        req_state.payload,
+                        OrganisationRepository(session),
+                        UserRepository(session),
+                    )
             except Exception:
                 return JSONResponse({"error": "Unauthorised"}, status_code=401)
             request.state.auth = payload

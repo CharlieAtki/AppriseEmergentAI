@@ -11,12 +11,13 @@ from core.coordination.task_state import TaskStateMachine
 from core.database import get_session
 from core.eventing.bus.handlers import EventHandler
 from core.eventing.events.task_events import TaskUpdatedEvent
-from core.models.agents import Agent
-from core.models.observability import InfluenceSnapshot
-from core.models.tasks import Task, TaskExecution
-from sqlalchemy import func, select
+from core.repositories.agent_repository import AgentRepository
+from core.repositories.influence_repository import InfluenceRepository
+from core.repositories.task_execution_repository import TaskExecutionRepository
+from core.repositories.task_repository import TaskRepository
 
 if TYPE_CHECKING:
+    from core.repositories.protocols import TaskExecutionRepositoryProtocol
     from sqlalchemy.ext.asyncio import AsyncSession
 
 logger = logging.getLogger(__name__)
@@ -26,7 +27,7 @@ async def compute_delegation_credits(
     task_id: uuid.UUID,
     workspace_id: uuid.UUID,
     quality: float,
-    session: AsyncSession,
+    execution_repo: TaskExecutionRepositoryProtocol,
 ) -> list[tuple[uuid.UUID, float]]:
     """Return (agent_id, quality_signal) for every agent in a task's delegation chain.
 
@@ -43,23 +44,14 @@ async def compute_delegation_credits(
     Multiple agents may appear (e.g. CFP initiator + decomposer in a CFP→Decompose chain).
     All are returned in a single query — one DB round-trip regardless of chain length.
     """
-    rows = (
-        await session.execute(
-            select(TaskExecution.agent_id, TaskExecution.execution_path).where(
-                TaskExecution.task_id == task_id,
-                TaskExecution.workspace_id == workspace_id,
-                TaskExecution.execution_path.in_(["cfp", "decompose"]),
-                TaskExecution.status == "completed",
-            )
-        )
-    ).all()
+    executions = await execution_repo.get_delegation_contributors(task_id, workspace_id)
 
     result: list[tuple[uuid.UUID, float]] = []
-    for agent_id, path in rows:
-        if path == "decompose":
-            result.append((agent_id, quality))
-        elif path == "cfp":
-            result.append((agent_id, quality * settings.CFP_COORDINATOR_CREDIT))
+    for execution in executions:
+        if execution.execution_path == "decompose":
+            result.append((execution.agent_id, quality))
+        elif execution.execution_path == "cfp":
+            result.append((execution.agent_id, quality * settings.CFP_COORDINATOR_CREDIT))
     return result
 
 
@@ -126,19 +118,19 @@ class AgentCreditHandler(EventHandler[TaskUpdatedEvent]):
         if event.state.executing_agent_id is None or event.state.quality_score is None:
             return
 
-        agent = await session.get(Agent, event.state.executing_agent_id)
+        agent_repo = AgentRepository(session)
+        agent = await agent_repo.get_by_id(event.state.executing_agent_id)
         if agent is None:
             return
 
+        influence_repo = InfluenceRepository(session)
         agent.influence = compute_influence_ema(agent.influence, event.state.quality_score)
-        session.add(agent)
-        session.add(
-            InfluenceSnapshot(
-                agent_id=agent.id,
-                organisation_id=agent.organisation_id,
-                workspace_id=agent.workspace_id,
-                influence=agent.influence,
-            )
+        await agent_repo.save(agent)
+        await influence_repo.record(
+            agent_id=agent.id,
+            organisation_id=agent.organisation_id,
+            workspace_id=agent.workspace_id,
+            influence=agent.influence,
         )
         logger.debug(
             "AgentCreditHandler executor: agent=%s influence=%.4f quality=%.3f",
@@ -148,6 +140,7 @@ class AgentCreditHandler(EventHandler[TaskUpdatedEvent]):
         )
 
     async def _credit_coordinator(self, event: TaskUpdatedEvent, session: AsyncSession) -> None:
+        execution_repo = TaskExecutionRepository(session)
         if event.state.parent_task_id is None:
             # Root task: credit delegation chain of this task directly.
             if event.state.quality_score is None:
@@ -156,25 +149,25 @@ class AgentCreditHandler(EventHandler[TaskUpdatedEvent]):
                 event.state.id,
                 event.state.workspace_id,
                 event.state.quality_score,
-                session,
+                execution_repo,
             )
         else:
             # Subtask: credit parent's delegation chain when all siblings are done.
-            credits = await self._subtask_rollup_credits(event, session)
+            credits = await self._subtask_rollup_credits(event, session, execution_repo)
 
+        agent_repo = AgentRepository(session)
+        influence_repo = InfluenceRepository(session)
         for agent_id, quality_signal in credits:
-            agent = await session.get(Agent, agent_id)
+            agent = await agent_repo.get_by_id(agent_id)
             if agent is None:
                 continue
             agent.influence = compute_influence_ema(agent.influence, quality_signal)
-            session.add(agent)
-            session.add(
-                InfluenceSnapshot(
-                    agent_id=agent.id,
-                    organisation_id=agent.organisation_id,
-                    workspace_id=agent.workspace_id,
-                    influence=agent.influence,
-                )
+            await agent_repo.save(agent)
+            await influence_repo.record(
+                agent_id=agent.id,
+                organisation_id=agent.organisation_id,
+                workspace_id=agent.workspace_id,
+                influence=agent.influence,
             )
             logger.debug(
                 "AgentCreditHandler coordinator: agent=%s influence=%.4f signal=%.3f",
@@ -187,6 +180,7 @@ class AgentCreditHandler(EventHandler[TaskUpdatedEvent]):
         self,
         event: TaskUpdatedEvent,
         session: AsyncSession,
+        execution_repo: TaskExecutionRepositoryProtocol,
     ) -> list[tuple[uuid.UUID, float]]:
         """Credit the parent task's delegation chain when this is the last sibling.
 
@@ -196,18 +190,8 @@ class AgentCreditHandler(EventHandler[TaskUpdatedEvent]):
         parent_id = event.state.parent_task_id
         workspace_id = event.state.workspace_id
 
-        siblings = (
-            (
-                await session.execute(
-                    select(Task).where(
-                        Task.parent_task_id == parent_id,
-                        Task.workspace_id == workspace_id,
-                    )
-                )
-            )
-            .scalars()
-            .all()
-        )
+        task_repo = TaskRepository(session)
+        siblings = await task_repo.get_siblings(parent_id, workspace_id)
 
         if not siblings:
             return []
@@ -218,16 +202,11 @@ class AgentCreditHandler(EventHandler[TaskUpdatedEvent]):
         if not completed_ids:
             return []  # all siblings failed/expired — no quality signal
 
-        avg_quality: float | None = (
-            await session.execute(
-                select(func.avg(TaskExecution.quality_score)).where(
-                    TaskExecution.task_id.in_(completed_ids),
-                    TaskExecution.status == "completed",
-                )
-            )
-        ).scalar()
+        avg_quality = await execution_repo.get_avg_quality_for_completed_tasks(completed_ids)
 
         if avg_quality is None:
             return []
 
-        return await compute_delegation_credits(parent_id, workspace_id, avg_quality, session)
+        return await compute_delegation_credits(
+            parent_id, workspace_id, avg_quality, execution_repo
+        )

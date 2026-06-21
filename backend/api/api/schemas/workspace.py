@@ -2,14 +2,14 @@ from __future__ import annotations
 
 import uuid
 from datetime import datetime
-from typing import Literal
+from typing import Any, Literal
 
 from pydantic import BaseModel
 
 
 class CreateWorkspaceRequest(BaseModel):
     name: str
-    config: dict | None = None
+    config: dict[str, Any] | None = None
 
 
 class UpdateWorkspaceRequest(BaseModel):
@@ -17,7 +17,7 @@ class UpdateWorkspaceRequest(BaseModel):
     status: Literal["active", "paused", "archived"] | None = None
     result_webhook_url: str | None = None
     webhook_secret: str | None = None
-    config: dict | None = None
+    config: dict[str, Any] | None = None
 
 
 class WorkspaceResponse(BaseModel):

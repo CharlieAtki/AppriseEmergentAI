@@ -2,15 +2,15 @@ from __future__ import annotations
 
 import uuid
 from datetime import datetime
-from typing import Literal
+from typing import Any, Literal
 
 from pydantic import BaseModel
 
 
 class CreateAgentRequest(BaseModel):
     name: str
-    personality: dict | None = None
-    skills: dict | None = None
+    personality: dict[str, Any] | None = None
+    skills: dict[str, float] | None = None
 
 
 class UpdateAgentRequest(BaseModel):
@@ -25,6 +25,6 @@ class AgentResponse(BaseModel):
     workspace_id: uuid.UUID
     name: str
     status: str
-    skills: dict | None
+    skills: dict[str, float] | None
     influence: float | None
     created_at: datetime

@@ -1,3 +1,11 @@
+"""ARQ cron job — samples workspace-level emergence metrics.
+
+TODO: raw session calls (select(Workspace), session.add(WorkspaceMetricsSnapshot),
+session.add(EmergenceEvent)) to be migrated to WorkspaceAdminRepository,
+WorkspaceMetricsRepository, and EmergenceEventRepository when the cron job layer
+is refactored.
+"""
+
 from __future__ import annotations
 
 import logging
@@ -6,9 +14,9 @@ from typing import Any
 
 from core.config import settings
 from core.database import get_session
-from core.models.agents import Agent
 from core.models.observability import EmergenceEvent, WorkspaceMetricsSnapshot
 from core.models.tenant import Workspace
+from core.repositories.agent_repository import AgentRepository
 from sqlalchemy import select
 
 logger = logging.getLogger(__name__)
@@ -36,20 +44,10 @@ async def sample_metrics(ctx: dict[str, Any]) -> None:
             .all()
         )
 
+        agent_repo = AgentRepository(session)
         snapshots_written = 0
         for workspace in workspaces:
-            agents = (
-                (
-                    await session.execute(
-                        select(Agent).where(
-                            Agent.workspace_id == workspace.id,
-                            Agent.status == "active",
-                        )
-                    )
-                )
-                .scalars()
-                .all()
-            )
+            agents = await agent_repo.get_all_active(workspace.id)
 
             if len(agents) < 2:
                 continue
