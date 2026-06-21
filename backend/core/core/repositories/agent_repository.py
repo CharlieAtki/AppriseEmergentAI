@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import uuid
+from collections.abc import Mapping
 from typing import Any
 
 from sqlalchemy import select
@@ -29,8 +30,8 @@ class AgentRepository:
         workspace_id: uuid.UUID,
         organisation_id: uuid.UUID,
         name: str,
-        skills: dict[str, Any] | None,
-        personality: dict[str, Any] | None,
+        skills: Mapping[str, Any] | None,
+        personality: Mapping[str, Any] | None,
     ) -> Agent:
         """Create and stage a new Agent, flushing to populate agent.id before returning.
 

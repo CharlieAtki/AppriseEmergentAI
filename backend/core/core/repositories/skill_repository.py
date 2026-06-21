@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import uuid
+from collections.abc import Mapping
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -42,7 +43,7 @@ class SkillRepository:
         agent_id: uuid.UUID,
         organisation_id: uuid.UUID,
         workspace_id: uuid.UUID,
-        skills: dict[str, float],
+        skills: Mapping[str, float],
         execution_id: uuid.UUID,
     ) -> None:
         """Stage a SkillSnapshot for the audit trail. Does not flush or commit."""

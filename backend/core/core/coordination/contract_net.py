@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import math
+from collections.abc import Mapping
 from typing import Any
 
 from redis.asyncio import Redis
@@ -13,8 +14,8 @@ def _clamp01(x: float) -> float:
 
 
 def _skill_match(
-    agent_skills: dict[str, float],
-    required_skills: dict[str, float],
+    agent_skills: Mapping[str, float],
+    required_skills: Mapping[str, float],
 ) -> float:
     if not required_skills:
         return 0.5  # neutral bid when task has no skill requirements
@@ -40,7 +41,7 @@ def _influence_factor(influence: float, k: float) -> float:
     return 1.0 - math.exp(-k * _clamp01(influence))
 
 
-def _cosine_similarity(a: dict[str, float], b: dict[str, float]) -> float:
+def _cosine_similarity(a: Mapping[str, float], b: Mapping[str, float]) -> float:
     keys = set(a) & set(b)
     if not keys:
         return 0.0
@@ -53,8 +54,8 @@ def _cosine_similarity(a: dict[str, float], b: dict[str, float]) -> float:
 
 
 def _personality_fit(
-    agent_personality: dict[str, Any] | None,
-    task_domain_tags: dict[str, Any] | None,
+    agent_personality: Mapping[str, Any] | None,
+    task_domain_tags: Mapping[str, Any] | None,
 ) -> float:
     if not agent_personality or not task_domain_tags:
         return 0.5  # neutral when either side is absent
@@ -76,12 +77,12 @@ def _seeded_jitter(task_id: str, agent_id: str) -> float:
 
 
 def compute_bid_score(
-    agent_skills: dict[str, float],
+    agent_skills: Mapping[str, float],
     agent_influence: float,
     agent_active_tasks: int,
-    required_skills: dict[str, float],
-    agent_personality: dict[str, Any] | None = None,
-    task_domain_tags: dict[str, Any] | None = None,
+    required_skills: Mapping[str, float],
+    agent_personality: Mapping[str, Any] | None = None,
+    task_domain_tags: Mapping[str, Any] | None = None,
     *,
     task_id: str | None = None,
     agent_id: str | None = None,

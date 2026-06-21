@@ -32,9 +32,9 @@ async def enrich_task(
     The creating request commits the task row (status="enriching") before enqueuing
     this job, so the task is guaranteed visible to this session.
 
-    On retry: if a previous attempt already transitioned the task to "open", the
-    TaskStateMachine.transition() call raises InvalidTaskTransition and the job exits
-    cleanly via ARQ's retry logic — no duplicate bidding events are published.
+    On retry: if a previous attempt already transitioned the task to "open" or a
+    terminal state, both session blocks detect this via status checks and return
+    early — no duplicate bidding events are published.
     """
     wctx = get_worker_context()
     meta = ArqJobMeta.from_ctx(ctx)
@@ -66,6 +66,14 @@ async def enrich_task(
         task = await task_repo.get_by_id(uuid.UUID(task_id))
         if task is None:
             logger.warning("enrich_task: task=%s not found on write — skipping", task_id)
+            return
+        if TaskStateMachine.is_terminal(task.status) or task.status == "open":
+            logger.info(
+                "enrich_task: task=%s reached %s before write session on try=%d — skipping",
+                task_id,
+                task.status,
+                meta.job_try,
+            )
             return
         task.required_skills = result.required_skills
         task.difficulty = result.difficulty

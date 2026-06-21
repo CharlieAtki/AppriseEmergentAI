@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import uuid
+from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Any
@@ -15,7 +16,7 @@ class CreateWorkspaceCommand:
 
     org_id: uuid.UUID
     name: str
-    config: dict[str, Any] | None
+    config: Mapping[str, Any] | None
 
 
 @dataclass(frozen=True)
@@ -26,7 +27,7 @@ class UpdateWorkspaceCommand:
     status: str | None
     result_webhook_url: str | None
     webhook_secret: str | None
-    config: dict[str, Any] | None
+    config: Mapping[str, Any] | None
 
 
 @dataclass(frozen=True)

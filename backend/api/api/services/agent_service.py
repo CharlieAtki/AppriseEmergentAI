@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import uuid
+from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import datetime
 from typing import TYPE_CHECKING, Any
@@ -18,8 +19,8 @@ class CreateAgentCommand:
     workspace_id: uuid.UUID
     organisation_id: uuid.UUID
     name: str
-    skills: dict[str, float] | None
-    personality: dict[str, Any] | None
+    skills: Mapping[str, float] | None
+    personality: Mapping[str, Any] | None
 
 
 @dataclass(frozen=True)
@@ -38,7 +39,7 @@ class AgentData:
     workspace_id: uuid.UUID
     name: str
     status: str
-    skills: dict[str, float] | None
+    skills: Mapping[str, float] | None
     influence: float | None
     created_at: datetime
 
@@ -50,7 +51,7 @@ class AgentData:
             workspace_id=agent.workspace_id,
             name=agent.name,
             status=agent.status,
-            skills=agent.skills,
+            skills=dict(agent.skills) if agent.skills is not None else None,
             influence=agent.influence,
             created_at=agent.created_at,
         )

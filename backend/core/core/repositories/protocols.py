@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import uuid
+from collections.abc import Mapping
 from datetime import datetime
 from typing import Any, Protocol
 
@@ -78,8 +79,8 @@ class AgentRepositoryProtocol(Protocol):
         workspace_id: uuid.UUID,
         organisation_id: uuid.UUID,
         name: str,
-        skills: dict[str, Any] | None,
-        personality: dict[str, Any] | None,
+        skills: Mapping[str, Any] | None,
+        personality: Mapping[str, Any] | None,
     ) -> Agent: ...
 
     async def get(self, agent_id: uuid.UUID, workspace_id: uuid.UUID) -> Agent | None: ...
@@ -205,7 +206,7 @@ class SkillRepositoryProtocol(Protocol):
         agent_id: uuid.UUID,
         organisation_id: uuid.UUID,
         workspace_id: uuid.UUID,
-        skills: dict[str, float],
+        skills: Mapping[str, float],
         execution_id: uuid.UUID,
     ) -> None: ...
 
@@ -274,7 +275,7 @@ class WorkspaceRepositoryProtocol(Protocol):
     """
 
     async def create(
-        self, org_id: uuid.UUID, name: str, config: dict[str, Any] | None
+        self, org_id: uuid.UUID, name: str, config: Mapping[str, Any] | None
     ) -> Workspace: ...
 
     async def get(self, org_id: uuid.UUID, workspace_id: uuid.UUID) -> Workspace | None: ...

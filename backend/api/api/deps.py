@@ -113,8 +113,8 @@ def require_workspace(permission: str = "write") -> Callable[..., Awaitable[Work
         if org_id is None:
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Unauthorised")
 
-        ws = await WorkspaceRepository(session).get_by_id(workspace_id)
-        if ws is None or ws.organisation_id != org_id:
+        ws = await WorkspaceRepository(session).get(org_id=org_id, workspace_id=workspace_id)
+        if ws is None:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Workspace not found")
 
         if ws.status != "active":

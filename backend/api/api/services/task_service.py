@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import uuid
+from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import datetime
 from typing import TYPE_CHECKING, Any
@@ -43,9 +44,9 @@ class TaskData:
     deadline_at: datetime | None
     external_ref: str | None
     idempotency_key: str | None
-    required_skills: dict[str, float] | None
+    required_skills: Mapping[str, float] | None
     difficulty: float | None
-    domain_tags: dict[str, Any] | None
+    domain_tags: Mapping[str, Any] | None
     created_at: datetime | None
 
     @classmethod
@@ -63,9 +64,11 @@ class TaskData:
             deadline_at=task.deadline_at,
             external_ref=task.external_ref,
             idempotency_key=task.idempotency_key,
-            required_skills=task.required_skills,
+            required_skills=dict(task.required_skills)
+            if task.required_skills is not None
+            else None,
             difficulty=task.difficulty,
-            domain_tags=task.domain_tags,
+            domain_tags=dict(task.domain_tags) if task.domain_tags is not None else None,
             created_at=task.created_at,
         )
 

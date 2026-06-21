@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import uuid
+from collections.abc import Mapping
 from typing import Any
 
 from sqlalchemy import select
@@ -26,7 +27,7 @@ class WorkspaceRepository:
         self._session = session
 
     async def create(
-        self, org_id: uuid.UUID, name: str, config: dict[str, Any] | None
+        self, org_id: uuid.UUID, name: str, config: Mapping[str, Any] | None
     ) -> Workspace:
         """Stage and flush — caller needs ws.id immediately for the HTTP response."""
         ws = Workspace(organisation_id=org_id, name=name, status="active", config=config)
