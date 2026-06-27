@@ -28,7 +28,6 @@ def score_outcome(state: GraphState) -> float:
     """
     artifact_score = 1.0 if (state["artifact"] or state["artifact_id"]) else 0.1
 
-    # Step efficiency: penalise runs that pushed near the limit.
     ratio = state["step_count"] / settings.intelligence.max_graph_steps
     step_score = _clamp01(1.0 - ratio * 0.6)
 

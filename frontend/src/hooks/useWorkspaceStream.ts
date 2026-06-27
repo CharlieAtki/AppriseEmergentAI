@@ -1,0 +1,94 @@
+import { useQueryClient } from '@tanstack/react-query'
+import { useEffect } from 'react'
+import { z } from 'zod'
+
+import {
+  getGetAgentWorkspacesWorkspaceIdAgentsAgentIdGetQueryKey,
+  getListAgentsWorkspacesWorkspaceIdAgentsGetQueryKey,
+} from '@/api/generated/agents/agents'
+import { getListTasksWorkspacesWorkspaceIdTasksGetQueryKey } from '@/api/generated/tasks/tasks'
+
+const TaskCompletedEvent = z.object({
+  type: z.literal('task.completed'),
+  task_id: z.string(),
+  agent_id: z.string(),
+  quality_score: z.number().min(0).max(1),
+})
+
+const TaskExecutingEvent = z.object({
+  type: z.literal('task.executing'),
+  task_id: z.string(),
+  agent_id: z.string(),
+})
+
+const AgentSkillUpdatedEvent = z.object({
+  type: z.literal('agent.skill_updated'),
+  agent_id: z.string(),
+  skill_deltas: z.record(z.string(), z.number()),
+  new_influence: z.number(),
+})
+
+const EmergenceDetectedEvent = z.object({
+  type: z.literal('emergence.detected'),
+  gini_coefficient: z.number(),
+  hub_agent_id: z.string(),
+})
+
+export const WorkspaceEvent = z.discriminatedUnion('type', [
+  TaskCompletedEvent,
+  TaskExecutingEvent,
+  AgentSkillUpdatedEvent,
+  EmergenceDetectedEvent,
+])
+
+export type WorkspaceEvent = z.infer<typeof WorkspaceEvent>
+
+export function useWorkspaceStream(workspaceId: string) {
+  const queryClient = useQueryClient()
+
+  useEffect(() => {
+    const wsUrl = process.env.NEXT_PUBLIC_WS_URL ?? 'ws://localhost:8000'
+    const ws = new WebSocket(`${wsUrl}/workspaces/${workspaceId}/stream`)
+
+    ws.onmessage = (event: MessageEvent<string>) => {
+      let raw: unknown
+      try {
+        raw = JSON.parse(event.data)
+      } catch {
+        return
+      }
+
+      const result = WorkspaceEvent.safeParse(raw)
+      if (!result.success) return
+
+      const e = result.data
+
+      switch (e.type) {
+        case 'task.completed':
+        case 'task.executing':
+          void queryClient.invalidateQueries({
+            queryKey: getListTasksWorkspacesWorkspaceIdTasksGetQueryKey(workspaceId),
+          })
+          break
+        case 'agent.skill_updated':
+          void queryClient.invalidateQueries({
+            queryKey: getGetAgentWorkspacesWorkspaceIdAgentsAgentIdGetQueryKey(
+              workspaceId,
+              e.agent_id,
+            ),
+          })
+          void queryClient.invalidateQueries({
+            queryKey: getListAgentsWorkspacesWorkspaceIdAgentsGetQueryKey(workspaceId),
+          })
+          break
+        case 'emergence.detected':
+          // No metrics endpoint yet — add key here once /metrics is wired up.
+          break
+      }
+    }
+
+    ws.onerror = (err) => console.error('[WorkspaceStream]', err)
+
+    return () => ws.close()
+  }, [workspaceId, queryClient])
+}
