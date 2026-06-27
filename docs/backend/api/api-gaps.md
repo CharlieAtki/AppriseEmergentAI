@@ -411,10 +411,10 @@ disconnect (leaked subscriptions compound with workspace count).
 | Response schema gaps | ✅ Closed |
 | Idempotency key not enforced | ✅ Closed |
 | Insufficient task schema validation | ✅ Closed |
-| `overrides` field missing from `CreateTaskRequest` | ❌ Open — customers cannot bypass enrichment |
-| `idempotency_key` is a body field, not HTTP header | ❌ Open — misalignment with Notion spec and industry convention |
-| API key prefix format (`appr_` vs `apk_live_`) | ❌ Open — customer-facing, needs decision |
-| `artifact_uri` column name misleading | ❌ Open — low priority naming issue, no runtime bug |
+| `overrides` field missing from `CreateTaskRequest` | ✅ Closed — `TaskOverrides` + unified `enrich()` in core |
+| `idempotency_key` is a body field, not HTTP header | ✅ Closed — `Idempotency-Key` header wins; body field kept |
+| API key prefix format (`appr_` vs `apk_live_`) | ✅ Closed — full key is now `apk_live_{token}` |
+| `artifact_uri` column name misleading | ✅ Closed — renamed to `artifact`, migration 006 |
 | No Clerk webhook handler | ❌ Open — human JWT auth returns 401 in production; seed workaround for dev |
 | API key scope system has no role abstraction | ❌ Open — no Admin/Operator/Readonly roles; callers must know internal scope strings |
 | Enrichment classification accuracy | ❌ Open — coarse keyword rules cause silent mis-classification; LLM fallback never fires for high-confidence wrong matches |

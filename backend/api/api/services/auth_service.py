@@ -85,11 +85,11 @@ async def validate_clerk_token(
     clerk_org_id: str = claims.get("org_id", "")
     clerk_user_id: str = claims.get("sub", "")
 
-    org = await org_repo.get_by_clerk_org_id(clerk_org_id)
+    org = await org_repo.get_by_external_id("clerk", clerk_org_id)
     if org is None:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Unauthorised")
 
-    user = await user_repo.get_by_clerk_user_id(clerk_user_id)
+    user = await user_repo.get_by_external_id("clerk", clerk_user_id)
     if user is None:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Unauthorised")
 

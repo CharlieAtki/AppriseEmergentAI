@@ -106,31 +106,36 @@ on the in-process `EventBus`. `RedisBus` added to the FastAPI lifespan and store
 
 ---
 
-### 3. No tests
+### ~~3. No tests~~
 
-**Gap:** No tests exist for `EventBus` dispatch, composable wrappers, activity loggers,
-`Snapshot.from_domain`, `TaskStreamSubscriber`, `TaskBiddingHandler`,
-`SocialMemoryHandler`, `TaskContext`, or `RollupSubtaskHandler`.
+**What was done:** Substantial test coverage now exists:
 
-**What is needed (priority order):**
+| Test file | Location | Status |
+|---|---|---|
+| `test_rollup_handler.py` | `worker/tests/unit/` | ✅ |
+| `test_agent_credit_handler.py` | `worker/tests/unit/` | ✅ |
+| `test_reflect_job_handler.py` | `worker/tests/unit/` | ✅ |
+| `test_reflection_stages.py` | `worker/tests/unit/` | ✅ |
+| `test_deliver_webhook.py` | `worker/tests/unit/` | ✅ |
+| `test_webhook_handler.py` | `worker/tests/unit/` | ✅ |
+| `test_score_and_reserve.py` | `worker/tests/unit/` | ✅ (covers bidding) |
+| `test_bid_scoring.py` | `worker/tests/unit/` + `core/tests/unit/` | ✅ |
+| `test_task_state_machine.py` | `worker/tests/unit/` | ✅ |
+| `test_span.py` | `worker/tests/unit/` | ✅ |
+| `test_influence.py` | `core/tests/unit/` | ✅ |
+| `test_skills.py` | `core/tests/unit/` | ✅ |
+| `test_event_bus_flow.py` | `worker/tests/integration/` | ✅ (bus dispatch, handler isolation) |
+
+**Still missing:**
 
 | Test file | What it covers |
 |---|---|
-| `test_event_bus.py` | `bind`, MRO routing, `apublish` fire-and-forget, `drain_pending`, `start/stop_subscribers` |
-| `test_stream_subscriber.py` | `_parse_stream_event` for each known type, unknown type returns None, `TaskStreamSubscriber` start/stop lifecycle |
-| `test_handlers.py` | `Retry` backoff, `Filtering` predicate, `Timeout` cancellation, `SyncToAsync` thread dispatch |
-| `test_activity_loggers.py` | `TaskActivityLogger.created/updated/deleted` publish correct events; `AsyncMock` as publish callable |
-| `test_snapshots.py` | `from_domain` for flat fields, nested snapshots, `tuple[Snapshot, ...]` collections, nullable snapshot fields |
-| `test_bidding_handler.py` | Agent scoring, threshold filtering, reservation attempt, `execute_task` enqueue, no-agents path |
-| `test_social_memory_handler.py` | Peer query, `store_social` fan-out, single peer failure does not block others |
-| `test_task_context.py` | `TaskContext.from_task()`, `MAX_DELEGATION_DEPTH` constant, depth guard override in `execute_task` |
-| `test_rollup_handler.py` | Sibling query, all-terminal trigger, partial failure (parent → `"failed"`), concurrent race guard, coordinator credit EMA, reflect job enqueue, no-coordinator path |
-
-`test_rollup_handler.py` and `test_bidding_handler.py` are the highest priority — they
-cover the most complex logic with the most edge cases.
-
-`InMemoryBus` (`core/eventing/bus/in_memory_bus.py`) is the test double for `RedisBus`.
-Use it in place of a real Redis connection for `TaskStreamSubscriber` and handler tests.
+| `test_stream_subscriber.py` | `_parse_stream_event`, unknown type handling, subscriber lifecycle |
+| `test_handlers.py` | `Retry`, `Filtering`, `Timeout`, `SyncToAsync` composable wrappers |
+| `test_activity_loggers.py` | `TaskActivityLogger` event publishing |
+| `test_snapshots.py` | `Snapshot.from_domain` for nested/nullable/tuple fields |
+| `test_social_memory_handler.py` | Fan-out, single peer failure isolation |
+| `test_task_context.py` | `TaskContext.from_task()`, depth guard |
 
 ---
 
@@ -145,4 +150,4 @@ Use it in place of a real Redis connection for `TaskStreamSubscriber` and handle
 | Redis subscriber decoupled via `ExternalEventSubscriber` | ✅ Closed — `TaskStreamSubscriber` + stream event types |
 | Audit log handler | ⚠️ Open — `audit_log` table does not exist yet |
 | API publishes `task.created` to Redis | ✅ Closed — `TaskCreatedRedisPublisher` in `api/handlers/task_bridge.py` |
-| Tests | ❌ Open — nothing tested yet |
+| Tests | ✅ Partial — 13 test files covering rollup, bidding, credit, reflect, webhook, state machine, bus flow; missing stream subscriber, composable wrappers, activity loggers, snapshots, social memory, task context |

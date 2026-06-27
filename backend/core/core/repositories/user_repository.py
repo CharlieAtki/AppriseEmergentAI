@@ -7,10 +7,10 @@ from core.models.tenant import User
 
 
 class UserRepository:
-    """Read-only Clerk identity lookup for User.
+    """Read-only identity lookup for User.
 
-    Used by validate_clerk_token() in auth_service to resolve a Clerk user ID to an
-    internal UUID. No write methods — users are provisioned via the Clerk webhook
+    Used by validate_clerk_token() in auth_service to resolve an external provider ID
+    to an internal UUID. No write methods — users are provisioned via the webhook
     flow, not via direct API calls.
 
     Transaction contract: never calls commit() or flush().
@@ -19,8 +19,11 @@ class UserRepository:
     def __init__(self, session: AsyncSession) -> None:
         self._session = session
 
-    async def get_by_clerk_user_id(self, clerk_user_id: str) -> User | None:
+    async def get_by_external_id(self, provider: str, external_id: str) -> User | None:
         result = await self._session.execute(
-            select(User).where(User.clerk_user_id == clerk_user_id)
+            select(User).where(
+                User.identity_provider == provider,
+                User.external_id == external_id,
+            )
         )
         return result.scalar_one_or_none()

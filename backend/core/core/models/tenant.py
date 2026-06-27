@@ -25,9 +25,18 @@ class Organisation(Base, TimestampMixin):
         primary_key=True,
         server_default=sa.text("gen_random_uuid()"),
     )
-    clerk_org_id: Mapped[str] = mapped_column(sa.Text, unique=True, nullable=False)
+    identity_provider: Mapped[str] = mapped_column(
+        sa.Text, nullable=False, server_default=sa.text("'clerk'")
+    )
+    external_id: Mapped[str] = mapped_column(sa.Text, nullable=False)
     name: Mapped[str | None] = mapped_column(sa.Text, nullable=True)
     config: Mapped[dict[str, Any] | None] = mapped_column(JSONB, nullable=True)
+
+    __table_args__ = (
+        sa.UniqueConstraint(
+            "identity_provider", "external_id", name="uq_organisations_provider_external_id"
+        ),
+    )
 
     workspaces: Mapped[list[Workspace]] = relationship(
         back_populates="organisation",
@@ -39,7 +48,7 @@ class Organisation(Base, TimestampMixin):
     )
 
     def __repr__(self) -> str:
-        return f"<Organisation id={self.id} name={self.name!r}>"
+        return f"<Organisation id={self.id} provider={self.identity_provider!r} name={self.name!r}>"
 
 
 class User(Base, TimestampMixin):
@@ -50,16 +59,25 @@ class User(Base, TimestampMixin):
         primary_key=True,
         server_default=sa.text("gen_random_uuid()"),
     )
-    clerk_user_id: Mapped[str] = mapped_column(sa.Text, unique=True, nullable=False)
+    identity_provider: Mapped[str] = mapped_column(
+        sa.Text, nullable=False, server_default=sa.text("'clerk'")
+    )
+    external_id: Mapped[str] = mapped_column(sa.Text, nullable=False)
     email: Mapped[str | None] = mapped_column(sa.Text, nullable=True)
     name: Mapped[str | None] = mapped_column(sa.Text, nullable=True)
+
+    __table_args__ = (
+        sa.UniqueConstraint(
+            "identity_provider", "external_id", name="uq_users_provider_external_id"
+        ),
+    )
 
     memberships: Mapped[list[OrganisationMember]] = relationship(
         back_populates="user",
     )
 
     def __repr__(self) -> str:
-        return f"<User id={self.id} email={self.email!r}>"
+        return f"<User id={self.id} provider={self.identity_provider!r} email={self.email!r}>"
 
 
 class OrganisationMember(Base, CreatedAtMixin):

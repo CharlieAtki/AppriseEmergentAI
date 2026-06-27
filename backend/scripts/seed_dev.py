@@ -10,6 +10,9 @@ dashboard under Users and Organizations after signing up via the frontend.
 
 Re-running with the same IDs is idempotent on structure (org/user/workspace are
 reused). A new API key is always created.
+
+Identity provider is always "clerk" for this script. To seed other providers,
+pass --provider <name> alongside the external IDs.
 """
 
 from __future__ import annotations
@@ -28,23 +31,36 @@ _ORG_NAME = "Dev Org"
 _WORKSPACE_NAME = "Default"
 
 
-async def main(clerk_org_id: str, clerk_user_id: str) -> None:
+async def main(clerk_org_id: str, clerk_user_id: str, provider: str = "clerk") -> None:
     async with get_session() as session:
         # Organisation
         result = await session.execute(
-            select(Organisation).where(Organisation.clerk_org_id == clerk_org_id)
+            select(Organisation).where(
+                Organisation.identity_provider == provider,
+                Organisation.external_id == clerk_org_id,
+            )
         )
         org = result.scalar_one_or_none()
         if org is None:
-            org = Organisation(clerk_org_id=clerk_org_id, name=_ORG_NAME)
+            org = Organisation(identity_provider=provider, external_id=clerk_org_id, name=_ORG_NAME)
             session.add(org)
             await session.flush()
 
         # User
-        result = await session.execute(select(User).where(User.clerk_user_id == clerk_user_id))
+        result = await session.execute(
+            select(User).where(
+                User.identity_provider == provider,
+                User.external_id == clerk_user_id,
+            )
+        )
         user = result.scalar_one_or_none()
         if user is None:
-            user = User(clerk_user_id=clerk_user_id, email="dev@local", name="Dev User")
+            user = User(
+                identity_provider=provider,
+                external_id=clerk_user_id,
+                email="dev@local",
+                name="Dev User",
+            )
             session.add(user)
             await session.flush()
 
@@ -93,8 +109,9 @@ async def main(clerk_org_id: str, clerk_user_id: str) -> None:
 
     print()
     print("=" * 60)
-    print(f"Clerk Org ID : {clerk_org_id}")
-    print(f"Clerk User ID: {clerk_user_id}")
+    print(f"Provider     : {provider}")
+    print(f"Org ID       : {clerk_org_id}")
+    print(f"User ID      : {clerk_user_id}")
     print(f"Workspace ID : {workspace.id}")
     print(f"API Key      : {raw_key}")
     print("=" * 60)
@@ -108,12 +125,21 @@ if __name__ == "__main__":
     parser.add_argument(
         "--clerk-user-id",
         required=True,
-        help="Clerk user ID from the dashboard (e.g. user_2abc...)",
+        help="External user ID from the identity provider (e.g. user_2abc... for Clerk)",
     )
     parser.add_argument(
         "--clerk-org-id",
         required=True,
-        help="Clerk org ID from the dashboard (e.g. org_2xyz...)",
+        help="External org ID from the identity provider (e.g. org_2xyz... for Clerk)",
+    )
+    parser.add_argument(
+        "--provider",
+        default="clerk",
+        help="Identity provider name (default: clerk)",
     )
     args = parser.parse_args()
-    asyncio.run(main(clerk_org_id=args.clerk_org_id, clerk_user_id=args.clerk_user_id))
+    asyncio.run(
+        main(
+            clerk_org_id=args.clerk_org_id, clerk_user_id=args.clerk_user_id, provider=args.provider
+        )
+    )

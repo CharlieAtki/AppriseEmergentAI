@@ -169,34 +169,19 @@ no race window.
 
 ---
 
-### 14. Unbound tool calls crash the job instead of returning a tool error
+### ~~14. Unbound tool calls crash the job instead of returning a tool error~~
 
-**Gap:** When the LLM requests a tool that is not present in the current graph's `tool_map`
-(e.g. `execute_code` during a `research`-type task), `_call_tool` raises `KeyError`. This
-propagates unhandled through the graph invocation and into the `execute_task` except block,
-writing the task to `"failed"` permanently with `{"type": "KeyError", "message": "'execute_code'"}`.
+**What was done:**
+`_call_tool` in `core/agents/graphs/factory.py` wraps `cfg.tool_map[tool_name].ainvoke()`
+in a broad `except Exception` block. A `KeyError` (unknown tool name) now produces
+`result_str = "[tool error] KeyError: 'tool_name'"` which is returned to the LLM as a
+`ToolMessage`, allowing the graph to continue rather than crashing the job.
 
-Two things are wrong:
-
-1. **Missing graceful recovery.** The LLM may occasionally hallucinate a tool name, or a task
-   type/tool mapping may drift out of sync. In either case the correct response is to return a
-   structured tool-error message back to the LLM (e.g. `"tool 'execute_code' is not available"`)
-   so the graph can continue and the LLM can recover. A `KeyError` in a tool dispatch should never
-   kill the job.
-
-2. **Tool map auditing.** In the observed failure, the `execute_code` tool is likely present in
-   the global tool registry but absent from the `research` graph's tool set. The LLM sees the tool
-   in its training data and selects it; the graph has never declared it as available. The bound tool
-   list passed to `.bind_tools()` at graph compilation is the contract — the LLM should only see
-   tools that are in the map. This is already the case if compilation is correct; the gap is that
-   there is no assertion or startup check that validates map ↔ bound-tools consistency.
-
-**What is needed:**
-- `_call_tool` should catch `KeyError` and return a tool-error dict (following LangChain's tool
-  result schema) rather than raising.
-- Add a startup assertion in `WorkerContext.build()` that verifies each compiled graph's
-  `tool_map` keys match the tools passed to `.bind_tools()`, so map/bound mismatches are caught
-  at worker start rather than at runtime.
+**Remaining open:** Startup tool-map validation — no assertion in `WorkerContext.build()`
+that verifies each graph's `tool_map` keys match the tools passed to `.bind_tools()`. A
+mismatch is now survivable (tool-error response rather than crash), but the LLM will still
+be confused if it was bound a tool it cannot dispatch. Add a startup check when the
+universal graph's tool configuration stabilises.
 
 ---
 
@@ -375,6 +360,6 @@ needed; current state (static dict) is not wrong, just inconsistent with the in-
 | `SKILL_DECAY_RATE` is static | ❌ Open — defer until emergence experiment baselines available |
 | Influence not wired into evaluate strategy decision | ❌ Open — high-influence coordinator pattern cannot emerge without it |
 | Embedding model not pre-warmed at startup | ❌ Open — concurrent first-use races cause `NoSuchFile`; pre-warm in `WorkerContext.build()` |
-| Unbound tool calls crash the job | ❌ Open — `KeyError` in `_call_tool` kills the job; needs graceful tool-error response + startup map validation |
+| Unbound tool calls crash the job | ✅ Partial — `_call_tool` now catches `Exception` and returns tool-error string; startup map validation still open |
 | Runaway decomposition below difficulty threshold | ❌ Open — LLM ignores soft difficulty guideline; needs hard code-level guard + config threshold |
 | Reflection pipeline — heuristic quality, no failure reflection, episodic/reflect decoupling | ✅ Closed — reflect→skills→rules pipeline implemented; episodic entries now written in `execute_task` for completed + failed tasks |

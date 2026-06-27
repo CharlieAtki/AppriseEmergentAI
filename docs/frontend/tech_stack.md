@@ -18,30 +18,31 @@ Every tool choice in this stack accounts for all three phases. Nothing built for
 
 | Layer | Tool | Version |
 |---|---|---|
-| Framework | Next.js | 15 (App Router) |
+| Framework | Next.js | 16 (App Router) |
 | Package manager | Bun | latest |
 | Language | TypeScript | 5.x strict |
+| Auth | Clerk (`@clerk/nextjs`) | v7 |
 | API code generation | Orval | latest |
 | HTTP client | Axios | latest |
 | Server state | TanStack Query | v5 |
 | Client UI state | Zustand | latest |
-| Runtime validation | Zod | latest |
+| Runtime validation | Zod | v4 |
 | Styling | Tailwind CSS | v4 |
-| Headless UI primitives | Radix UI | latest |
+| Headless UI primitives | Radix UI | latest (Phase 1+, install per-primitive as needed) |
 | Icons | Lucide React | latest |
-| Animation | Framer Motion | latest |
+| Animation | Framer Motion | latest (Phase 2+, not yet installed) |
 | Data visualisation | TBD | — |
-| Graph / node visualisation | ReactFlow (`@xyflow/react`) | latest |
-| Code editor | Monaco Editor | latest |
+| Graph / node visualisation | ReactFlow (`@xyflow/react`) | latest (Phase 2+, not yet installed) |
+| Code editor | Monaco Editor | latest (Phase 2+, not yet installed) |
 | Date utilities | date-fns | latest |
 
 ---
 
 ## Framework and Build Tooling
 
-### Next.js 15 (App Router)
+### Next.js 16 (App Router)
 
-**What it is**: A React framework with file-based routing, React Server Components, and built-in support for server-side rendering and middleware.
+**What it is**: A React framework with file-based routing, React Server Components, and built-in support for server-side rendering and proxy (formerly middleware — renamed in v16).
 
 **Why it was chosen**: The Apprise frontend starts as a real-time observability dashboard (Phase 1) and grows into a multi-tenant SaaS product (Phase 2) with workspace management, auth-protected routes, and a public marketing surface. A plain Vite SPA would serve Phase 1 well but would require significant rearchitecting for Phase 2's routing and auth requirements. Next.js App Router handles both without a rewrite.
 
@@ -62,13 +63,14 @@ app/
         page.tsx                     # task board
 ```
 
-Clerk auth middleware runs at the App Router level, protecting every route under `/workspaces` without boilerplate in individual page files. When Phase 2 adds a `/tools` registry route and a `/artifacts` viewer, they follow the same pattern — nested under `[id]`, inside the same client boundary.
+Clerk auth proxy runs at the App Router level via `src/proxy.ts`, protecting every route under `/workspaces` without boilerplate in individual page files. When Phase 2 adds a `/tools` registry route and a `/artifacts` viewer, they follow the same pattern — nested under `[id]`, inside the same client boundary.
 
 **The client boundary strategy**: App Router pushes toward React Server Components, but the Apprise observability dashboard is almost entirely client-side — real-time data, WebSocket connections, interactive charts, agent detail panels. Rather than placing `'use client'` on every individual component, the workspace layout declares a single boundary. Every component inside `app/workspaces/[id]/` inherits the client context without its own directive.
 
 ```tsx
 // app/workspaces/[id]/layout.tsx
 'use client'
+import { use } from 'react'
 import { useWorkspaceStream } from '@/hooks/useWorkspaceStream'
 
 export default function WorkspaceLayout({
@@ -76,9 +78,10 @@ export default function WorkspaceLayout({
   params,
 }: {
   children: React.ReactNode
-  params: { id: string }
+  params: Promise<{ id: string }>  // Next.js 16: params is a Promise in client components
 }) {
-  useWorkspaceStream(params.id)  // WebSocket connection, mounted once for the entire subtree
+  const { id } = use(params)
+  useWorkspaceStream(id)  // WebSocket connection, mounted once for the entire subtree
   return <>{children}</>
 }
 ```
@@ -182,7 +185,9 @@ export default {
 
 `mode: 'tags-split'` produces one file per FastAPI router tag (workspaces, agents, tasks, metrics). This keeps the generated directory navigable as the API surface grows across phases.
 
-**The custom fetcher**: Orval routes every HTTP request through a single custom fetcher function. This is the one place where the Axios instance is configured — base URL, auth headers, error interceptors. When Clerk auth is added, the token injection happens here and nowhere else in the codebase.
+**The custom fetcher**: Orval routes every HTTP request through a single custom fetcher function (`customInstance`). This is the one place where the Axios instance is configured — base URL, request/response interceptors. Orval 8 calls mutators as `(url, fetchOptions)` where `fetchOptions` uses fetch-style `body`, not Axios-style `data`. The bridge handles the mapping.
+
+Clerk token injection is handled separately by `AxiosAuthSync` (a render-null component inside `Providers`) using the `useAuth().getToken()` hook, which registers an Axios interceptor tied to the active Clerk session.
 
 ```ts
 // src/api/client.ts
@@ -192,15 +197,15 @@ export const AXIOS_INSTANCE = Axios.create({
   baseURL: process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8000',
 })
 
-// Clerk auth header injection — uncomment when auth is added
-// AXIOS_INSTANCE.interceptors.request.use(async (config) => {
-//   const token = await clerkClient.getToken()
-//   config.headers.Authorization = `Bearer ${token}`
-//   return config
-// })
-
-export const customInstance = <T>(config: AxiosRequestConfig): Promise<T> => {
-  return AXIOS_INSTANCE(config).then(({ data }) => data)
+// Orval 8 signature: (url: string, options?: RequestInit)
+export const customInstance = async <T>(url: string, options?: RequestInit): Promise<T> => {
+  const config: AxiosRequestConfig = { url }
+  if (options?.method !== undefined) config.method = options.method
+  if (options?.headers !== undefined) config.headers = options.headers as Record<string, string>
+  if (options?.body !== undefined) config.data = options.body
+  if (options?.signal !== undefined) config.signal = options.signal as AbortSignal
+  const res = await AXIOS_INSTANCE.request<T>(config)
+  return res.data as T
 }
 ```
 
@@ -282,19 +287,22 @@ queryClient.setQueryData(
 
 Use `invalidateQueries` for task completion events and emergence detection — you want the server's authoritative response. Use `setQueryData` for skill delta events — the event carries the full delta and an immediate local update is preferable to a round trip.
 
-**Query key conventions**: Keys follow a hierarchical structure that enables precise invalidation across the entire workspace.
+**Query key conventions**: Keys are generated by Orval — each hook exports a `get<HookName>QueryKey` factory. Always use these factories for `invalidateQueries` rather than hand-writing key arrays. This ensures cache invalidation stays in sync with the generated hooks as the API evolves.
 
 ```ts
-['workspaces']                                   // workspace list
-['workspaces', workspaceId]                      // single workspace
-['workspaces', workspaceId, 'agents']            // all agents in workspace
-['workspaces', workspaceId, 'agents', agentId]   // single agent
-['workspaces', workspaceId, 'tasks']             // task list
-['workspaces', workspaceId, 'metrics']           // Gini, emergence status, influence snapshots
-['workspaces', workspaceId, 'emergence']         // emergence event timeline
+import { getListTasksWorkspacesWorkspaceIdTasksGetQueryKey } from '@/api/generated/tasks/tasks'
+import { getListAgentsWorkspacesWorkspaceIdAgentsGetQueryKey } from '@/api/generated/agents/agents'
+
+// Correct — uses the Orval-generated factory
+queryClient.invalidateQueries({
+  queryKey: getListTasksWorkspacesWorkspaceIdTasksGetQueryKey(workspaceId),
+})
+
+// Wrong — hand-written key that can drift from the generated hook
+queryClient.invalidateQueries({ queryKey: ['workspaces', workspaceId, 'tasks'] })
 ```
 
-Invalidating `['workspaces', workspaceId, 'agents']` automatically invalidates all more-specific agent keys, because TanStack Query uses prefix matching for invalidation. In Phase 2, artifact and tool registry queries follow the same hierarchical pattern under the workspace key.
+In Phase 2, artifact and tool registry queries follow the same pattern — use the Orval-generated key factory from the relevant generated file.
 
 ---
 
@@ -344,7 +352,7 @@ Stores live in `src/stores/`, one file per domain. Keep stores small and domain-
 
 **Two distinct jobs in this codebase**:
 
-**Job 1 — REST response validation (automatic via Orval)**: Orval generates Zod schemas for every API response type from the OpenAPI spec. These run automatically on every HTTP response through the generated hooks. If the backend sends a malformed or unexpected response, it is caught at the API boundary and surfaces as a handled error rather than a mysterious downstream failure.
+**Job 1 — REST types (via Orval)**: Orval generates TypeScript interfaces for every API request and response type. This provides compile-time safety — a backend schema change surfaces as a TypeScript error at every call site after `bun run orval`. Runtime Zod validation of REST responses is not currently enabled (would require adding `zod: true` to `orval.config.ts`).
 
 **Job 2 — WebSocket event validation (manual)**: Orval does not cover the WebSocket protocol. Every event type published by the backend to the stream endpoint requires a manually written Zod schema. These live in `src/hooks/useWorkspaceStream.ts`.
 
@@ -354,28 +362,28 @@ import { z } from 'zod'
 
 const TaskCompletedEvent = z.object({
   type: z.literal('task.completed'),
-  task_id: z.string().uuid(),
-  agent_id: z.string().uuid(),
+  task_id: z.string(),
+  agent_id: z.string(),
   quality_score: z.number().min(0).max(1),
 })
 
 const TaskExecutingEvent = z.object({
   type: z.literal('task.executing'),
-  task_id: z.string().uuid(),
-  agent_id: z.string().uuid(),
+  task_id: z.string(),
+  agent_id: z.string(),
 })
 
 const AgentSkillUpdatedEvent = z.object({
   type: z.literal('agent.skill_updated'),
-  agent_id: z.string().uuid(),
-  skill_deltas: z.record(z.number()),
+  agent_id: z.string(),
+  skill_deltas: z.record(z.string(), z.number()),
   new_influence: z.number(),
 })
 
 const EmergenceDetectedEvent = z.object({
   type: z.literal('emergence.detected'),
   gini_coefficient: z.number(),
-  hub_agent_id: z.string().uuid(),
+  hub_agent_id: z.string(),
 })
 
 export const WorkspaceEvent = z.discriminatedUnion('type', [
@@ -404,14 +412,23 @@ The project uses Tailwind v4 throughout. Since we build our own component implem
 /* src/app/globals.css */
 @import "tailwindcss";
 
-@theme {
-  --color-brand-primary: oklch(65% 0.2 165);    /* Apprise teal */
-  --color-brand-accent: oklch(70% 0.15 280);     /* Apprise purple */
-  --color-brand-highlight: oklch(72% 0.18 45);   /* amber for emergence alerts */
-  --font-sans: 'Inter', sans-serif;
-  --font-mono: 'JetBrains Mono', monospace;
+:root {
+  --background: #0a0a0f;
+  --foreground: #ededed;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-brand-primary: oklch(65% 0.2 165);
+  --color-brand-accent: oklch(70% 0.15 280);
+  --color-brand-highlight: oklch(72% 0.18 45);
+  --font-sans: var(--font-inter);
+  --font-mono: var(--font-jetbrains);
 }
 ```
+
+`@theme inline` (v4 syntax) inlines CSS variable references rather than resolving them at parse time, which is required for runtime theming. Note the use of `var(--font-inter)` / `var(--font-jetbrains)` — these are injected by Next.js `next/font` at the `<html>` element as CSS variables.
 
 Custom design tokens are defined in `@theme` and are then available as Tailwind utilities throughout the codebase (`text-brand-primary`, `bg-brand-accent`, and so on).
 
@@ -600,12 +617,14 @@ export function useWorkspaceStream(workspaceId: string) {
   const queryClient = useQueryClient()
 
   useEffect(() => {
-    const ws = new WebSocket(
-      `${process.env.NEXT_PUBLIC_WS_URL}/workspaces/${workspaceId}/stream`
-    )
+    const wsUrl = process.env.NEXT_PUBLIC_WS_URL ?? 'ws://localhost:8000'
+    const ws = new WebSocket(`${wsUrl}/workspaces/${workspaceId}/stream`)
 
-    ws.onmessage = (event) => {
-      const result = WorkspaceEvent.safeParse(JSON.parse(event.data))
+    ws.onmessage = (event: MessageEvent<string>) => {
+      let raw: unknown
+      try { raw = JSON.parse(event.data) } catch { return }
+
+      const result = WorkspaceEvent.safeParse(raw)
       if (!result.success) return
 
       const e = result.data
@@ -613,33 +632,31 @@ export function useWorkspaceStream(workspaceId: string) {
       switch (e.type) {
         case 'task.completed':
         case 'task.executing':
-          queryClient.invalidateQueries({
-            queryKey: ['workspaces', workspaceId, 'tasks'],
+          void queryClient.invalidateQueries({
+            queryKey: getListTasksWorkspacesWorkspaceIdTasksGetQueryKey(workspaceId),
           })
           break
         case 'agent.skill_updated':
-          queryClient.setQueryData(
-            ['workspaces', workspaceId, 'agents', e.agent_id],
-            (old: Agent | undefined) =>
-              old
-                ? { ...old, skills: applyDeltas(old.skills, e.skill_deltas), influence: e.new_influence }
-                : old
-          )
+          void queryClient.invalidateQueries({
+            queryKey: getGetAgentWorkspacesWorkspaceIdAgentsAgentIdGetQueryKey(workspaceId, e.agent_id),
+          })
+          void queryClient.invalidateQueries({
+            queryKey: getListAgentsWorkspacesWorkspaceIdAgentsGetQueryKey(workspaceId),
+          })
           break
         case 'emergence.detected':
-          queryClient.invalidateQueries({
-            queryKey: ['workspaces', workspaceId, 'metrics'],
-          })
           break
       }
     }
 
-    ws.onerror = (err) => console.error('[WorkspaceStream]', err)
+    ws.onerror = () => console.error('[WorkspaceStream] connection error')
 
     return () => ws.close()
   }, [workspaceId, queryClient])
 }
 ```
+
+All cache invalidation uses Orval-generated key factories. `invalidateQueries` is preferred over `setQueryData` for agent skill updates — the event carries deltas, not the full new state, so the authoritative source is the server.
 
 The hook is mounted in `app/workspaces/[id]/layout.tsx` and survives navigation between workspace sub-routes. It does not remount when a user navigates from the task board to an agent detail page — the WebSocket connection is maintained continuously.
 
