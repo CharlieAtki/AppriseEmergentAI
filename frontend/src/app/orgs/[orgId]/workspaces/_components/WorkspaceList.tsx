@@ -26,7 +26,7 @@ export function WorkspaceList() {
     )
   }
 
-  const workspaces = data.data
+  const workspaces = data?.data ?? []
 
   if (workspaces.length === 0) {
     return (
