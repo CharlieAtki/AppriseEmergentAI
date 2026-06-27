@@ -254,9 +254,9 @@ async def execute_task(
                 execution.status = "completed"
                 execution.execution_path = "self_execute"
                 execution.quality_score = quality
-                execution.artifact = final_state.get("artifact")
-                execution.artifact_id = final_state.get("artifact_id")
-                execution.skill_tags_used = final_state.get("skill_tags_used") or []
+                execution.artifact = final_state["artifact"]
+                execution.artifact_id = final_state["artifact_id"]
+                execution.skill_tags_used = final_state["skill_tags_used"] or []
                 execution.tool_trace = final_state["tool_trace"]
                 execution.completed_at = datetime.now(UTC)
                 await execution_repo.save(execution)

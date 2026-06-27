@@ -12,6 +12,7 @@ from core.models.observability import (
 )
 from core.models.tasks import Task, TaskExecution, WebhookDelivery
 from core.models.tenant import Organisation, OrganisationMember, User, Workspace
+from core.models.tools import Tool, WorkspaceTool
 
 __all__ = [
     "Agent",
@@ -31,9 +32,11 @@ __all__ = [
     "Task",
     "TaskExecution",
     "TimestampMixin",
+    "Tool",
     "User",
     "WebhookDelivery",
     "Workspace",
     "WorkspaceMetricsSnapshot",
     "WorkspaceModelRouting",
+    "WorkspaceTool",
 ]

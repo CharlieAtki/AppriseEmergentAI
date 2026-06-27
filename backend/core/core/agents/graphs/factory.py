@@ -25,6 +25,7 @@ the key might be absent, which breaks the typed contract.
 from __future__ import annotations
 
 import json
+from collections.abc import Mapping
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
@@ -50,8 +51,8 @@ class GraphConfig:
     """
 
     model: BaseChatModel
-    tool_map: dict[str, BaseTool]
-    skill_tag_map: dict[str, frozenset[str]] = field(default_factory=dict)
+    tool_map: Mapping[str, BaseTool]
+    skill_tag_map: Mapping[str, frozenset[str]] = field(default_factory=dict)
 
     @classmethod
     def from_runnable(cls, config: RunnableConfig) -> GraphConfig:

@@ -127,6 +127,7 @@ class Workspace(Base, TimestampMixin):
         cascade="all, delete-orphan",
     )
     tools: Mapped[list[WorkspaceTool]] = relationship(
+        "WorkspaceTool",
         back_populates="workspace",
         cascade="all, delete-orphan",
     )

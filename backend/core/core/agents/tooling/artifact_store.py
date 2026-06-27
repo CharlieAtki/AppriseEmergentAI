@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import os
 from pathlib import Path
 from typing import Protocol
@@ -30,9 +31,9 @@ class LocalArtifactStore:
 
     async def write(self, workspace_id: UUID, path: str, content: bytes) -> str:
         dest = self._base / str(workspace_id) / path.lstrip("/")
-        dest.parent.mkdir(parents=True, exist_ok=True)
-        dest.write_bytes(content)
+        await asyncio.to_thread(dest.parent.mkdir, parents=True, exist_ok=True)
+        await asyncio.to_thread(dest.write_bytes, content)
         return str(dest)
 
     async def read(self, storage_ref: str) -> bytes:
-        return Path(storage_ref).read_bytes()
+        return await asyncio.to_thread(Path(storage_ref).read_bytes)

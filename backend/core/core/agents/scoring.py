@@ -1,18 +1,3 @@
-"""Outcome scoring for completed graph runs.
-
-**SoC:** scoring is a pure function — no I/O, no async, no DB reads. All signal
-comes from ``GraphState``, which is passed in by the job layer after ``ainvoke()``
-returns. The job layer (``execute_task``) owns persistence; this module owns the
-quality formula only.
-
-``GraphState`` fields are accessed via direct subscription (``state["key"]``), not
-``state.get("key")``. Every field is guaranteed present by ``build_initial_state()``.
-
-**Phase 2 replacement:** swap the body of ``score_outcome()`` for an LLM-as-judge call.
-The interface ``(state: GraphState) -> float`` must remain stable — the job layer and
-reflection pipeline both depend on it.
-"""
-
 from __future__ import annotations
 
 from core.agents.graphs.state import GraphState
@@ -43,6 +28,7 @@ def score_outcome(state: GraphState) -> float:
     """
     artifact_score = 1.0 if (state["artifact"] or state["artifact_id"]) else 0.1
 
+    # Step efficiency: penalise runs that pushed near the limit.
     ratio = state["step_count"] / settings.intelligence.max_graph_steps
     step_score = _clamp01(1.0 - ratio * 0.6)
 
