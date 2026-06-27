@@ -8,9 +8,9 @@ export default function WorkspaceLayout({
   params,
 }: {
   children: React.ReactNode
-  params: Promise<{ id: string }>
+  params: Promise<{ workspaceId: string }>
 }) {
-  const { id } = use(params)
-  useWorkspaceStream(id)
+  const { workspaceId } = use(params)
+  useWorkspaceStream(workspaceId)
   return <>{children}</>
 }

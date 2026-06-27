@@ -1,21 +1,83 @@
 @import "tailwindcss";
 
+/* ─── Tier 1: Primitive palette ─────────────────────────────────────────────
+   Raw values only. Components never reference these directly.              */
 :root {
-  --background: #0a0a0f;
-  --foreground: #ededed;
+  /* Brand */
+  --brand-teal-50:    oklch(96% 0.04 165);
+  --brand-teal-500:   oklch(65% 0.20 165);
+  --brand-teal-600:   oklch(57% 0.20 165);
+  --brand-purple-500: oklch(70% 0.15 280);
+  --brand-amber-500:  oklch(72% 0.18 45);
+
+  /* Neutrals */
+  --neutral-950: #0a0a0f;
+  --neutral-900: #111118;
+  --neutral-800: #1a1a24;
+  --neutral-700: #26263a;
+  --neutral-200: #c8c8d8;
+  --neutral-100: #ededed;
+
+  /* Status */
+  --status-success: oklch(68% 0.18 145);
+  --status-warning: oklch(75% 0.18 70);
+  --status-error:   oklch(62% 0.22 25);
+  --status-info:    oklch(68% 0.16 230);
 }
 
+/* ─── Tier 2: Semantic tokens ────────────────────────────────────────────────
+   These are what components reference. When the brand pack lands,
+   update the right-hand values here and nothing else changes.             */
+:root {
+  --color-bg-base:        var(--neutral-950);
+  --color-bg-surface:     var(--neutral-900);
+  --color-bg-elevated:    var(--neutral-800);
+  --color-bg-hover:       var(--neutral-700);
+
+  --color-text-primary:   var(--neutral-100);
+  --color-text-secondary: var(--neutral-200);
+  --color-text-muted:     oklch(55% 0.02 250);
+
+  --border-default:       var(--neutral-700);
+  --border-subtle:        var(--neutral-800);
+
+  --color-brand:          var(--brand-teal-500);
+  --color-brand-hover:    var(--brand-teal-600);
+  --color-accent:         var(--brand-purple-500);
+  --color-highlight:      var(--brand-amber-500);
+
+  --color-status-success: var(--status-success);
+  --color-status-warning: var(--status-warning);
+  --color-status-error:   var(--status-error);
+  --color-status-info:    var(--status-info);
+}
+
+/* ─── Tier 3: Tailwind theme mapping ─────────────────────────────────────────
+   Maps semantic tokens → Tailwind utilities.
+   bg-surface, text-muted, border-border, text-brand-primary, etc.        */
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --color-brand-primary: oklch(65% 0.2 165);
-  --color-brand-accent: oklch(70% 0.15 280);
-  --color-brand-highlight: oklch(72% 0.18 45);
+  --color-background:      var(--color-bg-base);
+  --color-surface:         var(--color-bg-surface);
+  --color-elevated:        var(--color-bg-elevated);
+  --color-hover:           var(--color-bg-hover);
+  --color-foreground:      var(--color-text-primary);
+  --color-secondary:       var(--color-text-secondary);
+  --color-muted:           var(--color-text-muted);
+  --color-border:          var(--border-default);
+  --color-border-subtle:   var(--border-subtle);
+  --color-brand-primary:   var(--color-brand);
+  --color-brand-hover:     var(--color-brand-hover);
+  --color-brand-accent:    var(--color-accent);
+  --color-brand-highlight: var(--color-highlight);
+  --color-success:         var(--color-status-success);
+  --color-warning:         var(--color-status-warning);
+  --color-error:           var(--color-status-error);
+  --color-info:            var(--color-status-info);
   --font-sans: var(--font-inter);
   --font-mono: var(--font-jetbrains);
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
+  background: var(--color-bg-base);
+  color: var(--color-text-primary);
 }
