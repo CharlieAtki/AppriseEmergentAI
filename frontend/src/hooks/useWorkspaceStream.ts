@@ -82,12 +82,11 @@ export function useWorkspaceStream(workspaceId: string) {
           })
           break
         case 'emergence.detected':
-          // No metrics endpoint yet — add key here once /metrics is wired up.
           break
       }
     }
 
-    ws.onerror = (err) => console.error('[WorkspaceStream]', err)
+    ws.onerror = () => console.error('[WorkspaceStream] connection error')
 
     return () => ws.close()
   }, [workspaceId, queryClient])
