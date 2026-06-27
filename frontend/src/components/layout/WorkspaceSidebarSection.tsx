@@ -35,6 +35,16 @@ export function WorkspaceSidebarSection({ orgId }: WorkspaceSidebarSectionProps)
 
         <Collapsible.Content className="overflow-hidden data-[state=closed]:animate-collapsible-up data-[state=open]:animate-collapsible-down">
           <ul className="ml-4 mt-1 space-y-0.5 border-l border-border-subtle pl-3">
+            <li>
+              <button
+                onClick={() => setDialogOpen(true)}
+                className="flex w-full items-center gap-1.5 rounded-md px-2 py-1.5 text-sm text-muted transition-colors hover:bg-elevated hover:text-foreground"
+              >
+                <Plus size={13} className="shrink-0" />
+                New workspace
+              </button>
+            </li>
+
             {workspaces.map((ws) => {
               const isActive = params.workspaceId === ws.id
               return (
@@ -52,16 +62,6 @@ export function WorkspaceSidebarSection({ orgId }: WorkspaceSidebarSectionProps)
                 </li>
               )
             })}
-
-            <li>
-              <button
-                onClick={() => setDialogOpen(true)}
-                className="flex w-full items-center gap-1.5 rounded-md px-2 py-1.5 text-sm text-muted transition-colors hover:bg-elevated hover:text-foreground"
-              >
-                <Plus size={13} className="shrink-0" />
-                New workspace
-              </button>
-            </li>
           </ul>
         </Collapsible.Content>
       </Collapsible.Root>

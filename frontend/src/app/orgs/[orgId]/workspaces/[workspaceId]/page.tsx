@@ -1,20 +1,19 @@
 'use client'
 
-import { use } from 'react'
+import { PanelShell } from '@/components/ui/PanelShell'
 
-export default function WorkspacePage({
-  params,
-}: {
-  params: Promise<{ workspaceId: string }>
-}) {
-  const { workspaceId } = use(params)
-
+export default function WorkspacePage() {
   return (
-    <main className="flex flex-col gap-6 p-8">
-      <h1 className="text-2xl font-semibold tracking-tight text-foreground">
-        Workspace {workspaceId}
-      </h1>
-      <p className="text-sm text-muted">Dashboard coming soon.</p>
-    </main>
+    <div
+      className="grid h-full grid-cols-2 gap-4"
+      style={{ gridTemplateRows: 'minmax(0,1.5fr) minmax(0,1fr) minmax(0,1fr)' }}
+    >
+      <PanelShell title="Agent Pool" />
+      <PanelShell title="Live Feed" />
+      <PanelShell title="Agent Lanes" />
+      <PanelShell title="Active Tasks" />
+      <PanelShell title="Emergence Signal" />
+      <PanelShell title="Workspace Stats" />
+    </div>
   )
 }

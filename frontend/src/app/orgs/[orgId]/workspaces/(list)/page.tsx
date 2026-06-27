@@ -1,4 +1,4 @@
-import { WorkspaceList } from './_components/WorkspaceList'
+import { WorkspaceList } from '../_components/WorkspaceList'
 
 // No SSR prefetch: listWorkspacesWorkspacesGet() routes through customInstance → AXIOS_INSTANCE,
 // which has no Authorization header server-side (AxiosAuthSync is client-only). A HydrationBoundary

@@ -1,5 +1,5 @@
 import { useQueryClient } from '@tanstack/react-query'
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { z } from 'zod'
 
 import {
@@ -43,12 +43,24 @@ export const WorkspaceEvent = z.discriminatedUnion('type', [
 
 export type WorkspaceEvent = z.infer<typeof WorkspaceEvent>
 
-export function useWorkspaceStream(workspaceId: string) {
+/**
+ * Connects to the workspace event stream and keeps the TanStack Query cache
+ * in sync via invalidation on each event.
+ *
+ * `connected` reflects the live WebSocket state. It remains false until the
+ * backend WS endpoint /workspaces/{id}/stream is implemented —
+ * see docs/frontend/frontend-gaps.md.
+ */
+export function useWorkspaceStream(workspaceId: string): { connected: boolean } {
   const queryClient = useQueryClient()
+  const [connected, setConnected] = useState(false)
 
   useEffect(() => {
     const wsUrl = process.env.NEXT_PUBLIC_WS_URL ?? 'ws://localhost:8000'
     const ws = new WebSocket(`${wsUrl}/workspaces/${workspaceId}/stream`)
+
+    ws.onopen = () => setConnected(true)
+    ws.onclose = () => setConnected(false)
 
     ws.onmessage = (event: MessageEvent<string>) => {
       let raw: unknown
@@ -86,8 +98,14 @@ export function useWorkspaceStream(workspaceId: string) {
       }
     }
 
-    ws.onerror = () => console.error('[WorkspaceStream] connection error')
+    ws.onerror = () => {
+      // Backend WS endpoint not yet implemented — see docs/frontend/frontend-gaps.md
+      console.warn('[WorkspaceStream] could not connect — backend stream endpoint pending')
+      setConnected(false)
+    }
 
     return () => ws.close()
   }, [workspaceId, queryClient])
+
+  return { connected }
 }
