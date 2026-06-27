@@ -14,6 +14,7 @@ from core.models.tenant import Workspace
 from core.repositories.agent_repository import AgentRepository
 from core.repositories.api_key_repository import ApiKeyRepository
 from core.repositories.task_repository import TaskRepository
+from core.repositories.tool_repository import ToolRepository
 from core.repositories.workspace_repository import WorkspaceRepository
 from fastapi import Depends, HTTPException, Request, status
 from redis.asyncio import Redis
@@ -23,6 +24,7 @@ from api.services.agent_service import AgentService
 from api.services.api_key_service import ApiKeyService
 from api.services.task_service import TaskService
 from api.services.workspace_service import WorkspaceService
+from api.services.workspace_tool_service import WorkspaceToolService
 
 
 def get_bus(request: Request) -> EventBus:
@@ -90,6 +92,16 @@ def get_api_key_repo(session: AsyncSession = Depends(get_db)) -> ApiKeyRepositor
 
 def get_api_key_service(repo: ApiKeyRepository = Depends(get_api_key_repo)) -> ApiKeyService:
     return ApiKeyService(repo)
+
+
+def get_tool_repo(session: AsyncSession = Depends(get_db)) -> ToolRepository:
+    return ToolRepository(session)
+
+
+def get_workspace_tool_service(
+    repo: ToolRepository = Depends(get_tool_repo),
+) -> WorkspaceToolService:
+    return WorkspaceToolService(repo)
 
 
 def get_arq_queue(request: Request) -> ArqRedis:

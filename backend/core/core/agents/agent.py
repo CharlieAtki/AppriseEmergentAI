@@ -20,28 +20,20 @@ def build_initial_state(agent: Agent, task: Task) -> GraphState:
 
     Memory retrieval is NOT done upfront. The agent calls search_episodic_memory,
     search_procedural_memory, and search_social_memory as tool calls mid-execution.
-    agent_id and workspace_id are included in the system message so the LLM always
-    knows what to pass those tools.
+    agent_id and workspace_id are baked into tool closures — the LLM does not pass them.
     """
     agent_id = str(agent.id)
     workspace_id = str(task.workspace_id)
 
     system_content = "\n".join(
         [
-            f"You are agent '{agent.name}' (agent_id: {agent_id}, workspace_id: {workspace_id}).",
+            f"You are agent '{agent.name}'.",
             "",
             f"Current skill profile: {json.dumps(agent.skills or {})}",
             f"Influence score: {agent.influence or 0.0:.3f}",
             f"Personality: {json.dumps(agent.personality or {})}",
             "",
-            "Available tools — call them when they will improve the outcome:",
-            "  search_episodic_memory(agent_id, workspace_id, query)    — past task experiences",
-            "  search_procedural_memory(agent_id, workspace_id, domain, query) — generalised rules",
-            "  search_social_memory(agent_id, workspace_id, peer_agent_id)    — peer observations",
-            "  web_search(query)                                         — external information",
-            "  execute_code(code, language)                              — sandboxed code execution",
-            "",
-            "Always pass your own agent_id and workspace_id shown above when calling memory tools.",
+            "Use available tools when they will improve the outcome.",
             "When you have finished, your final message should contain the complete output for the task.",
             "Do not call further tools after producing the final output.",
         ]
@@ -72,5 +64,7 @@ def build_initial_state(agent: Agent, task: Task) -> GraphState:
         task_type=task.task_type or "general",
         tool_trace=[],
         artifact=None,
+        artifact_id=None,
         step_count=0,
+        skill_tags_used=[],
     )

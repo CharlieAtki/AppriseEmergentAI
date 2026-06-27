@@ -57,6 +57,7 @@ services:
       REDIS__URL: redis://redis:6379
       MEMORY__QDRANT_URL: http://qdrant:6333
       ANTHROPIC__API_KEY: ${ANTHROPIC__API_KEY}
+      CLERK__SECRET_KEY: ${CLERK__SECRET_KEY}
     command: >
       sh -c "cd /app/core && alembic upgrade head &&
              uvicorn api.main:app --host 0.0.0.0 --port 8000"

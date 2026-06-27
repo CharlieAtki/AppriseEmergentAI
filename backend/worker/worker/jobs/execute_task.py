@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING, Any
 from core.agents.agent import build_initial_state
 from core.agents.graphs.state import GraphState
 from core.agents.scoring import score_outcome
+from core.agents.tooling.registry import tool_registry
 from core.config import settings
 from core.coordination.decompose import decompose_and_publish
 from core.coordination.task_context import MAX_DELEGATION_DEPTH, TaskContext
@@ -23,6 +24,8 @@ from core.intelligence.prompts.evaluate import EvaluateResponse
 from core.repositories.agent_repository import AgentRepository
 from core.repositories.task_execution_repository import TaskExecutionRepository
 from core.repositories.task_repository import TaskRepository
+from core.repositories.tool_repository import ToolRepository
+from langchain_core.runnables import RunnableConfig
 
 from worker.context import get_worker_context
 from worker.span import ArqJobMeta, JobSpan
@@ -213,11 +216,31 @@ async def execute_task(
                 return
 
             # ── Phase 5: SELF-EXECUTE via LangGraph ──────────────────────────────
-            # No open DB session during graph execution — connections are a scarce resource.
+            # Resolve workspace-scoped tools before graph invocation. Session closes
+            # before ainvoke — no open DB connection during graph execution.
             await span.emit("agent.executing", {})
+            async with span.session() as session:
+                tools, entries = await tool_registry.build_for_task_type(
+                    task_type=task.task_type or "general",
+                    workspace_id=task.workspace_id,
+                    memory=wctx.memory,
+                    agent_id=agent.id,
+                    organisation_id=agent.organisation_id,
+                    repo=ToolRepository(session),
+                    artifact_store=wctx.artifact_store,
+                )
+            model_with_tools = wctx.llm_router.get_chat_model(CallType.EXECUTE).bind_tools(tools)
+            run_config = RunnableConfig(
+                configurable={
+                    "model": model_with_tools,
+                    "tool_map": {t.name: t for t in tools},
+                    "skill_tag_map": tool_registry.get_skill_tag_map(entries),
+                }
+            )
             initial_state = build_initial_state(agent, task)
-            graph_key = task.task_type if task.task_type in wctx.graphs else "general"
-            final_state: GraphState = await wctx.graphs[graph_key].ainvoke(initial_state)
+            final_state: GraphState = await wctx.graphs["universal"].ainvoke(
+                initial_state, config=run_config
+            )
 
             quality = score_outcome(final_state)
             await span.emit("agent.scored", {"quality_score": quality})
@@ -231,10 +254,10 @@ async def execute_task(
                 execution.status = "completed"
                 execution.execution_path = "self_execute"
                 execution.quality_score = quality
-                execution.artifact = final_state.get("artifact")
-                execution.tool_trace = final_state[
-                    "tool_trace"
-                ]  # structured {tool,args,result} records
+                execution.artifact = final_state["artifact"]
+                execution.artifact_id = final_state["artifact_id"]
+                execution.skill_tags_used = final_state["skill_tags_used"] or []
+                execution.tool_trace = final_state["tool_trace"]
                 execution.completed_at = datetime.now(UTC)
                 await execution_repo.save(execution)
 
