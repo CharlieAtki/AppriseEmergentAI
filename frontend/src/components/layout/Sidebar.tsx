@@ -9,7 +9,7 @@ interface SidebarProps {
 
 export function Sidebar({ orgId }: SidebarProps) {
   return (
-    <aside className="flex w-56 shrink-0 flex-col border-r border-border bg-surface">
+    <aside className="flex w-56 shrink-0 flex-col border-r border-border bg-sidebar">
       <div className="px-3 py-3 border-b border-border">
         <OrganizationSwitcher
           hidePersonal

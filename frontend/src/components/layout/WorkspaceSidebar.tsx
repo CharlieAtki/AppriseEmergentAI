@@ -47,7 +47,7 @@ export function WorkspaceSidebar({ orgId, workspaceId, workspaceName }: Workspac
 
   return (
     <Tooltip.Provider delayDuration={300}>
-      <aside className="flex w-56 shrink-0 flex-col border-r border-border bg-surface">
+      <aside className="flex w-56 shrink-0 flex-col border-r border-border bg-sidebar">
         <div className="flex h-16 shrink-0 flex-col justify-center border-b border-border px-4">
           <p className="text-xs font-semibold uppercase tracking-wide text-muted">Workspace</p>
           <p className="mt-0.5 truncate text-sm font-medium text-foreground">{workspaceName}</p>

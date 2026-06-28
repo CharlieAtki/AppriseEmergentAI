@@ -6,16 +6,23 @@ import './globals.css'
 
 const inter = Inter({
   subsets: ['latin'],
+  weight: ['400', '500', '600', '700'],
   variable: '--font-inter',
+  display: 'swap',
 })
 
 const jetbrainsMono = JetBrains_Mono({
   subsets: ['latin'],
+  weight: ['400'],
   variable: '--font-jetbrains',
+  display: 'swap',
 })
 
 export const metadata: Metadata = {
-  title: 'Apprise',
+  title: {
+    default: 'Apprise',
+    template: '%s — Apprise',
+  },
   description: 'Multi-tenant agent platform',
 }
 
@@ -33,7 +40,7 @@ export default function RootLayout({
           colorMutedForeground: '#d4d4d8',
           colorInput: '#141418',
           colorNeutral: '#ededed',
-          colorPrimary: 'oklch(65% 0.2 165)',
+          colorPrimary: 'oklch(49.1% 0.057 148.8)',
         },
       }}
     >
@@ -41,7 +48,7 @@ export default function RootLayout({
         lang="en"
         className={`${inter.variable} ${jetbrainsMono.variable} h-full antialiased`}
       >
-        <body className="min-h-full bg-background text-foreground">
+        <body className="min-h-full text-foreground">
           <Providers>{children}</Providers>
         </body>
       </html>
