@@ -51,10 +51,10 @@ export function WorkspaceSidebarSection({ orgId }: WorkspaceSidebarSectionProps)
                 <li key={ws.id}>
                   <Link
                     href={`/orgs/${orgId}/workspaces/${ws.id}`}
-                    className={`block truncate rounded-md px-2 py-1.5 text-sm transition-colors ${
+                    className={`block truncate rounded-md pr-2 py-1.5 text-sm transition-colors ${
                       isActive
-                        ? 'bg-brand-primary/10 font-medium text-brand-primary'
-                        : 'text-secondary hover:bg-elevated hover:text-foreground'
+                        ? 'border-l-2 border-brand-primary bg-brand-primary/10 font-medium text-brand-primary pl-[6px]'
+                        : 'pl-2 text-secondary hover:bg-elevated hover:text-foreground'
                     }`}
                   >
                     {ws.name}

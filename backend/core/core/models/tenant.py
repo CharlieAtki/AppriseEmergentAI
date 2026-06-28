@@ -131,23 +131,28 @@ class Workspace(Base, TimestampMixin):
     api_keys: Mapped[list[ApiKey]] = relationship(
         back_populates="workspace",
         cascade="all, delete-orphan",
+        passive_deletes=True,
     )
     agents: Mapped[list[Agent]] = relationship(
         back_populates="workspace",
         cascade="all, delete-orphan",
+        passive_deletes=True,
     )
     tasks: Mapped[list[Task]] = relationship(
         back_populates="workspace",
         cascade="all, delete-orphan",
+        passive_deletes=True,
     )
     artifacts: Mapped[list[Artifact]] = relationship(
         back_populates="workspace",
         cascade="all, delete-orphan",
+        passive_deletes=True,
     )
     tools: Mapped[list[WorkspaceTool]] = relationship(
         "WorkspaceTool",
         back_populates="workspace",
         cascade="all, delete-orphan",
+        passive_deletes=True,
     )
 
     def __repr__(self) -> str:

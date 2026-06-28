@@ -6,6 +6,7 @@ import { ReactQueryDevtools } from '@tanstack/react-query-devtools'
 import { useEffect, useState } from 'react'
 
 import { AXIOS_INSTANCE } from '@/api/client'
+import { Toaster } from '@/components/ui/Toaster'
 
 function AxiosAuthSync() {
   const { getToken } = useAuth()
@@ -43,6 +44,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
     <QueryClientProvider client={queryClient}>
       <AxiosAuthSync />
       {children}
+      <Toaster />
       <ReactQueryDevtools initialIsOpen={false} />
     </QueryClientProvider>
   )
