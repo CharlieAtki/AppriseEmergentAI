@@ -1,13 +1,20 @@
 import type { Metadata } from 'next'
 import { ClerkProvider } from '@clerk/nextjs'
-import { Inter, JetBrains_Mono } from 'next/font/google'
+import { Space_Grotesk, Manrope, JetBrains_Mono } from 'next/font/google'
 import { Providers } from './providers'
 import './globals.css'
 
-const inter = Inter({
+const spaceGrotesk = Space_Grotesk({
   subsets: ['latin'],
   weight: ['400', '500', '600', '700'],
-  variable: '--font-inter',
+  variable: '--font-space-grotesk',
+  display: 'swap',
+})
+
+const manrope = Manrope({
+  subsets: ['latin'],
+  weight: ['400', '500', '600', '700'],
+  variable: '--font-manrope',
   display: 'swap',
 })
 
@@ -46,7 +53,7 @@ export default function RootLayout({
     >
       <html
         lang="en"
-        className={`${inter.variable} ${jetbrainsMono.variable} h-full antialiased`}
+        className={`${spaceGrotesk.variable} ${manrope.variable} ${jetbrainsMono.variable} h-full antialiased`}
       >
         <body className="min-h-full text-foreground">
           <Providers>{children}</Providers>

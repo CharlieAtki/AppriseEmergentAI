@@ -29,7 +29,7 @@ export function WorkspaceInfoPopover({ workspace }: WorkspaceInfoPopoverProps) {
       <Popover.Trigger asChild>
         <button
           aria-label="Workspace info"
-          className="flex items-center gap-1.5 rounded-md px-2 py-1 text-xs text-muted transition-colors hover:bg-hover hover:text-foreground"
+          className="flex items-center gap-1.5 rounded-md px-2 py-1 text-label text-muted transition-colors hover:bg-hover hover:text-foreground"
         >
           <Info size={13} />
           Info
@@ -43,15 +43,15 @@ export function WorkspaceInfoPopover({ workspace }: WorkspaceInfoPopoverProps) {
           sideOffset={6}
           className="popover-content z-50 w-72 rounded-xl border border-border bg-elevated p-4 shadow-xl"
         >
-          <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-muted">
+          <p className="mb-3 text-label font-semibold uppercase tracking-architectural text-muted">
             Workspace details
           </p>
 
           <dl className="space-y-3">
             <div>
-              <dt className="text-xs text-muted">ID</dt>
+              <dt className="text-caption text-muted">ID</dt>
               <dd className="mt-0.5 flex items-center gap-1.5">
-                <span className="flex-1 truncate font-mono text-xs text-secondary">
+                <span className="flex-1 truncate font-mono text-code text-secondary">
                   {workspace.id}
                 </span>
                 <button
@@ -65,7 +65,7 @@ export function WorkspaceInfoPopover({ workspace }: WorkspaceInfoPopoverProps) {
             </div>
 
             <div>
-              <dt className="text-xs text-muted">Status</dt>
+              <dt className="text-caption text-muted">Status</dt>
               <dd className="mt-0.5">
                 <Badge status={workspace.status} />
               </dd>
@@ -73,14 +73,14 @@ export function WorkspaceInfoPopover({ workspace }: WorkspaceInfoPopoverProps) {
 
             {createdAt && (
               <div>
-                <dt className="text-xs text-muted">Created</dt>
-                <dd className="mt-0.5 text-xs text-secondary">{createdAt}</dd>
+                <dt className="text-caption text-muted">Created</dt>
+                <dd className="mt-0.5 text-caption text-secondary">{createdAt}</dd>
               </div>
             )}
 
             <div>
-              <dt className="text-xs text-muted">Webhook URL</dt>
-              <dd className="mt-0.5 truncate font-mono text-xs text-secondary">
+              <dt className="text-caption text-muted">Webhook URL</dt>
+              <dd className="mt-0.5 truncate font-mono text-code text-secondary">
                 {workspace.result_webhook_url ?? '—'}
               </dd>
             </div>

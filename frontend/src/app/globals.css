@@ -100,7 +100,8 @@
   --color-error:           var(--color-status-error);
   --color-info:            var(--color-status-info);
   --color-sidebar:         var(--color-bg-sidebar);
-  --font-sans: var(--font-inter);
+  --font-sans: var(--font-manrope);
+  --font-display: var(--font-space-grotesk);
   --font-mono: var(--font-jetbrains);
 
   /* Type scale utilities — pair with font-{weight} and tracking-{tight/wide} */
@@ -118,6 +119,9 @@
   --text-caption--line-height: 1.4;
   --text-code: var(--size-code);
   --text-code--line-height: 1.6;
+
+  /* Architectural tracking — uppercase labels at 0.08em */
+  --tracking-architectural: 0.08em;
 }
 
 body {
@@ -130,6 +134,10 @@ body {
   background-attachment: fixed;
   color: var(--color-text-primary);
   isolation: isolate;
+}
+
+h1, h2, h3, h4, h5, h6 {
+  font-family: var(--font-space-grotesk);
 }
 
 body::before {

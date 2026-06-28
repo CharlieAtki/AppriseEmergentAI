@@ -49,8 +49,8 @@ export function WorkspaceSidebar({ orgId, workspaceId, workspaceName }: Workspac
     <Tooltip.Provider delayDuration={300}>
       <aside className="flex w-56 shrink-0 flex-col border-r border-border bg-sidebar">
         <div className="flex h-16 shrink-0 flex-col justify-center border-b border-border px-4">
-          <p className="text-xs font-semibold uppercase tracking-wide text-muted">Workspace</p>
-          <p className="mt-0.5 truncate text-sm font-medium text-foreground">{workspaceName}</p>
+          <p className="text-label font-semibold uppercase tracking-architectural text-muted">Workspace</p>
+          <p className="mt-0.5 truncate text-body font-medium text-foreground">{workspaceName}</p>
         </div>
 
         <nav className="flex-1 overflow-y-auto px-2 py-3">
@@ -60,7 +60,7 @@ export function WorkspaceSidebar({ orgId, workspaceId, workspaceName }: Workspac
               const href = segment === null ? base : `${base}/${segment}`
 
               const cls = [
-                'flex w-full items-center gap-3 rounded-md px-3 py-2 text-sm transition-colors',
+                'flex w-full items-center gap-3 rounded-md px-3 py-2 text-body transition-colors',
                 active
                   ? 'bg-brand-primary/10 font-medium text-brand-primary'
                   : disabled
@@ -82,7 +82,7 @@ export function WorkspaceSidebar({ orgId, workspaceId, workspaceName }: Workspac
                         <Tooltip.Content
                           side="right"
                           sideOffset={8}
-                          className="rounded bg-elevated px-2 py-1 text-xs text-muted shadow-md"
+                          className="rounded bg-elevated px-2 py-1 text-caption text-muted shadow-md"
                         >
                           Coming soon
                           <Tooltip.Arrow className="fill-elevated" />

@@ -22,10 +22,10 @@ export function DeleteWorkspaceDialog({ workspace, open, onOpenChange, onConfirm
               <Trash2 size={18} className="text-error" />
             </div>
             <div className="min-w-0">
-              <Dialog.Title className="text-base font-semibold text-foreground">
+              <Dialog.Title className="text-title font-semibold text-foreground">
                 Delete workspace
               </Dialog.Title>
-              <Dialog.Description className="mt-1 text-sm text-muted">
+              <Dialog.Description className="mt-1 text-body text-muted">
                 <span className="font-medium text-secondary">{workspace.name}</span> will be
                 deleted. You'll have 5 seconds to undo.
               </Dialog.Description>
@@ -36,14 +36,14 @@ export function DeleteWorkspaceDialog({ workspace, open, onOpenChange, onConfirm
             <Dialog.Close asChild>
               <button
                 type="button"
-                className="rounded-lg px-4 py-2 text-sm text-muted transition-colors hover:text-foreground"
+                className="rounded-lg px-4 py-2 text-body text-muted transition-colors hover:text-foreground"
               >
                 Cancel
               </button>
             </Dialog.Close>
             <button
               onClick={onConfirm}
-              className="rounded-lg bg-error px-4 py-2 text-sm font-medium text-white transition-colors hover:opacity-90"
+              className="rounded-lg bg-error px-4 py-2 text-body font-medium text-white transition-colors hover:opacity-90"
             >
               Delete
             </button>

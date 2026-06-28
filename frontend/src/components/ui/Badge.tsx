@@ -14,7 +14,7 @@ export function Badge({ status }: BadgeProps) {
   const label = status.charAt(0).toUpperCase() + status.slice(1)
 
   return (
-    <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-medium ${styles}`}>
+    <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-label font-medium ${styles}`}>
       <span className="w-1.5 h-1.5 rounded-full bg-current shrink-0" />
       {label}
     </span>

@@ -23,7 +23,7 @@ export function WorkspaceSidebarSection({ orgId }: WorkspaceSidebarSectionProps)
     <>
       <Collapsible.Root open={open} onOpenChange={setOpen}>
         <Collapsible.Trigger asChild>
-          <button className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-xs font-semibold uppercase tracking-wide text-muted transition-colors hover:bg-elevated hover:text-foreground">
+          <button className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-label font-semibold uppercase tracking-architectural text-muted transition-colors hover:bg-elevated hover:text-foreground">
             <ChevronRight
               size={14}
               className={`shrink-0 transition-transform duration-150 ${open ? 'rotate-90' : ''}`}
@@ -38,7 +38,7 @@ export function WorkspaceSidebarSection({ orgId }: WorkspaceSidebarSectionProps)
             <li>
               <button
                 onClick={() => setDialogOpen(true)}
-                className="flex w-full items-center gap-1.5 rounded-md px-2 py-1.5 text-sm text-muted transition-colors hover:bg-elevated hover:text-foreground"
+                className="flex w-full items-center gap-1.5 rounded-md px-2 py-1.5 text-body text-muted transition-colors hover:bg-elevated hover:text-foreground"
               >
                 <Plus size={13} className="shrink-0" />
                 New workspace
@@ -51,7 +51,7 @@ export function WorkspaceSidebarSection({ orgId }: WorkspaceSidebarSectionProps)
                 <li key={ws.id}>
                   <Link
                     href={`/orgs/${orgId}/workspaces/${ws.id}`}
-                    className={`block truncate rounded-md pr-2 py-1.5 text-sm transition-colors ${
+                    className={`block truncate rounded-md pr-2 py-1.5 text-body transition-colors ${
                       isActive
                         ? 'border-l-2 border-brand-primary bg-brand-primary/10 font-medium text-brand-primary pl-[6px]'
                         : 'pl-2 text-secondary hover:bg-elevated hover:text-foreground'

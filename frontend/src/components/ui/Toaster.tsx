@@ -60,11 +60,11 @@ export function Toaster() {
               <span className={`mt-0.5 h-2 w-2 shrink-0 rounded-full ${dotStyles[t.variant ?? 'default']}`} />
 
               <div className="flex-1 min-w-0">
-                <Toast.Title className="text-sm font-medium text-foreground">
+                <Toast.Title className="text-body font-medium text-foreground">
                   {t.title}
                 </Toast.Title>
                 {t.description && (
-                  <Toast.Description className="mt-0.5 text-xs text-muted">
+                  <Toast.Description className="mt-0.5 text-caption text-muted">
                     {t.description}
                   </Toast.Description>
                 )}
@@ -80,7 +80,7 @@ export function Toaster() {
                     <Toast.Action altText="Undo" asChild>
                       <button
                         onClick={t.undoAction}
-                        className="flex items-center gap-1.5 rounded-md border border-border px-2.5 py-1 text-xs font-medium text-foreground transition-colors hover:bg-elevated"
+                        className="flex items-center gap-1.5 rounded-md border border-border px-2.5 py-1 text-label font-medium text-foreground transition-colors hover:bg-elevated"
                       >
                         <RotateCcw size={11} />
                         Undo

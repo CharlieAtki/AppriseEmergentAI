@@ -53,10 +53,10 @@ export function EditWorkspaceDialog({ workspace, open, onOpenChange }: EditWorks
       <Dialog.Portal>
         <Dialog.Overlay className="dialog-overlay fixed inset-0 bg-background/60 backdrop-blur-sm" />
         <Dialog.Content className="dialog-content fixed left-1/2 top-1/2 w-full max-w-md -translate-x-1/2 -translate-y-1/2 rounded-xl border border-border bg-surface p-6 shadow-xl focus:outline-none">
-          <Dialog.Title className="text-base font-semibold text-foreground">
+          <Dialog.Title className="text-title font-semibold text-foreground">
             Edit workspace
           </Dialog.Title>
-          <Dialog.Description className="mt-1 text-sm text-muted">
+          <Dialog.Description className="mt-1 text-body text-muted">
             Update the workspace name or status.
           </Dialog.Description>
 
@@ -68,7 +68,7 @@ export function EditWorkspaceDialog({ workspace, open, onOpenChange }: EditWorks
             }}
           >
             <Form.Field name="name" className="space-y-1.5">
-              <Form.Label className="text-xs font-medium text-secondary">Name</Form.Label>
+              <Form.Label className="text-label font-medium text-secondary">Name</Form.Label>
               <Form.Control asChild>
                 <input
                   autoFocus
@@ -76,23 +76,23 @@ export function EditWorkspaceDialog({ workspace, open, onOpenChange }: EditWorks
                   required
                   value={name}
                   onChange={(e) => setName(e.target.value)}
-                  className="w-full rounded-lg border border-border bg-elevated px-3 py-2 text-sm text-foreground placeholder:text-muted focus:border-brand-primary focus:outline-none focus:ring-1 focus:ring-brand-primary"
+                  className="w-full rounded-lg border border-border bg-elevated px-3 py-2 text-body text-foreground placeholder:text-muted focus:border-brand-primary focus:outline-none focus:ring-1 focus:ring-brand-primary"
                 />
               </Form.Control>
-              <Form.Message match="valueMissing" className="text-xs text-error">
+              <Form.Message match="valueMissing" className="text-caption text-error">
                 Name is required.
               </Form.Message>
             </Form.Field>
 
             <Form.Field name="status" className="space-y-1.5">
-              <Form.Label className="text-xs font-medium text-secondary">Status</Form.Label>
+              <Form.Label className="text-label font-medium text-secondary">Status</Form.Label>
               {/* Hidden input so Radix Form sees the value — Select.Root manages visual state */}
               <input type="hidden" name="status" value={status ?? UpdateWorkspaceRequestStatus.active} />
               <Select.Root
                 value={status ?? UpdateWorkspaceRequestStatus.active}
                 onValueChange={(v) => setStatus(v as typeof UpdateWorkspaceRequestStatus[keyof typeof UpdateWorkspaceRequestStatus])}
               >
-                <Select.Trigger className="flex w-full items-center justify-between rounded-lg border border-border bg-elevated px-3 py-2 text-sm text-foreground transition-colors hover:border-brand-primary focus:border-brand-primary focus:outline-none focus:ring-1 focus:ring-brand-primary data-[placeholder]:text-muted">
+                <Select.Trigger className="flex w-full items-center justify-between rounded-lg border border-border bg-elevated px-3 py-2 text-body text-foreground transition-colors hover:border-brand-primary focus:border-brand-primary focus:outline-none focus:ring-1 focus:ring-brand-primary data-[placeholder]:text-muted">
                   <Select.Value />
                   <Select.Icon>
                     <ChevronDown size={14} className="text-muted" />
@@ -110,7 +110,7 @@ export function EditWorkspaceDialog({ workspace, open, onOpenChange }: EditWorks
                         <Select.Item
                           key={s}
                           value={s}
-                          className="flex cursor-pointer items-center justify-between rounded-md px-3 py-1.5 text-sm text-foreground outline-none transition-colors hover:bg-hover data-[highlighted]:bg-hover data-[state=checked]:text-brand-primary"
+                          className="flex cursor-pointer items-center justify-between rounded-md px-3 py-1.5 text-body text-foreground outline-none transition-colors hover:bg-hover data-[highlighted]:bg-hover data-[state=checked]:text-brand-primary"
                         >
                           <Select.ItemText>{s.charAt(0).toUpperCase() + s.slice(1)}</Select.ItemText>
                           <Select.ItemIndicator>
@@ -128,7 +128,7 @@ export function EditWorkspaceDialog({ workspace, open, onOpenChange }: EditWorks
               <Dialog.Close asChild>
                 <button
                   type="button"
-                  className="rounded-lg px-4 py-2 text-sm text-muted transition-colors hover:text-foreground"
+                  className="rounded-lg px-4 py-2 text-body text-muted transition-colors hover:text-foreground"
                 >
                   Cancel
                 </button>
@@ -136,7 +136,7 @@ export function EditWorkspaceDialog({ workspace, open, onOpenChange }: EditWorks
               <Form.Submit asChild>
                 <button
                   disabled={isPending}
-                  className="rounded-lg bg-brand-primary px-4 py-2 text-sm font-medium text-background transition-colors hover:bg-brand-hover disabled:opacity-50"
+                  className="rounded-lg bg-brand-primary px-4 py-2 text-body font-medium text-background transition-colors hover:bg-brand-hover disabled:opacity-50"
                 >
                   {isPending ? 'Saving…' : 'Save'}
                 </button>

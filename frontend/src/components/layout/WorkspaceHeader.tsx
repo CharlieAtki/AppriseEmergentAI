@@ -32,12 +32,12 @@ export function WorkspaceHeader({ connected }: WorkspaceHeaderProps) {
       <div>
         <Link
           href={workspacesHref}
-          className="flex items-center gap-1 text-xs text-muted transition-colors hover:text-foreground"
+          className="flex items-center gap-1 text-caption text-muted transition-colors hover:text-foreground"
         >
           <ChevronLeft size={12} />
           Workspaces
         </Link>
-        <h1 className="text-base font-semibold leading-tight text-foreground">{section}</h1>
+        <h1 className="text-title font-bold leading-tight text-foreground">{section}</h1>
       </div>
 
       <div className="flex items-center gap-2">
@@ -47,7 +47,7 @@ export function WorkspaceHeader({ connected }: WorkspaceHeaderProps) {
          * /workspaces/{id}/stream is built — see docs/frontend/frontend-gaps.md.
          */}
         <span className={`h-2 w-2 rounded-full ${connected ? 'bg-success' : 'bg-muted'}`} />
-        <span className="text-xs text-muted">{connected ? 'live' : 'offline'}</span>
+        <span className="text-caption text-muted">{connected ? 'live' : 'offline'}</span>
       </div>
     </header>
   )

@@ -43,7 +43,7 @@ export function WorkspaceCard({ workspace, orgId }: WorkspaceCardProps) {
           className="flex flex-col gap-4 p-6 pb-4 focus-visible:outline-none"
         >
           <div className="flex items-start justify-between gap-3">
-            <h2 className="text-title font-semibold text-foreground group-hover:text-brand-primary transition-colors">
+            <h2 className="text-title font-semibold text-foreground">
               {workspace.name}
             </h2>
             <Badge status={workspace.status} />
@@ -58,7 +58,7 @@ export function WorkspaceCard({ workspace, orgId }: WorkspaceCardProps) {
           <button
             onClick={() => setEditOpen(true)}
             aria-label="Edit workspace"
-            className="flex items-center gap-1.5 rounded-md px-2 py-1 text-xs text-muted transition-colors hover:bg-hover hover:text-foreground"
+            className="flex items-center gap-1.5 rounded-md px-2 py-1 text-label text-muted transition-colors hover:bg-hover hover:text-foreground"
           >
             <Pencil size={13} />
             Edit
@@ -66,7 +66,7 @@ export function WorkspaceCard({ workspace, orgId }: WorkspaceCardProps) {
           <button
             onClick={() => setDeleteOpen(true)}
             aria-label="Delete workspace"
-            className="flex items-center gap-1.5 rounded-md px-2 py-1 text-xs text-muted transition-colors hover:bg-hover hover:text-error"
+            className="flex items-center gap-1.5 rounded-md px-2 py-1 text-label text-muted transition-colors hover:bg-hover hover:text-error"
           >
             <Trash2 size={13} />
             Delete

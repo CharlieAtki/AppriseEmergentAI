@@ -16,7 +16,7 @@ export function Sidebar({ orgId }: SidebarProps) {
           appearance={{
             elements: {
               rootBox: 'w-full',
-              organizationSwitcherTrigger: 'w-full rounded-md px-1.5 py-1 text-sm text-foreground hover:bg-elevated transition-colors',
+              organizationSwitcherTrigger: 'w-full rounded-md px-1.5 py-1 text-body text-foreground hover:bg-elevated transition-colors',
             },
           }}
         />

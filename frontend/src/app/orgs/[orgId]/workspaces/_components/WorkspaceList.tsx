@@ -20,7 +20,7 @@ export function WorkspaceList() {
 
   if (isError) {
     return (
-      <p className="text-sm text-error">
+      <p className="text-body text-error">
         Failed to load workspaces. Please refresh the page.
       </p>
     )
@@ -30,7 +30,7 @@ export function WorkspaceList() {
 
   if (workspaces.length === 0) {
     return (
-      <p className="text-sm text-muted">
+      <p className="text-body text-muted">
         No workspaces yet. Create one to get started.
       </p>
     )
