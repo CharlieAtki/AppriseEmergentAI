@@ -7,10 +7,6 @@ export default function WorkspacesPage() {
   return (
     <main className="p-8">
       <div className="max-w-[1440px] mx-auto">
-        <div className="mb-8">
-          <h1 className="text-heading font-semibold tracking-tight text-foreground">Workspaces</h1>
-          <p className="mt-1 text-body text-secondary">Select a workspace to open its dashboard.</p>
-        </div>
         <WorkspaceList />
       </div>
     </main>

@@ -29,3 +29,4 @@ class WorkspaceResponse(BaseModel):
     status: str
     result_webhook_url: str | None
     created_at: datetime | None
+    agent_count: int = 0

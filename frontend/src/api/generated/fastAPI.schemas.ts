@@ -163,6 +163,7 @@ export interface WorkspaceResponse {
   status: string;
   result_webhook_url: string | null;
   created_at: string | null;
+  agent_count?: number;
 }
 
 export type WorkspaceToolResponseConfigSchema = { [key: string]: unknown } | null;

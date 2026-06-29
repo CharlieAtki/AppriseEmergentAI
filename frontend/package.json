@@ -13,6 +13,7 @@
   "dependencies": {
     "@clerk/nextjs": "^7.5.9",
     "@clerk/themes": "^2.4.57",
+    "@radix-ui/react-alert-dialog": "^1.1.17",
     "@radix-ui/react-collapsible": "^1.1.14",
     "@radix-ui/react-dialog": "^1.1.17",
     "@radix-ui/react-form": "^0.1.10",

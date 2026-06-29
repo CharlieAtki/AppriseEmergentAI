@@ -29,10 +29,9 @@ export function WorkspaceInfoPopover({ workspace }: WorkspaceInfoPopoverProps) {
       <Popover.Trigger asChild>
         <button
           aria-label="Workspace info"
-          className="flex items-center gap-1.5 rounded-md px-2 py-1 text-label text-muted transition-colors hover:bg-hover hover:text-foreground"
+          className="rounded-md p-1.5 text-muted transition-colors hover:bg-hover hover:text-foreground"
         >
-          <Info size={13} />
-          Info
+          <Info size={14} />
         </button>
       </Popover.Trigger>
 
@@ -68,6 +67,13 @@ export function WorkspaceInfoPopover({ workspace }: WorkspaceInfoPopoverProps) {
               <dt className="text-caption text-muted">Status</dt>
               <dd className="mt-0.5">
                 <Badge status={workspace.status} />
+              </dd>
+            </div>
+
+            <div>
+              <dt className="text-caption text-muted">Agents</dt>
+              <dd className="mt-0.5 text-caption text-secondary">
+                {workspace.agent_count ?? 0} agent{(workspace.agent_count ?? 0) !== 1 ? 's' : ''}
               </dd>
             </div>
 

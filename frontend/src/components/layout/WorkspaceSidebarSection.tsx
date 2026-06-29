@@ -1,11 +1,11 @@
 'use client'
 
-import * as Collapsible from '@radix-ui/react-collapsible'
-import { ChevronRight, LayoutGrid, Plus } from 'lucide-react'
+import { Plus } from 'lucide-react'
 import Link from 'next/link'
 import { useParams } from 'next/navigation'
 import { useState } from 'react'
 import { useListWorkspacesWorkspacesGet } from '@/api/generated/workspaces/workspaces'
+import { WorkspaceAvatar } from '@/components/workspaces/WorkspaceAvatar'
 import { CreateWorkspaceDialog } from '@/components/workspaces/CreateWorkspaceDialog'
 
 interface WorkspaceSidebarSectionProps {
@@ -13,58 +13,55 @@ interface WorkspaceSidebarSectionProps {
 }
 
 export function WorkspaceSidebarSection({ orgId }: WorkspaceSidebarSectionProps) {
-  const [open, setOpen] = useState(true)
   const [dialogOpen, setDialogOpen] = useState(false)
   const params = useParams<{ workspaceId?: string }>()
   const { data } = useListWorkspacesWorkspacesGet()
+  // FAVOURITES STUB: When implemented, favourited workspace IDs will be read from a
+  // Zustand store persisted to localStorage. Favourited workspaces render first with a
+  // visual separator before the rest. See stores/workspaceFavourites.ts (to be created).
   const workspaces = data?.data ?? []
 
   return (
     <>
-      <Collapsible.Root open={open} onOpenChange={setOpen}>
-        <Collapsible.Trigger asChild>
-          <button className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-label font-semibold uppercase tracking-architectural text-muted transition-colors hover:bg-elevated hover:text-foreground">
-            <ChevronRight
-              size={14}
-              className={`shrink-0 transition-transform duration-150 ${open ? 'rotate-90' : ''}`}
-            />
-            <LayoutGrid size={14} className="shrink-0" />
-            Workspaces
-          </button>
-        </Collapsible.Trigger>
-
-        <Collapsible.Content className="overflow-hidden data-[state=closed]:animate-collapsible-up data-[state=open]:animate-collapsible-down">
-          <ul className="ml-4 mt-1 space-y-0.5 border-l border-border-subtle pl-3">
-            <li>
-              <button
-                onClick={() => setDialogOpen(true)}
-                className="flex w-full items-center gap-1.5 rounded-md px-2 py-1.5 text-body text-muted transition-colors hover:bg-elevated hover:text-foreground"
-              >
-                <Plus size={13} className="shrink-0" />
-                New workspace
-              </button>
-            </li>
-
-            {workspaces.map((ws) => {
-              const isActive = params.workspaceId === ws.id
-              return (
-                <li key={ws.id}>
-                  <Link
-                    href={`/orgs/${orgId}/workspaces/${ws.id}`}
-                    className={`block truncate rounded-md pr-2 py-1.5 text-body transition-colors ${
-                      isActive
-                        ? 'border-l-2 border-brand-primary bg-brand-primary/10 font-medium text-brand-primary pl-[6px]'
-                        : 'pl-2 text-secondary hover:bg-elevated hover:text-foreground'
-                    }`}
-                  >
-                    {ws.name}
-                  </Link>
-                </li>
-              )
-            })}
-          </ul>
-        </Collapsible.Content>
-      </Collapsible.Root>
+      <div>
+        <p className="mb-1 px-2 text-label font-semibold uppercase tracking-architectural text-muted">
+          Workspaces
+        </p>
+        <ul className="space-y-0.5">
+          {workspaces.map((ws) => {
+            const isActive = params.workspaceId === ws.id
+            const isOnline = ws.status === 'active'
+            return (
+              <li key={ws.id}>
+                <Link
+                  href={`/orgs/${orgId}/workspaces/${ws.id}`}
+                  className={`flex items-center gap-2 rounded-md px-2 py-1.5 text-body transition-colors ${
+                    isActive
+                      ? 'bg-brand-primary/10 font-medium text-brand-primary'
+                      : 'text-secondary hover:bg-elevated hover:text-foreground'
+                  }`}
+                >
+                  <WorkspaceAvatar name={ws.name} size="sm" />
+                  <span className="flex-1 truncate">{ws.name}</span>
+                  <span
+                    aria-hidden="true"
+                    className={`h-1.5 w-1.5 shrink-0 rounded-full ${isOnline ? 'bg-success' : 'bg-muted'}`}
+                  />
+                </Link>
+              </li>
+            )
+          })}
+          <li>
+            <button
+              onClick={() => setDialogOpen(true)}
+              className="flex w-full items-center gap-1.5 rounded-md px-2 py-1.5 text-body text-muted transition-colors hover:bg-elevated hover:text-foreground"
+            >
+              <Plus size={13} className="shrink-0" />
+              New workspace
+            </button>
+          </li>
+        </ul>
+      </div>
 
       <CreateWorkspaceDialog orgId={orgId} open={dialogOpen} onOpenChange={setDialogOpen} />
     </>

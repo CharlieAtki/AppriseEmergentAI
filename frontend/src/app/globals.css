@@ -148,7 +148,7 @@ body::before {
   background-size: 200px 200px;
   background-repeat: repeat;
   background-attachment: fixed;
-  opacity: 0.055;
+  opacity: 0.060;
   pointer-events: none;
   z-index: -1;
 }
@@ -183,7 +183,7 @@ body::before {
   background-image: url('/crack-pattern.svg');
   background-size: 200px 200px;
   background-repeat: repeat;
-  opacity: 0.055;
+  opacity: 0.09;
   pointer-events: none;
   z-index: -1;
 }

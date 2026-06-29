@@ -5,7 +5,7 @@ import { PanelShell } from '@/components/ui/PanelShell'
 export default function WorkspacePage() {
   return (
     <div
-      className="grid h-full grid-cols-2 gap-4"
+      className="grid h-full grid-cols-2 gap-4 p-6"
       style={{ gridTemplateRows: 'minmax(0,1.5fr) minmax(0,1fr) minmax(0,1fr)' }}
     >
       <PanelShell title="Agent Pool" />

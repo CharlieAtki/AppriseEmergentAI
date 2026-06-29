@@ -40,9 +40,10 @@ class WorkspaceData:
     status: str
     result_webhook_url: str | None
     created_at: datetime | None
+    agent_count: int = 0
 
     @classmethod
-    def from_domain(cls, ws: Workspace) -> WorkspaceData:
+    def from_domain(cls, ws: Workspace, *, agent_count: int = 0) -> WorkspaceData:
         # Explicit field mapping — no introspection; webhook_secret intentionally omitted.
         return cls(
             id=ws.id,
@@ -51,6 +52,7 @@ class WorkspaceData:
             status=ws.status,
             result_webhook_url=ws.result_webhook_url,
             created_at=ws.created_at,
+            agent_count=agent_count,
         )
 
 
@@ -69,8 +71,8 @@ class WorkspaceService:
         return WorkspaceData.from_domain(ws) if ws is not None else None
 
     async def list(self, org_id: uuid.UUID) -> list[WorkspaceData]:
-        workspaces = await self._repo.list_all(org_id=org_id)
-        return [WorkspaceData.from_domain(ws) for ws in workspaces]
+        rows = await self._repo.list_with_agent_counts(org_id=org_id)
+        return [WorkspaceData.from_domain(ws, agent_count=count) for ws, count in rows]
 
     async def update(self, ws: Workspace, cmd: UpdateWorkspaceCommand) -> WorkspaceData:
         # ws loaded by require_workspace() auth dep — accept ORM directly to avoid a second DB read.
