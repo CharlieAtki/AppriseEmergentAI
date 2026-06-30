@@ -147,6 +147,9 @@ class AgentRepository:
         self._session.add(agent)
         return agent
 
+    async def delete(self, agent: Agent) -> None:
+        await self._session.delete(agent)
+
     async def save(self, agent: Agent) -> None:
         """Stage agent for persistence via session.add().
 

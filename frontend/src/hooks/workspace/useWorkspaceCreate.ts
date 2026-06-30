@@ -30,7 +30,10 @@ export function useWorkspaceCreate() {
 
   const createWorkspace = useCallback(
     (name: string, options?: { onSuccess?: () => void }) => {
-      mutate({ data: { name } }, { onSuccess: options?.onSuccess })
+      mutate(
+        { data: { name } },
+        options?.onSuccess !== undefined ? { onSuccess: options.onSuccess } : undefined,
+      )
     },
     [mutate],
   )

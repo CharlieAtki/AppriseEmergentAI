@@ -6,11 +6,19 @@
  */
 export type AgentResponseSkills = {[key: string]: number} | null;
 
+export type AgentStatus = typeof AgentStatus[keyof typeof AgentStatus];
+
+
+export const AgentStatus = {
+  active: 'active',
+  inactive: 'inactive',
+} as const;
+
 export interface AgentResponse {
   id: string;
   workspace_id: string;
   name: string;
-  status: string;
+  status: AgentStatus;
   skills: AgentResponseSkills;
   influence: number | null;
   created_at: string;
@@ -35,7 +43,7 @@ export interface ApiKeyResponse {
   created_at: string | null;
 }
 
-export type CreateAgentRequestPersonality = { [key: string]: unknown } | null;
+export type CreateAgentRequestPersonality = {[key: string]: number} | null;
 
 export type CreateAgentRequestSkills = {[key: string]: number} | null;
 
@@ -124,17 +132,9 @@ export interface TaskResponse {
   created_at: string | null;
 }
 
-export type UpdateAgentRequestStatus = typeof UpdateAgentRequestStatus[keyof typeof UpdateAgentRequestStatus] | null;
-
-
-export const UpdateAgentRequestStatus = {
-  active: 'active',
-  inactive: 'inactive',
-} as const;
-
 export interface UpdateAgentRequest {
   name?: string | null;
-  status?: UpdateAgentRequestStatus;
+  status?: AgentStatus | null;
 }
 
 export type UpdateWorkspaceRequestStatus = typeof UpdateWorkspaceRequestStatus[keyof typeof UpdateWorkspaceRequestStatus] | null;

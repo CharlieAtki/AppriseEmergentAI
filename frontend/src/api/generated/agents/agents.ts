@@ -388,7 +388,98 @@ export function useGetAgentWorkspacesWorkspaceIdAgentsAgentIdGet<TData = Awaited
 
 
 
-export type updateAgentWorkspacesWorkspaceIdAgentsAgentIdPatchResponse200 = {
+export type deleteAgentWorkspacesWorkspaceIdAgentsAgentIdDeleteResponse204 = {
+  data: void
+  status: 204
+}
+
+export type deleteAgentWorkspacesWorkspaceIdAgentsAgentIdDeleteResponse422 = {
+  data: HTTPValidationError
+  status: 422
+}
+
+export type deleteAgentWorkspacesWorkspaceIdAgentsAgentIdDeleteResponseSuccess = (deleteAgentWorkspacesWorkspaceIdAgentsAgentIdDeleteResponse204) & {
+  headers: Headers;
+};
+export type deleteAgentWorkspacesWorkspaceIdAgentsAgentIdDeleteResponseError = (deleteAgentWorkspacesWorkspaceIdAgentsAgentIdDeleteResponse422) & {
+  headers: Headers;
+};
+
+export type deleteAgentWorkspacesWorkspaceIdAgentsAgentIdDeleteResponse = (deleteAgentWorkspacesWorkspaceIdAgentsAgentIdDeleteResponseSuccess | deleteAgentWorkspacesWorkspaceIdAgentsAgentIdDeleteResponseError)
+
+export const getDeleteAgentWorkspacesWorkspaceIdAgentsAgentIdDeleteUrl = (workspaceId: string,
+    agentId: string,) => {
+
+
+
+
+  return `/workspaces/${workspaceId}/agents/${agentId}`
+}
+
+/**
+ * @summary Delete Agent
+ */
+export const deleteAgentWorkspacesWorkspaceIdAgentsAgentIdDelete = async (workspaceId: string,
+    agentId: string, options?: RequestInit): Promise<deleteAgentWorkspacesWorkspaceIdAgentsAgentIdDeleteResponse> => {
+
+  return customInstance<deleteAgentWorkspacesWorkspaceIdAgentsAgentIdDeleteResponse>(getDeleteAgentWorkspacesWorkspaceIdAgentsAgentIdDeleteUrl(workspaceId,agentId),
+  {
+    ...options,
+    method: 'DELETE'
+
+
+  }
+);}
+
+
+
+
+
+export const getDeleteAgentWorkspacesWorkspaceIdAgentsAgentIdDeleteMutationOptions = <TError = HTTPValidationError,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteAgentWorkspacesWorkspaceIdAgentsAgentIdDelete>>, TError,{workspaceId: string;agentId: string}, TContext>, request?: SecondParameter<typeof customInstance>}
+): UseMutationOptions<Awaited<ReturnType<typeof deleteAgentWorkspacesWorkspaceIdAgentsAgentIdDelete>>, TError,{workspaceId: string;agentId: string}, TContext> => {
+
+const mutationKey = ['deleteAgentWorkspacesWorkspaceIdAgentsAgentIdDelete'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof deleteAgentWorkspacesWorkspaceIdAgentsAgentIdDelete>>, {workspaceId: string;agentId: string}> = (props) => {
+          const {workspaceId,agentId} = props ?? {};
+
+          return  deleteAgentWorkspacesWorkspaceIdAgentsAgentIdDelete(workspaceId,agentId,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type DeleteAgentWorkspacesWorkspaceIdAgentsAgentIdDeleteMutationResult = NonNullable<Awaited<ReturnType<typeof deleteAgentWorkspacesWorkspaceIdAgentsAgentIdDelete>>>
+
+    export type DeleteAgentWorkspacesWorkspaceIdAgentsAgentIdDeleteMutationError = HTTPValidationError
+
+    /**
+ * @summary Delete Agent
+ */
+export const useDeleteAgentWorkspacesWorkspaceIdAgentsAgentIdDelete = <TError = HTTPValidationError,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteAgentWorkspacesWorkspaceIdAgentsAgentIdDelete>>, TError,{workspaceId: string;agentId: string}, TContext>, request?: SecondParameter<typeof customInstance>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof deleteAgentWorkspacesWorkspaceIdAgentsAgentIdDelete>>,
+        TError,
+        {workspaceId: string;agentId: string},
+        TContext
+      > => {
+      return useMutation(getDeleteAgentWorkspacesWorkspaceIdAgentsAgentIdDeleteMutationOptions(options), queryClient);
+    }
+    export type updateAgentWorkspacesWorkspaceIdAgentsAgentIdPatchResponse200 = {
   data: AgentResponse
   status: 200
 }

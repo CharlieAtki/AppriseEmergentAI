@@ -81,6 +81,13 @@ class AgentService:
         agents = await self._repo.list_all(workspace_id=workspace_id)
         return [AgentData.from_domain(a) for a in agents]
 
+    async def delete(self, agent_id: uuid.UUID, workspace_id: uuid.UUID) -> bool:
+        agent = await self._repo.get(agent_id, workspace_id)
+        if agent is None:
+            return False
+        await self._repo.delete(agent)
+        return True
+
     async def update(
         self,
         agent_id: uuid.UUID,

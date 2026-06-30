@@ -6,7 +6,7 @@ import Link from 'next/link'
 import { useParams, usePathname } from 'next/navigation'
 import { useOrganization } from '@clerk/nextjs'
 import { useGetWorkspaceWorkspacesWorkspaceIdGet } from '@/api/generated/workspaces/workspaces'
-import { useWorkspaceStream } from '@/hooks/useWorkspaceStream'
+import { useWorkspaceStream } from '@/hooks/workspace/useWorkspaceStream'
 
 interface AppHeaderProps {
   orgId: string

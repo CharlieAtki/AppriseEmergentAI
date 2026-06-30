@@ -148,7 +148,7 @@ body::before {
   background-size: 200px 200px;
   background-repeat: repeat;
   background-attachment: fixed;
-  opacity: 0.060;
+  opacity: 0.06;
   pointer-events: none;
   z-index: -1;
 }
@@ -234,4 +234,51 @@ body::before {
 }
 .animate-collapsible-up {
   animation: collapsible-up 150ms ease-out;
+}
+
+/* ─── ReactFlow theme overrides ─────────────────────────────────────────────
+   ReactFlow CSS loads after globals.css (client component import), so CSS
+   variable overrides get clobbered. We use higher-specificity selectors
+   (nested class = 0,2,0 vs ReactFlow's single class = 0,1,0) to win.        */
+
+.react-flow__controls .react-flow__controls-button {
+  background-color: var(--color-bg-surface);
+  border-color: var(--border-default);
+  color: var(--color-text-muted);
+  fill: var(--color-text-muted);
+}
+
+.react-flow__controls .react-flow__controls-button:hover {
+  background-color: var(--color-bg-elevated);
+  color: var(--color-text-primary);
+  fill: var(--color-text-primary);
+}
+
+.react-flow__controls .react-flow__controls-button svg {
+  fill: currentColor;
+}
+
+.react-flow__background {
+  background-color: transparent;
+}
+
+/* ─── Spawn agent button glow ───────────────────────────────────────────── */
+@keyframes spawn-glow {
+  0%, 100% { box-shadow: 0 0 0 0   oklch(49.1% 0.057 148.8 / 0  ), 0 4px 16px oklch(0% 0 0 / 0.25); }
+  50%       { box-shadow: 0 0 0 6px oklch(49.1% 0.057 148.8 / 0.3), 0 4px 24px oklch(0% 0 0 / 0.4); }
+}
+
+.spawn-agent-btn {
+  animation: spawn-glow 2.5s ease-in-out infinite;
+}
+
+/* ─── Agent node hover glow ─────────────────────────────────────────────── */
+.agent-node {
+  transition: box-shadow var(--duration-slow) var(--ease-standard),
+              border-color var(--duration-slow) var(--ease-standard);
+}
+
+.agent-node:hover {
+  box-shadow: 0 0 0 1px var(--agent-accent, var(--color-brand)), 0 8px 24px oklch(20% 0.10 150 / 40%);
+  border-color: var(--agent-accent, var(--color-brand));
 }

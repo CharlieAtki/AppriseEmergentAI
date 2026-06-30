@@ -12,7 +12,7 @@ import { cardHover } from '@/lib/motion'
 import { EditWorkspaceDialog } from './EditWorkspaceDialog'
 import { DeleteWorkspaceDialog } from './DeleteWorkspaceDialog'
 import { WorkspaceInfoPopover } from './WorkspaceInfoPopover'
-import { useWorkspaceDelete } from '@/hooks/useWorkspaceDelete'
+import { useWorkspaceDelete } from '@/hooks/workspace/useWorkspaceDelete'
 
 interface WorkspaceCardProps {
   workspace: WorkspaceResponse
