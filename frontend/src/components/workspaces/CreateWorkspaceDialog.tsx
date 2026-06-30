@@ -4,12 +4,7 @@ import * as Dialog from '@radix-ui/react-dialog'
 import * as Form from '@radix-ui/react-form'
 import { X } from 'lucide-react'
 import { useState } from 'react'
-import { useQueryClient } from '@tanstack/react-query'
-import {
-  useCreateWorkspaceWorkspacesPost,
-  getListWorkspacesWorkspacesGetQueryKey,
-} from '@/api/generated/workspaces/workspaces'
-import { useToastStore } from '@/stores/toast'
+import { useWorkspaceCreate } from '@/hooks/useWorkspaceCreate'
 
 interface CreateWorkspaceDialogProps {
   orgId: string
@@ -19,21 +14,7 @@ interface CreateWorkspaceDialogProps {
 
 export function CreateWorkspaceDialog({ orgId: _orgId, open, onOpenChange }: CreateWorkspaceDialogProps) {
   const [name, setName] = useState('')
-  const queryClient = useQueryClient()
-  const { toast } = useToastStore()
-
-  const { mutate, isPending } = useCreateWorkspaceWorkspacesPost({
-    mutation: {
-      onSuccess: (response) => {
-        // Narrows the discriminated union — Axios throws on 422 so this branch is always taken.
-        if (response.status !== 201) return
-        void queryClient.invalidateQueries({ queryKey: getListWorkspacesWorkspacesGetQueryKey() })
-        onOpenChange(false)
-        toast({ title: 'Workspace created', description: response.data.name, variant: 'success' })
-        setName('')
-      },
-    },
-  })
+  const { createWorkspace, isPending } = useWorkspaceCreate()
 
   return (
     <Dialog.Root open={open} onOpenChange={onOpenChange}>
@@ -51,7 +32,12 @@ export function CreateWorkspaceDialog({ orgId: _orgId, open, onOpenChange }: Cre
             className="mt-5 space-y-4"
             onSubmit={(e) => {
               e.preventDefault()
-              mutate({ data: { name: name.trim() } })
+              createWorkspace(name.trim(), {
+                onSuccess: () => {
+                  onOpenChange(false)
+                  setName('')
+                },
+              })
             }}
           >
             <Form.Field name="name" className="space-y-1.5">

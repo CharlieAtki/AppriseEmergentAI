@@ -10,6 +10,12 @@ import { useToastStore } from '@/stores/toast'
 
 export const DELETE_UNDO_DURATION_MS = 5000
 
+function insertAt<T>(list: T[], item: T, index: number): T[] {
+  const next = [...list]
+  next.splice(Math.max(0, Math.min(index, next.length)), 0, item)
+  return next
+}
+
 export function useWorkspaceDelete() {
   const queryClient = useQueryClient()
   const { toast, dismiss } = useToastStore()
@@ -19,6 +25,7 @@ export function useWorkspaceDelete() {
     (workspace: WorkspaceResponse) => {
       const queryKey = getListWorkspacesWorkspacesGetQueryKey()
       const snapshot = queryClient.getQueryData<listWorkspacesWorkspacesGetResponse>(queryKey)
+      const originalIndex = snapshot?.data.findIndex((w) => w.id === workspace.id) ?? -1
 
       // Optimistically remove the card immediately
       queryClient.setQueryData<listWorkspacesWorkspacesGetResponse>(queryKey, (old) =>
@@ -30,10 +37,16 @@ export function useWorkspaceDelete() {
       const timeoutId = window.setTimeout(async () => {
         try {
           await mutateAsync({ workspaceId: workspace.id })
-          await queryClient.invalidateQueries({ queryKey })
+          // Confirm the optimistic removal without a refetch — a full invalidation here
+          // would show server state mid-flight while other pending deletes haven't committed yet.
+          queryClient.setQueryData<listWorkspacesWorkspacesGetResponse>(queryKey, (current) =>
+            current ? { ...current, data: current.data.filter((w) => w.id !== workspace.id) } : current
+          )
         } catch {
-          // Restore the card on failure
-          queryClient.setQueryData(queryKey, snapshot)
+          // Restore only this workspace into current cache state on failure
+          queryClient.setQueryData<listWorkspacesWorkspacesGetResponse>(queryKey, (current) =>
+            current ? { ...current, data: insertAt(current.data, workspace, originalIndex) } : snapshot
+          )
           toast({
             title: 'Failed to delete workspace',
             description: workspace.name,
@@ -48,10 +61,14 @@ export function useWorkspaceDelete() {
         id: toastId,
         title: 'Workspace deleted',
         description: workspace.name,
+        variant: 'success',
         duration: DELETE_UNDO_DURATION_MS,
         undoAction: () => {
           clearTimeout(timeoutId)
-          queryClient.setQueryData(queryKey, snapshot)
+          // Insert only this workspace back at its original position in the current list
+          queryClient.setQueryData<listWorkspacesWorkspacesGetResponse>(queryKey, (current) =>
+            current ? { ...current, data: insertAt(current.data, workspace, originalIndex) } : snapshot
+          )
           dismiss(toastId)
         },
       })

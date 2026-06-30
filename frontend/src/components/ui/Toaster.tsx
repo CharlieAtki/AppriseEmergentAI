@@ -45,7 +45,8 @@ export function Toaster() {
             key={t.id}
             open
             forceMount
-            duration={t.undoAction ? Infinity : 4000}
+            // Hooks own all dismissal via window.setTimeout; Radix's timer pauses on hover and can't drive API side effects.
+            duration={Infinity}
             onOpenChange={(open) => { if (!open) dismiss(t.id) }}
             asChild
           >
@@ -98,7 +99,7 @@ export function Toaster() {
                 </Toast.Close>
               </div>
 
-              {t.undoAction && <CountdownBar variant={t.variant ?? 'default'} duration={t.duration ?? 5000} />}
+              {(t.undoAction || t.duration) && <CountdownBar variant={t.variant ?? 'default'} duration={t.duration ?? 5000} />}
             </motion.li>
           </Toast.Root>
         ))}
