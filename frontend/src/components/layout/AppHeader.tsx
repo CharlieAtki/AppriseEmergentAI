@@ -24,7 +24,7 @@ function WorkspaceLiveStatus({ workspaceId }: { workspaceId: string }) {
 
 function WorkspaceBreadcrumb({ workspaceId, orgId }: { workspaceId: string; orgId: string }) {
   const { data } = useGetWorkspaceWorkspacesWorkspaceIdGet(workspaceId)
-  const name = data?.status === 200 ? data.data.name : workspaceId
+  const name = data?.name ?? workspaceId
   const pathname = usePathname()
   const base = `/orgs/${orgId}/workspaces/${workspaceId}`
   const segments = pathname.split('/').filter(Boolean)

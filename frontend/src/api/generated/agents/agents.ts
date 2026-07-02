@@ -4,14 +4,13 @@
  * FastAPI
  * OpenAPI spec version: 0.1.0
  */
-import {
-  useMutation,
-  useQuery
-} from '@tanstack/react-query';
+import { z } from "zod";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type {
   DataTag,
   DefinedInitialDataOptions,
   DefinedUseQueryResult,
+  InvalidateOptions,
   MutationFunction,
   QueryClient,
   QueryFunction,
@@ -20,29 +19,29 @@ import type {
   UseMutationOptions,
   UseMutationResult,
   UseQueryOptions,
-  UseQueryResult
-} from '@tanstack/react-query';
+  UseQueryResult,
+} from "@tanstack/react-query";
 
 import type {
-  AgentResponse,
   CreateAgentRequest,
   HTTPValidationError,
-  UpdateAgentRequest
-} from '../fastAPI.schemas';
+  UpdateAgentRequest,
+} from "../model";
+import { AgentResponse } from "../model";
 
-import { customInstance } from '../../client';
-
+import { customInstance } from "../../client";
 
 type SecondParameter<T extends (...args: never) => unknown> = Parameters<T>[1];
 
-
-
-const withQueryKey = <T extends object, K>(query: T, queryKey: K): T & { queryKey: K } => {
+const withQueryKey = <T extends object, K>(
+  query: T,
+  queryKey: K,
+): T & { queryKey: K } => {
   const result = { queryKey } as T & { queryKey: K };
   for (const key of Object.keys(query)) {
     // The explicit queryKey always wins, matching the previous
     // `{ ...query, queryKey }` spread where it was set last.
-    if (key === 'queryKey') continue;
+    if (key === "queryKey") continue;
     Object.defineProperty(result, key, {
       enumerable: true,
       configurable: true,
@@ -52,522 +51,887 @@ const withQueryKey = <T extends object, K>(query: T, queryKey: K): T & { queryKe
   return result;
 };
 
-export type createAgentWorkspacesWorkspaceIdAgentsPostResponse201 = {
-  data: AgentResponse
-  status: 201
-}
-
-export type createAgentWorkspacesWorkspaceIdAgentsPostResponse422 = {
-  data: HTTPValidationError
-  status: 422
-}
-
-export type createAgentWorkspacesWorkspaceIdAgentsPostResponseSuccess = (createAgentWorkspacesWorkspaceIdAgentsPostResponse201) & {
-  headers: Headers;
+/**
+ * @summary Create Agent
+ */
+export const createAgentWorkspacesWorkspaceIdAgentsPost = (
+  workspaceId: string,
+  createAgentRequest: CreateAgentRequest,
+  options?: SecondParameter<typeof customInstance>,
+  signal?: AbortSignal,
+) => {
+  return customInstance<AgentResponse>(
+    {
+      url: `/workspaces/${workspaceId}/agents`,
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      data: createAgentRequest,
+      ...(signal ? { signal } : {}),
+    },
+    options,
+    AgentResponse,
+  );
 };
-export type createAgentWorkspacesWorkspaceIdAgentsPostResponseError = (createAgentWorkspacesWorkspaceIdAgentsPostResponse422) & {
-  headers: Headers;
+
+export const getCreateAgentWorkspacesWorkspaceIdAgentsPostMutationOptions = <
+  TError = HTTPValidationError,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof createAgentWorkspacesWorkspaceIdAgentsPost>>,
+    TError,
+    { workspaceId: string; data: CreateAgentRequest },
+    TContext
+  >;
+  request?: SecondParameter<typeof customInstance>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof createAgentWorkspacesWorkspaceIdAgentsPost>>,
+  TError,
+  { workspaceId: string; data: CreateAgentRequest },
+  TContext
+> => {
+  const mutationKey = ["createAgentWorkspacesWorkspaceIdAgentsPost"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof createAgentWorkspacesWorkspaceIdAgentsPost>>,
+    { workspaceId: string; data: CreateAgentRequest }
+  > = (props) => {
+    const { workspaceId, data } = props ?? {};
+
+    return createAgentWorkspacesWorkspaceIdAgentsPost(
+      workspaceId,
+      data,
+      requestOptions,
+    );
+  };
+
+  return { mutationFn, ...mutationOptions };
 };
 
-export type createAgentWorkspacesWorkspaceIdAgentsPostResponse = (createAgentWorkspacesWorkspaceIdAgentsPostResponseSuccess | createAgentWorkspacesWorkspaceIdAgentsPostResponseError)
-
-export const getCreateAgentWorkspacesWorkspaceIdAgentsPostUrl = (workspaceId: string,) => {
-
-
-
-
-  return `/workspaces/${workspaceId}/agents`
-}
+export type CreateAgentWorkspacesWorkspaceIdAgentsPostMutationResult =
+  NonNullable<
+    Awaited<ReturnType<typeof createAgentWorkspacesWorkspaceIdAgentsPost>>
+  >;
+export type CreateAgentWorkspacesWorkspaceIdAgentsPostMutationBody =
+  CreateAgentRequest;
+export type CreateAgentWorkspacesWorkspaceIdAgentsPostMutationError =
+  HTTPValidationError;
 
 /**
  * @summary Create Agent
  */
-export const createAgentWorkspacesWorkspaceIdAgentsPost = async (workspaceId: string,
-    createAgentRequest: CreateAgentRequest, options?: RequestInit): Promise<createAgentWorkspacesWorkspaceIdAgentsPostResponse> => {
-
-  return customInstance<createAgentWorkspacesWorkspaceIdAgentsPostResponse>(getCreateAgentWorkspacesWorkspaceIdAgentsPostUrl(workspaceId),
-  {
-    ...options,
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...options?.headers },
-    body: JSON.stringify(createAgentRequest)
-  }
-);}
-
-
-
-
-
-export const getCreateAgentWorkspacesWorkspaceIdAgentsPostMutationOptions = <TError = HTTPValidationError,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createAgentWorkspacesWorkspaceIdAgentsPost>>, TError,{workspaceId: string;data: CreateAgentRequest}, TContext>, request?: SecondParameter<typeof customInstance>}
-): UseMutationOptions<Awaited<ReturnType<typeof createAgentWorkspacesWorkspaceIdAgentsPost>>, TError,{workspaceId: string;data: CreateAgentRequest}, TContext> => {
-
-const mutationKey = ['createAgentWorkspacesWorkspaceIdAgentsPost'];
-const {mutation: mutationOptions, request: requestOptions} = options ?
-      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
-      options
-      : {...options, mutation: {...options.mutation, mutationKey}}
-      : {mutation: { mutationKey, }, request: undefined};
-
-
-
-
-      const mutationFn: MutationFunction<Awaited<ReturnType<typeof createAgentWorkspacesWorkspaceIdAgentsPost>>, {workspaceId: string;data: CreateAgentRequest}> = (props) => {
-          const {workspaceId,data} = props ?? {};
-
-          return  createAgentWorkspacesWorkspaceIdAgentsPost(workspaceId,data,requestOptions)
-        }
-
-
-
-
-
-
-  return  { mutationFn, ...mutationOptions }}
-
-    export type CreateAgentWorkspacesWorkspaceIdAgentsPostMutationResult = NonNullable<Awaited<ReturnType<typeof createAgentWorkspacesWorkspaceIdAgentsPost>>>
-    export type CreateAgentWorkspacesWorkspaceIdAgentsPostMutationBody = CreateAgentRequest
-    export type CreateAgentWorkspacesWorkspaceIdAgentsPostMutationError = HTTPValidationError
-
-    /**
- * @summary Create Agent
+export const useCreateAgentWorkspacesWorkspaceIdAgentsPost = <
+  TError = HTTPValidationError,
+  TContext = unknown,
+>(
+  options?: {
+    mutation?: UseMutationOptions<
+      Awaited<ReturnType<typeof createAgentWorkspacesWorkspaceIdAgentsPost>>,
+      TError,
+      { workspaceId: string; data: CreateAgentRequest },
+      TContext
+    >;
+    request?: SecondParameter<typeof customInstance>;
+  },
+  queryClient?: QueryClient,
+): UseMutationResult<
+  Awaited<ReturnType<typeof createAgentWorkspacesWorkspaceIdAgentsPost>>,
+  TError,
+  { workspaceId: string; data: CreateAgentRequest },
+  TContext
+> => {
+  return useMutation(
+    getCreateAgentWorkspacesWorkspaceIdAgentsPostMutationOptions(options),
+    queryClient,
+  );
+};
+/**
+ * @summary List Agents
  */
-export const useCreateAgentWorkspacesWorkspaceIdAgentsPost = <TError = HTTPValidationError,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createAgentWorkspacesWorkspaceIdAgentsPost>>, TError,{workspaceId: string;data: CreateAgentRequest}, TContext>, request?: SecondParameter<typeof customInstance>}
- , queryClient?: QueryClient): UseMutationResult<
-        Awaited<ReturnType<typeof createAgentWorkspacesWorkspaceIdAgentsPost>>,
+export const listAgentsWorkspacesWorkspaceIdAgentsGet = (
+  workspaceId: string,
+  options?: SecondParameter<typeof customInstance>,
+  signal?: AbortSignal,
+) => {
+  return customInstance<AgentResponse[]>(
+    {
+      url: `/workspaces/${workspaceId}/agents`,
+      method: "GET",
+      ...(signal ? { signal } : {}),
+    },
+    options,
+    z.array(AgentResponse),
+  );
+};
+
+export const getListAgentsWorkspacesWorkspaceIdAgentsGetQueryKey = (
+  workspaceId: string,
+) => {
+  return [`/workspaces/${workspaceId}/agents`] as const;
+};
+
+export const getListAgentsWorkspacesWorkspaceIdAgentsGetQueryOptions = <
+  TData = Awaited<ReturnType<typeof listAgentsWorkspacesWorkspaceIdAgentsGet>>,
+  TError = HTTPValidationError,
+>(
+  workspaceId: string,
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<ReturnType<typeof listAgentsWorkspacesWorkspaceIdAgentsGet>>,
         TError,
-        {workspaceId: string;data: CreateAgentRequest},
-        TContext
-      > => {
-      return useMutation(getCreateAgentWorkspacesWorkspaceIdAgentsPostMutationOptions(options), queryClient);
-    }
-    export type listAgentsWorkspacesWorkspaceIdAgentsGetResponse200 = {
-  data: AgentResponse[]
-  status: 200
-}
+        TData
+      >
+    >;
+    request?: SecondParameter<typeof customInstance>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
 
-export type listAgentsWorkspacesWorkspaceIdAgentsGetResponse422 = {
-  data: HTTPValidationError
-  status: 422
-}
+  const queryKey =
+    queryOptions?.queryKey ??
+    getListAgentsWorkspacesWorkspaceIdAgentsGetQueryKey(workspaceId);
 
-export type listAgentsWorkspacesWorkspaceIdAgentsGetResponseSuccess = (listAgentsWorkspacesWorkspaceIdAgentsGetResponse200) & {
-  headers: Headers;
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof listAgentsWorkspacesWorkspaceIdAgentsGet>>
+  > = ({ signal }) =>
+    listAgentsWorkspacesWorkspaceIdAgentsGet(
+      workspaceId,
+      requestOptions,
+      signal,
+    );
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: workspaceId !== null && workspaceId !== undefined,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof listAgentsWorkspacesWorkspaceIdAgentsGet>>,
+    TError,
+    TData
+  > & { queryKey: DataTag<QueryKey, TData, TError> };
 };
-export type listAgentsWorkspacesWorkspaceIdAgentsGetResponseError = (listAgentsWorkspacesWorkspaceIdAgentsGetResponse422) & {
-  headers: Headers;
+
+export type ListAgentsWorkspacesWorkspaceIdAgentsGetQueryResult = NonNullable<
+  Awaited<ReturnType<typeof listAgentsWorkspacesWorkspaceIdAgentsGet>>
+>;
+export type ListAgentsWorkspacesWorkspaceIdAgentsGetQueryError =
+  HTTPValidationError;
+
+export function useListAgentsWorkspacesWorkspaceIdAgentsGet<
+  TData = Awaited<ReturnType<typeof listAgentsWorkspacesWorkspaceIdAgentsGet>>,
+  TError = HTTPValidationError,
+>(
+  workspaceId: string,
+  options: {
+    query: Partial<
+      UseQueryOptions<
+        Awaited<ReturnType<typeof listAgentsWorkspacesWorkspaceIdAgentsGet>>,
+        TError,
+        TData
+      >
+    > &
+      Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof listAgentsWorkspacesWorkspaceIdAgentsGet>>,
+          TError,
+          Awaited<ReturnType<typeof listAgentsWorkspacesWorkspaceIdAgentsGet>>
+        >,
+        "initialData"
+      >;
+    request?: SecondParameter<typeof customInstance>;
+  },
+  queryClient?: QueryClient,
+): DefinedUseQueryResult<TData, TError> & {
+  queryKey: DataTag<QueryKey, TData, TError>;
 };
+export function useListAgentsWorkspacesWorkspaceIdAgentsGet<
+  TData = Awaited<ReturnType<typeof listAgentsWorkspacesWorkspaceIdAgentsGet>>,
+  TError = HTTPValidationError,
+>(
+  workspaceId: string,
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<ReturnType<typeof listAgentsWorkspacesWorkspaceIdAgentsGet>>,
+        TError,
+        TData
+      >
+    > &
+      Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof listAgentsWorkspacesWorkspaceIdAgentsGet>>,
+          TError,
+          Awaited<ReturnType<typeof listAgentsWorkspacesWorkspaceIdAgentsGet>>
+        >,
+        "initialData"
+      >;
+    request?: SecondParameter<typeof customInstance>;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & {
+  queryKey: DataTag<QueryKey, TData, TError>;
+};
+export function useListAgentsWorkspacesWorkspaceIdAgentsGet<
+  TData = Awaited<ReturnType<typeof listAgentsWorkspacesWorkspaceIdAgentsGet>>,
+  TError = HTTPValidationError,
+>(
+  workspaceId: string,
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<ReturnType<typeof listAgentsWorkspacesWorkspaceIdAgentsGet>>,
+        TError,
+        TData
+      >
+    >;
+    request?: SecondParameter<typeof customInstance>;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & {
+  queryKey: DataTag<QueryKey, TData, TError>;
+};
+/**
+ * @summary List Agents
+ */
 
-export type listAgentsWorkspacesWorkspaceIdAgentsGetResponse = (listAgentsWorkspacesWorkspaceIdAgentsGetResponseSuccess | listAgentsWorkspacesWorkspaceIdAgentsGetResponseError)
+export function useListAgentsWorkspacesWorkspaceIdAgentsGet<
+  TData = Awaited<ReturnType<typeof listAgentsWorkspacesWorkspaceIdAgentsGet>>,
+  TError = HTTPValidationError,
+>(
+  workspaceId: string,
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<ReturnType<typeof listAgentsWorkspacesWorkspaceIdAgentsGet>>,
+        TError,
+        TData
+      >
+    >;
+    request?: SecondParameter<typeof customInstance>;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & {
+  queryKey: DataTag<QueryKey, TData, TError>;
+} {
+  const queryOptions = getListAgentsWorkspacesWorkspaceIdAgentsGetQueryOptions(
+    workspaceId,
+    options,
+  );
 
-export const getListAgentsWorkspacesWorkspaceIdAgentsGetUrl = (workspaceId: string,) => {
+  const query = useQuery(queryOptions, queryClient) as UseQueryResult<
+    TData,
+    TError
+  > & { queryKey: DataTag<QueryKey, TData, TError> };
 
-
-
-
-  return `/workspaces/${workspaceId}/agents`
+  return withQueryKey(query, queryOptions.queryKey);
 }
 
 /**
  * @summary List Agents
  */
-export const listAgentsWorkspacesWorkspaceIdAgentsGet = async (workspaceId: string, options?: RequestInit): Promise<listAgentsWorkspacesWorkspaceIdAgentsGetResponse> => {
+export const invalidateListAgentsWorkspacesWorkspaceIdAgentsGet = async (
+  queryClient: QueryClient,
+  workspaceId: string,
+  options?: InvalidateOptions,
+): Promise<QueryClient> => {
+  await queryClient.invalidateQueries(
+    {
+      queryKey:
+        getListAgentsWorkspacesWorkspaceIdAgentsGetQueryKey(workspaceId),
+    },
+    options,
+  );
 
-  return customInstance<listAgentsWorkspacesWorkspaceIdAgentsGetResponse>(getListAgentsWorkspacesWorkspaceIdAgentsGetUrl(workspaceId),
-  {
-    ...options,
-    method: 'GET'
+  return queryClient;
+};
 
-
-  }
-);}
-
-
-
-
-
-export const getListAgentsWorkspacesWorkspaceIdAgentsGetQueryKey = (workspaceId: string,) => {
-    return [
-    `/workspaces/${workspaceId}/agents`
-    ] as const;
-    }
-
-
-export const getListAgentsWorkspacesWorkspaceIdAgentsGetQueryOptions = <TData = Awaited<ReturnType<typeof listAgentsWorkspacesWorkspaceIdAgentsGet>>, TError = HTTPValidationError>(workspaceId: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listAgentsWorkspacesWorkspaceIdAgentsGet>>, TError, TData>>, request?: SecondParameter<typeof customInstance>}
-) => {
-
-const {query: queryOptions, request: requestOptions} = options ?? {};
-
-  const queryKey =  queryOptions?.queryKey ?? getListAgentsWorkspacesWorkspaceIdAgentsGetQueryKey(workspaceId);
-
-
-
-    const queryFn: QueryFunction<Awaited<ReturnType<typeof listAgentsWorkspacesWorkspaceIdAgentsGet>>> = ({ signal }) => listAgentsWorkspacesWorkspaceIdAgentsGet(workspaceId, { signal, ...requestOptions });
-
-
-
-
-
-   return  { queryKey, queryFn, enabled: workspaceId !== null && workspaceId !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listAgentsWorkspacesWorkspaceIdAgentsGet>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
-}
-
-export type ListAgentsWorkspacesWorkspaceIdAgentsGetQueryResult = NonNullable<Awaited<ReturnType<typeof listAgentsWorkspacesWorkspaceIdAgentsGet>>>
-export type ListAgentsWorkspacesWorkspaceIdAgentsGetQueryError = HTTPValidationError
-
-
-export function useListAgentsWorkspacesWorkspaceIdAgentsGet<TData = Awaited<ReturnType<typeof listAgentsWorkspacesWorkspaceIdAgentsGet>>, TError = HTTPValidationError>(
- workspaceId: string, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof listAgentsWorkspacesWorkspaceIdAgentsGet>>, TError, TData>> & Pick<
-        DefinedInitialDataOptions<
-          Awaited<ReturnType<typeof listAgentsWorkspacesWorkspaceIdAgentsGet>>,
-          TError,
-          Awaited<ReturnType<typeof listAgentsWorkspacesWorkspaceIdAgentsGet>>
-        > , 'initialData'
-      >, request?: SecondParameter<typeof customInstance>}
- , queryClient?: QueryClient
-  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-export function useListAgentsWorkspacesWorkspaceIdAgentsGet<TData = Awaited<ReturnType<typeof listAgentsWorkspacesWorkspaceIdAgentsGet>>, TError = HTTPValidationError>(
- workspaceId: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listAgentsWorkspacesWorkspaceIdAgentsGet>>, TError, TData>> & Pick<
-        UndefinedInitialDataOptions<
-          Awaited<ReturnType<typeof listAgentsWorkspacesWorkspaceIdAgentsGet>>,
-          TError,
-          Awaited<ReturnType<typeof listAgentsWorkspacesWorkspaceIdAgentsGet>>
-        > , 'initialData'
-      >, request?: SecondParameter<typeof customInstance>}
- , queryClient?: QueryClient
-  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-export function useListAgentsWorkspacesWorkspaceIdAgentsGet<TData = Awaited<ReturnType<typeof listAgentsWorkspacesWorkspaceIdAgentsGet>>, TError = HTTPValidationError>(
- workspaceId: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listAgentsWorkspacesWorkspaceIdAgentsGet>>, TError, TData>>, request?: SecondParameter<typeof customInstance>}
- , queryClient?: QueryClient
-  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
 /**
  * @summary List Agents
  */
-
-export function useListAgentsWorkspacesWorkspaceIdAgentsGet<TData = Awaited<ReturnType<typeof listAgentsWorkspacesWorkspaceIdAgentsGet>>, TError = HTTPValidationError>(
- workspaceId: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listAgentsWorkspacesWorkspaceIdAgentsGet>>, TError, TData>>, request?: SecondParameter<typeof customInstance>}
- , queryClient?: QueryClient
- ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
-
-  const queryOptions = getListAgentsWorkspacesWorkspaceIdAgentsGetQueryOptions(workspaceId,options)
-
-  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
-
-  return withQueryKey(query, queryOptions.queryKey);
-}
-
-
-
-
-
-
-export type getAgentWorkspacesWorkspaceIdAgentsAgentIdGetResponse200 = {
-  data: AgentResponse
-  status: 200
-}
-
-export type getAgentWorkspacesWorkspaceIdAgentsAgentIdGetResponse422 = {
-  data: HTTPValidationError
-  status: 422
-}
-
-export type getAgentWorkspacesWorkspaceIdAgentsAgentIdGetResponseSuccess = (getAgentWorkspacesWorkspaceIdAgentsAgentIdGetResponse200) & {
-  headers: Headers;
-};
-export type getAgentWorkspacesWorkspaceIdAgentsAgentIdGetResponseError = (getAgentWorkspacesWorkspaceIdAgentsAgentIdGetResponse422) & {
-  headers: Headers;
+export const useSetListAgentsWorkspacesWorkspaceIdAgentsGetQueryData = () => {
+  const queryClient = useQueryClient();
+  return (
+    workspaceId: string,
+    updater:
+      | Awaited<ReturnType<typeof listAgentsWorkspacesWorkspaceIdAgentsGet>>
+      | undefined
+      | ((
+          old:
+            | Awaited<
+                ReturnType<typeof listAgentsWorkspacesWorkspaceIdAgentsGet>
+              >
+            | undefined,
+        ) =>
+          | Awaited<ReturnType<typeof listAgentsWorkspacesWorkspaceIdAgentsGet>>
+          | undefined),
+  ) => {
+    queryClient.setQueriesData<
+      Awaited<ReturnType<typeof listAgentsWorkspacesWorkspaceIdAgentsGet>>
+    >(
+      {
+        queryKey:
+          getListAgentsWorkspacesWorkspaceIdAgentsGetQueryKey(workspaceId),
+      },
+      updater,
+    );
+  };
 };
 
-export type getAgentWorkspacesWorkspaceIdAgentsAgentIdGetResponse = (getAgentWorkspacesWorkspaceIdAgentsAgentIdGetResponseSuccess | getAgentWorkspacesWorkspaceIdAgentsAgentIdGetResponseError)
-
-export const getGetAgentWorkspacesWorkspaceIdAgentsAgentIdGetUrl = (workspaceId: string,
-    agentId: string,) => {
-
-
-
-
-  return `/workspaces/${workspaceId}/agents/${agentId}`
-}
+/**
+ * @summary List Agents
+ */
+export const useGetListAgentsWorkspacesWorkspaceIdAgentsGetQueryData = () => {
+  const queryClient = useQueryClient();
+  return (workspaceId: string) =>
+    queryClient.getQueryData<
+      Awaited<ReturnType<typeof listAgentsWorkspacesWorkspaceIdAgentsGet>>
+    >(getListAgentsWorkspacesWorkspaceIdAgentsGetQueryKey(workspaceId));
+};
 
 /**
  * @summary Get Agent
  */
-export const getAgentWorkspacesWorkspaceIdAgentsAgentIdGet = async (workspaceId: string,
-    agentId: string, options?: RequestInit): Promise<getAgentWorkspacesWorkspaceIdAgentsAgentIdGetResponse> => {
-
-  return customInstance<getAgentWorkspacesWorkspaceIdAgentsAgentIdGetResponse>(getGetAgentWorkspacesWorkspaceIdAgentsAgentIdGetUrl(workspaceId,agentId),
-  {
-    ...options,
-    method: 'GET'
-
-
-  }
-);}
-
-
-
-
-
-export const getGetAgentWorkspacesWorkspaceIdAgentsAgentIdGetQueryKey = (workspaceId: string,
-    agentId: string,) => {
-    return [
-    `/workspaces/${workspaceId}/agents/${agentId}`
-    ] as const;
-    }
-
-
-export const getGetAgentWorkspacesWorkspaceIdAgentsAgentIdGetQueryOptions = <TData = Awaited<ReturnType<typeof getAgentWorkspacesWorkspaceIdAgentsAgentIdGet>>, TError = HTTPValidationError>(workspaceId: string,
-    agentId: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getAgentWorkspacesWorkspaceIdAgentsAgentIdGet>>, TError, TData>>, request?: SecondParameter<typeof customInstance>}
+export const getAgentWorkspacesWorkspaceIdAgentsAgentIdGet = (
+  workspaceId: string,
+  agentId: string,
+  options?: SecondParameter<typeof customInstance>,
+  signal?: AbortSignal,
 ) => {
+  return customInstance<AgentResponse>(
+    {
+      url: `/workspaces/${workspaceId}/agents/${agentId}`,
+      method: "GET",
+      ...(signal ? { signal } : {}),
+    },
+    options,
+    AgentResponse,
+  );
+};
 
-const {query: queryOptions, request: requestOptions} = options ?? {};
+export const getGetAgentWorkspacesWorkspaceIdAgentsAgentIdGetQueryKey = (
+  workspaceId: string,
+  agentId: string,
+) => {
+  return [`/workspaces/${workspaceId}/agents/${agentId}`] as const;
+};
 
-  const queryKey =  queryOptions?.queryKey ?? getGetAgentWorkspacesWorkspaceIdAgentsAgentIdGetQueryKey(workspaceId,agentId);
+export const getGetAgentWorkspacesWorkspaceIdAgentsAgentIdGetQueryOptions = <
+  TData = Awaited<
+    ReturnType<typeof getAgentWorkspacesWorkspaceIdAgentsAgentIdGet>
+  >,
+  TError = HTTPValidationError,
+>(
+  workspaceId: string,
+  agentId: string,
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<
+          ReturnType<typeof getAgentWorkspacesWorkspaceIdAgentsAgentIdGet>
+        >,
+        TError,
+        TData
+      >
+    >;
+    request?: SecondParameter<typeof customInstance>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
 
+  const queryKey =
+    queryOptions?.queryKey ??
+    getGetAgentWorkspacesWorkspaceIdAgentsAgentIdGetQueryKey(
+      workspaceId,
+      agentId,
+    );
 
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getAgentWorkspacesWorkspaceIdAgentsAgentIdGet>>
+  > = ({ signal }) =>
+    getAgentWorkspacesWorkspaceIdAgentsAgentIdGet(
+      workspaceId,
+      agentId,
+      requestOptions,
+      signal,
+    );
 
-    const queryFn: QueryFunction<Awaited<ReturnType<typeof getAgentWorkspacesWorkspaceIdAgentsAgentIdGet>>> = ({ signal }) => getAgentWorkspacesWorkspaceIdAgentsAgentIdGet(workspaceId,agentId, { signal, ...requestOptions });
+  return {
+    queryKey,
+    queryFn,
+    enabled:
+      workspaceId !== null &&
+      workspaceId !== undefined &&
+      agentId !== null &&
+      agentId !== undefined,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof getAgentWorkspacesWorkspaceIdAgentsAgentIdGet>>,
+    TError,
+    TData
+  > & { queryKey: DataTag<QueryKey, TData, TError> };
+};
 
+export type GetAgentWorkspacesWorkspaceIdAgentsAgentIdGetQueryResult =
+  NonNullable<
+    Awaited<ReturnType<typeof getAgentWorkspacesWorkspaceIdAgentsAgentIdGet>>
+  >;
+export type GetAgentWorkspacesWorkspaceIdAgentsAgentIdGetQueryError =
+  HTTPValidationError;
 
-
-
-
-   return  { queryKey, queryFn, enabled: workspaceId !== null && workspaceId !== undefined && agentId !== null && agentId !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getAgentWorkspacesWorkspaceIdAgentsAgentIdGet>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
-}
-
-export type GetAgentWorkspacesWorkspaceIdAgentsAgentIdGetQueryResult = NonNullable<Awaited<ReturnType<typeof getAgentWorkspacesWorkspaceIdAgentsAgentIdGet>>>
-export type GetAgentWorkspacesWorkspaceIdAgentsAgentIdGetQueryError = HTTPValidationError
-
-
-export function useGetAgentWorkspacesWorkspaceIdAgentsAgentIdGet<TData = Awaited<ReturnType<typeof getAgentWorkspacesWorkspaceIdAgentsAgentIdGet>>, TError = HTTPValidationError>(
- workspaceId: string,
-    agentId: string, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof getAgentWorkspacesWorkspaceIdAgentsAgentIdGet>>, TError, TData>> & Pick<
+export function useGetAgentWorkspacesWorkspaceIdAgentsAgentIdGet<
+  TData = Awaited<
+    ReturnType<typeof getAgentWorkspacesWorkspaceIdAgentsAgentIdGet>
+  >,
+  TError = HTTPValidationError,
+>(
+  workspaceId: string,
+  agentId: string,
+  options: {
+    query: Partial<
+      UseQueryOptions<
+        Awaited<
+          ReturnType<typeof getAgentWorkspacesWorkspaceIdAgentsAgentIdGet>
+        >,
+        TError,
+        TData
+      >
+    > &
+      Pick<
         DefinedInitialDataOptions<
-          Awaited<ReturnType<typeof getAgentWorkspacesWorkspaceIdAgentsAgentIdGet>>,
+          Awaited<
+            ReturnType<typeof getAgentWorkspacesWorkspaceIdAgentsAgentIdGet>
+          >,
           TError,
-          Awaited<ReturnType<typeof getAgentWorkspacesWorkspaceIdAgentsAgentIdGet>>
-        > , 'initialData'
-      >, request?: SecondParameter<typeof customInstance>}
- , queryClient?: QueryClient
-  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-export function useGetAgentWorkspacesWorkspaceIdAgentsAgentIdGet<TData = Awaited<ReturnType<typeof getAgentWorkspacesWorkspaceIdAgentsAgentIdGet>>, TError = HTTPValidationError>(
- workspaceId: string,
-    agentId: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getAgentWorkspacesWorkspaceIdAgentsAgentIdGet>>, TError, TData>> & Pick<
+          Awaited<
+            ReturnType<typeof getAgentWorkspacesWorkspaceIdAgentsAgentIdGet>
+          >
+        >,
+        "initialData"
+      >;
+    request?: SecondParameter<typeof customInstance>;
+  },
+  queryClient?: QueryClient,
+): DefinedUseQueryResult<TData, TError> & {
+  queryKey: DataTag<QueryKey, TData, TError>;
+};
+export function useGetAgentWorkspacesWorkspaceIdAgentsAgentIdGet<
+  TData = Awaited<
+    ReturnType<typeof getAgentWorkspacesWorkspaceIdAgentsAgentIdGet>
+  >,
+  TError = HTTPValidationError,
+>(
+  workspaceId: string,
+  agentId: string,
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<
+          ReturnType<typeof getAgentWorkspacesWorkspaceIdAgentsAgentIdGet>
+        >,
+        TError,
+        TData
+      >
+    > &
+      Pick<
         UndefinedInitialDataOptions<
-          Awaited<ReturnType<typeof getAgentWorkspacesWorkspaceIdAgentsAgentIdGet>>,
+          Awaited<
+            ReturnType<typeof getAgentWorkspacesWorkspaceIdAgentsAgentIdGet>
+          >,
           TError,
-          Awaited<ReturnType<typeof getAgentWorkspacesWorkspaceIdAgentsAgentIdGet>>
-        > , 'initialData'
-      >, request?: SecondParameter<typeof customInstance>}
- , queryClient?: QueryClient
-  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-export function useGetAgentWorkspacesWorkspaceIdAgentsAgentIdGet<TData = Awaited<ReturnType<typeof getAgentWorkspacesWorkspaceIdAgentsAgentIdGet>>, TError = HTTPValidationError>(
- workspaceId: string,
-    agentId: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getAgentWorkspacesWorkspaceIdAgentsAgentIdGet>>, TError, TData>>, request?: SecondParameter<typeof customInstance>}
- , queryClient?: QueryClient
-  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+          Awaited<
+            ReturnType<typeof getAgentWorkspacesWorkspaceIdAgentsAgentIdGet>
+          >
+        >,
+        "initialData"
+      >;
+    request?: SecondParameter<typeof customInstance>;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & {
+  queryKey: DataTag<QueryKey, TData, TError>;
+};
+export function useGetAgentWorkspacesWorkspaceIdAgentsAgentIdGet<
+  TData = Awaited<
+    ReturnType<typeof getAgentWorkspacesWorkspaceIdAgentsAgentIdGet>
+  >,
+  TError = HTTPValidationError,
+>(
+  workspaceId: string,
+  agentId: string,
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<
+          ReturnType<typeof getAgentWorkspacesWorkspaceIdAgentsAgentIdGet>
+        >,
+        TError,
+        TData
+      >
+    >;
+    request?: SecondParameter<typeof customInstance>;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & {
+  queryKey: DataTag<QueryKey, TData, TError>;
+};
 /**
  * @summary Get Agent
  */
 
-export function useGetAgentWorkspacesWorkspaceIdAgentsAgentIdGet<TData = Awaited<ReturnType<typeof getAgentWorkspacesWorkspaceIdAgentsAgentIdGet>>, TError = HTTPValidationError>(
- workspaceId: string,
-    agentId: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getAgentWorkspacesWorkspaceIdAgentsAgentIdGet>>, TError, TData>>, request?: SecondParameter<typeof customInstance>}
- , queryClient?: QueryClient
- ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+export function useGetAgentWorkspacesWorkspaceIdAgentsAgentIdGet<
+  TData = Awaited<
+    ReturnType<typeof getAgentWorkspacesWorkspaceIdAgentsAgentIdGet>
+  >,
+  TError = HTTPValidationError,
+>(
+  workspaceId: string,
+  agentId: string,
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<
+          ReturnType<typeof getAgentWorkspacesWorkspaceIdAgentsAgentIdGet>
+        >,
+        TError,
+        TData
+      >
+    >;
+    request?: SecondParameter<typeof customInstance>;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & {
+  queryKey: DataTag<QueryKey, TData, TError>;
+} {
+  const queryOptions =
+    getGetAgentWorkspacesWorkspaceIdAgentsAgentIdGetQueryOptions(
+      workspaceId,
+      agentId,
+      options,
+    );
 
-  const queryOptions = getGetAgentWorkspacesWorkspaceIdAgentsAgentIdGetQueryOptions(workspaceId,agentId,options)
-
-  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+  const query = useQuery(queryOptions, queryClient) as UseQueryResult<
+    TData,
+    TError
+  > & { queryKey: DataTag<QueryKey, TData, TError> };
 
   return withQueryKey(query, queryOptions.queryKey);
 }
 
+/**
+ * @summary Get Agent
+ */
+export const invalidateGetAgentWorkspacesWorkspaceIdAgentsAgentIdGet = async (
+  queryClient: QueryClient,
+  workspaceId: string,
+  agentId: string,
+  options?: InvalidateOptions,
+): Promise<QueryClient> => {
+  await queryClient.invalidateQueries(
+    {
+      queryKey: getGetAgentWorkspacesWorkspaceIdAgentsAgentIdGetQueryKey(
+        workspaceId,
+        agentId,
+      ),
+    },
+    options,
+  );
 
-
-
-
-
-export type deleteAgentWorkspacesWorkspaceIdAgentsAgentIdDeleteResponse204 = {
-  data: void
-  status: 204
-}
-
-export type deleteAgentWorkspacesWorkspaceIdAgentsAgentIdDeleteResponse422 = {
-  data: HTTPValidationError
-  status: 422
-}
-
-export type deleteAgentWorkspacesWorkspaceIdAgentsAgentIdDeleteResponseSuccess = (deleteAgentWorkspacesWorkspaceIdAgentsAgentIdDeleteResponse204) & {
-  headers: Headers;
+  return queryClient;
 };
-export type deleteAgentWorkspacesWorkspaceIdAgentsAgentIdDeleteResponseError = (deleteAgentWorkspacesWorkspaceIdAgentsAgentIdDeleteResponse422) & {
-  headers: Headers;
-};
 
-export type deleteAgentWorkspacesWorkspaceIdAgentsAgentIdDeleteResponse = (deleteAgentWorkspacesWorkspaceIdAgentsAgentIdDeleteResponseSuccess | deleteAgentWorkspacesWorkspaceIdAgentsAgentIdDeleteResponseError)
+/**
+ * @summary Get Agent
+ */
+export const useSetGetAgentWorkspacesWorkspaceIdAgentsAgentIdGetQueryData =
+  () => {
+    const queryClient = useQueryClient();
+    return (
+      workspaceId: string,
+      agentId: string,
+      updater:
+        | Awaited<
+            ReturnType<typeof getAgentWorkspacesWorkspaceIdAgentsAgentIdGet>
+          >
+        | undefined
+        | ((
+            old:
+              | Awaited<
+                  ReturnType<
+                    typeof getAgentWorkspacesWorkspaceIdAgentsAgentIdGet
+                  >
+                >
+              | undefined,
+          ) =>
+            | Awaited<
+                ReturnType<typeof getAgentWorkspacesWorkspaceIdAgentsAgentIdGet>
+              >
+            | undefined),
+    ) => {
+      queryClient.setQueriesData<
+        Awaited<
+          ReturnType<typeof getAgentWorkspacesWorkspaceIdAgentsAgentIdGet>
+        >
+      >(
+        {
+          queryKey: getGetAgentWorkspacesWorkspaceIdAgentsAgentIdGetQueryKey(
+            workspaceId,
+            agentId,
+          ),
+        },
+        updater,
+      );
+    };
+  };
 
-export const getDeleteAgentWorkspacesWorkspaceIdAgentsAgentIdDeleteUrl = (workspaceId: string,
-    agentId: string,) => {
-
-
-
-
-  return `/workspaces/${workspaceId}/agents/${agentId}`
-}
+/**
+ * @summary Get Agent
+ */
+export const useGetGetAgentWorkspacesWorkspaceIdAgentsAgentIdGetQueryData =
+  () => {
+    const queryClient = useQueryClient();
+    return (workspaceId: string, agentId: string) =>
+      queryClient.getQueryData<
+        Awaited<
+          ReturnType<typeof getAgentWorkspacesWorkspaceIdAgentsAgentIdGet>
+        >
+      >(
+        getGetAgentWorkspacesWorkspaceIdAgentsAgentIdGetQueryKey(
+          workspaceId,
+          agentId,
+        ),
+      );
+  };
 
 /**
  * @summary Delete Agent
  */
-export const deleteAgentWorkspacesWorkspaceIdAgentsAgentIdDelete = async (workspaceId: string,
-    agentId: string, options?: RequestInit): Promise<deleteAgentWorkspacesWorkspaceIdAgentsAgentIdDeleteResponse> => {
+export const deleteAgentWorkspacesWorkspaceIdAgentsAgentIdDelete = (
+  workspaceId: string,
+  agentId: string,
+  options?: SecondParameter<typeof customInstance>,
+  signal?: AbortSignal,
+) => {
+  return customInstance<void>(
+    {
+      url: `/workspaces/${workspaceId}/agents/${agentId}`,
+      method: "DELETE",
+      ...(signal ? { signal } : {}),
+    },
+    options,
+  );
+};
 
-  return customInstance<deleteAgentWorkspacesWorkspaceIdAgentsAgentIdDeleteResponse>(getDeleteAgentWorkspacesWorkspaceIdAgentsAgentIdDeleteUrl(workspaceId,agentId),
-  {
-    ...options,
-    method: 'DELETE'
+export const getDeleteAgentWorkspacesWorkspaceIdAgentsAgentIdDeleteMutationOptions =
+  <TError = HTTPValidationError, TContext = unknown>(options?: {
+    mutation?: UseMutationOptions<
+      Awaited<
+        ReturnType<typeof deleteAgentWorkspacesWorkspaceIdAgentsAgentIdDelete>
+      >,
+      TError,
+      { workspaceId: string; agentId: string },
+      TContext
+    >;
+    request?: SecondParameter<typeof customInstance>;
+  }): UseMutationOptions<
+    Awaited<
+      ReturnType<typeof deleteAgentWorkspacesWorkspaceIdAgentsAgentIdDelete>
+    >,
+    TError,
+    { workspaceId: string; agentId: string },
+    TContext
+  > => {
+    const mutationKey = ["deleteAgentWorkspacesWorkspaceIdAgentsAgentIdDelete"];
+    const { mutation: mutationOptions, request: requestOptions } = options
+      ? options.mutation &&
+        "mutationKey" in options.mutation &&
+        options.mutation.mutationKey
+        ? options
+        : { ...options, mutation: { ...options.mutation, mutationKey } }
+      : { mutation: { mutationKey }, request: undefined };
 
+    const mutationFn: MutationFunction<
+      Awaited<
+        ReturnType<typeof deleteAgentWorkspacesWorkspaceIdAgentsAgentIdDelete>
+      >,
+      { workspaceId: string; agentId: string }
+    > = (props) => {
+      const { workspaceId, agentId } = props ?? {};
 
-  }
-);}
+      return deleteAgentWorkspacesWorkspaceIdAgentsAgentIdDelete(
+        workspaceId,
+        agentId,
+        requestOptions,
+      );
+    };
 
+    return { mutationFn, ...mutationOptions };
+  };
 
+export type DeleteAgentWorkspacesWorkspaceIdAgentsAgentIdDeleteMutationResult =
+  NonNullable<
+    Awaited<
+      ReturnType<typeof deleteAgentWorkspacesWorkspaceIdAgentsAgentIdDelete>
+    >
+  >;
 
+export type DeleteAgentWorkspacesWorkspaceIdAgentsAgentIdDeleteMutationError =
+  HTTPValidationError;
 
-
-export const getDeleteAgentWorkspacesWorkspaceIdAgentsAgentIdDeleteMutationOptions = <TError = HTTPValidationError,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteAgentWorkspacesWorkspaceIdAgentsAgentIdDelete>>, TError,{workspaceId: string;agentId: string}, TContext>, request?: SecondParameter<typeof customInstance>}
-): UseMutationOptions<Awaited<ReturnType<typeof deleteAgentWorkspacesWorkspaceIdAgentsAgentIdDelete>>, TError,{workspaceId: string;agentId: string}, TContext> => {
-
-const mutationKey = ['deleteAgentWorkspacesWorkspaceIdAgentsAgentIdDelete'];
-const {mutation: mutationOptions, request: requestOptions} = options ?
-      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
-      options
-      : {...options, mutation: {...options.mutation, mutationKey}}
-      : {mutation: { mutationKey, }, request: undefined};
-
-
-
-
-      const mutationFn: MutationFunction<Awaited<ReturnType<typeof deleteAgentWorkspacesWorkspaceIdAgentsAgentIdDelete>>, {workspaceId: string;agentId: string}> = (props) => {
-          const {workspaceId,agentId} = props ?? {};
-
-          return  deleteAgentWorkspacesWorkspaceIdAgentsAgentIdDelete(workspaceId,agentId,requestOptions)
-        }
-
-
-
-
-
-
-  return  { mutationFn, ...mutationOptions }}
-
-    export type DeleteAgentWorkspacesWorkspaceIdAgentsAgentIdDeleteMutationResult = NonNullable<Awaited<ReturnType<typeof deleteAgentWorkspacesWorkspaceIdAgentsAgentIdDelete>>>
-
-    export type DeleteAgentWorkspacesWorkspaceIdAgentsAgentIdDeleteMutationError = HTTPValidationError
-
-    /**
+/**
  * @summary Delete Agent
  */
-export const useDeleteAgentWorkspacesWorkspaceIdAgentsAgentIdDelete = <TError = HTTPValidationError,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteAgentWorkspacesWorkspaceIdAgentsAgentIdDelete>>, TError,{workspaceId: string;agentId: string}, TContext>, request?: SecondParameter<typeof customInstance>}
- , queryClient?: QueryClient): UseMutationResult<
-        Awaited<ReturnType<typeof deleteAgentWorkspacesWorkspaceIdAgentsAgentIdDelete>>,
-        TError,
-        {workspaceId: string;agentId: string},
-        TContext
-      > => {
-      return useMutation(getDeleteAgentWorkspacesWorkspaceIdAgentsAgentIdDeleteMutationOptions(options), queryClient);
-    }
-    export type updateAgentWorkspacesWorkspaceIdAgentsAgentIdPatchResponse200 = {
-  data: AgentResponse
-  status: 200
-}
-
-export type updateAgentWorkspacesWorkspaceIdAgentsAgentIdPatchResponse422 = {
-  data: HTTPValidationError
-  status: 422
-}
-
-export type updateAgentWorkspacesWorkspaceIdAgentsAgentIdPatchResponseSuccess = (updateAgentWorkspacesWorkspaceIdAgentsAgentIdPatchResponse200) & {
-  headers: Headers;
+export const useDeleteAgentWorkspacesWorkspaceIdAgentsAgentIdDelete = <
+  TError = HTTPValidationError,
+  TContext = unknown,
+>(
+  options?: {
+    mutation?: UseMutationOptions<
+      Awaited<
+        ReturnType<typeof deleteAgentWorkspacesWorkspaceIdAgentsAgentIdDelete>
+      >,
+      TError,
+      { workspaceId: string; agentId: string },
+      TContext
+    >;
+    request?: SecondParameter<typeof customInstance>;
+  },
+  queryClient?: QueryClient,
+): UseMutationResult<
+  Awaited<
+    ReturnType<typeof deleteAgentWorkspacesWorkspaceIdAgentsAgentIdDelete>
+  >,
+  TError,
+  { workspaceId: string; agentId: string },
+  TContext
+> => {
+  return useMutation(
+    getDeleteAgentWorkspacesWorkspaceIdAgentsAgentIdDeleteMutationOptions(
+      options,
+    ),
+    queryClient,
+  );
 };
-export type updateAgentWorkspacesWorkspaceIdAgentsAgentIdPatchResponseError = (updateAgentWorkspacesWorkspaceIdAgentsAgentIdPatchResponse422) & {
-  headers: Headers;
+/**
+ * @summary Update Agent
+ */
+export const updateAgentWorkspacesWorkspaceIdAgentsAgentIdPatch = (
+  workspaceId: string,
+  agentId: string,
+  updateAgentRequest: UpdateAgentRequest,
+  options?: SecondParameter<typeof customInstance>,
+  signal?: AbortSignal,
+) => {
+  return customInstance<AgentResponse>(
+    {
+      url: `/workspaces/${workspaceId}/agents/${agentId}`,
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      data: updateAgentRequest,
+      ...(signal ? { signal } : {}),
+    },
+    options,
+    AgentResponse,
+  );
 };
 
-export type updateAgentWorkspacesWorkspaceIdAgentsAgentIdPatchResponse = (updateAgentWorkspacesWorkspaceIdAgentsAgentIdPatchResponseSuccess | updateAgentWorkspacesWorkspaceIdAgentsAgentIdPatchResponseError)
+export const getUpdateAgentWorkspacesWorkspaceIdAgentsAgentIdPatchMutationOptions =
+  <TError = HTTPValidationError, TContext = unknown>(options?: {
+    mutation?: UseMutationOptions<
+      Awaited<
+        ReturnType<typeof updateAgentWorkspacesWorkspaceIdAgentsAgentIdPatch>
+      >,
+      TError,
+      { workspaceId: string; agentId: string; data: UpdateAgentRequest },
+      TContext
+    >;
+    request?: SecondParameter<typeof customInstance>;
+  }): UseMutationOptions<
+    Awaited<
+      ReturnType<typeof updateAgentWorkspacesWorkspaceIdAgentsAgentIdPatch>
+    >,
+    TError,
+    { workspaceId: string; agentId: string; data: UpdateAgentRequest },
+    TContext
+  > => {
+    const mutationKey = ["updateAgentWorkspacesWorkspaceIdAgentsAgentIdPatch"];
+    const { mutation: mutationOptions, request: requestOptions } = options
+      ? options.mutation &&
+        "mutationKey" in options.mutation &&
+        options.mutation.mutationKey
+        ? options
+        : { ...options, mutation: { ...options.mutation, mutationKey } }
+      : { mutation: { mutationKey }, request: undefined };
 
-export const getUpdateAgentWorkspacesWorkspaceIdAgentsAgentIdPatchUrl = (workspaceId: string,
-    agentId: string,) => {
+    const mutationFn: MutationFunction<
+      Awaited<
+        ReturnType<typeof updateAgentWorkspacesWorkspaceIdAgentsAgentIdPatch>
+      >,
+      { workspaceId: string; agentId: string; data: UpdateAgentRequest }
+    > = (props) => {
+      const { workspaceId, agentId, data } = props ?? {};
 
+      return updateAgentWorkspacesWorkspaceIdAgentsAgentIdPatch(
+        workspaceId,
+        agentId,
+        data,
+        requestOptions,
+      );
+    };
 
+    return { mutationFn, ...mutationOptions };
+  };
 
-
-  return `/workspaces/${workspaceId}/agents/${agentId}`
-}
+export type UpdateAgentWorkspacesWorkspaceIdAgentsAgentIdPatchMutationResult =
+  NonNullable<
+    Awaited<
+      ReturnType<typeof updateAgentWorkspacesWorkspaceIdAgentsAgentIdPatch>
+    >
+  >;
+export type UpdateAgentWorkspacesWorkspaceIdAgentsAgentIdPatchMutationBody =
+  UpdateAgentRequest;
+export type UpdateAgentWorkspacesWorkspaceIdAgentsAgentIdPatchMutationError =
+  HTTPValidationError;
 
 /**
  * @summary Update Agent
  */
-export const updateAgentWorkspacesWorkspaceIdAgentsAgentIdPatch = async (workspaceId: string,
-    agentId: string,
-    updateAgentRequest: UpdateAgentRequest, options?: RequestInit): Promise<updateAgentWorkspacesWorkspaceIdAgentsAgentIdPatchResponse> => {
-
-  return customInstance<updateAgentWorkspacesWorkspaceIdAgentsAgentIdPatchResponse>(getUpdateAgentWorkspacesWorkspaceIdAgentsAgentIdPatchUrl(workspaceId,agentId),
-  {
-    ...options,
-    method: 'PATCH',
-    headers: { 'Content-Type': 'application/json', ...options?.headers },
-    body: JSON.stringify(updateAgentRequest)
-  }
-);}
-
-
-
-
-
-export const getUpdateAgentWorkspacesWorkspaceIdAgentsAgentIdPatchMutationOptions = <TError = HTTPValidationError,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateAgentWorkspacesWorkspaceIdAgentsAgentIdPatch>>, TError,{workspaceId: string;agentId: string;data: UpdateAgentRequest}, TContext>, request?: SecondParameter<typeof customInstance>}
-): UseMutationOptions<Awaited<ReturnType<typeof updateAgentWorkspacesWorkspaceIdAgentsAgentIdPatch>>, TError,{workspaceId: string;agentId: string;data: UpdateAgentRequest}, TContext> => {
-
-const mutationKey = ['updateAgentWorkspacesWorkspaceIdAgentsAgentIdPatch'];
-const {mutation: mutationOptions, request: requestOptions} = options ?
-      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
-      options
-      : {...options, mutation: {...options.mutation, mutationKey}}
-      : {mutation: { mutationKey, }, request: undefined};
-
-
-
-
-      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateAgentWorkspacesWorkspaceIdAgentsAgentIdPatch>>, {workspaceId: string;agentId: string;data: UpdateAgentRequest}> = (props) => {
-          const {workspaceId,agentId,data} = props ?? {};
-
-          return  updateAgentWorkspacesWorkspaceIdAgentsAgentIdPatch(workspaceId,agentId,data,requestOptions)
-        }
-
-
-
-
-
-
-  return  { mutationFn, ...mutationOptions }}
-
-    export type UpdateAgentWorkspacesWorkspaceIdAgentsAgentIdPatchMutationResult = NonNullable<Awaited<ReturnType<typeof updateAgentWorkspacesWorkspaceIdAgentsAgentIdPatch>>>
-    export type UpdateAgentWorkspacesWorkspaceIdAgentsAgentIdPatchMutationBody = UpdateAgentRequest
-    export type UpdateAgentWorkspacesWorkspaceIdAgentsAgentIdPatchMutationError = HTTPValidationError
-
-    /**
- * @summary Update Agent
- */
-export const useUpdateAgentWorkspacesWorkspaceIdAgentsAgentIdPatch = <TError = HTTPValidationError,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateAgentWorkspacesWorkspaceIdAgentsAgentIdPatch>>, TError,{workspaceId: string;agentId: string;data: UpdateAgentRequest}, TContext>, request?: SecondParameter<typeof customInstance>}
- , queryClient?: QueryClient): UseMutationResult<
-        Awaited<ReturnType<typeof updateAgentWorkspacesWorkspaceIdAgentsAgentIdPatch>>,
-        TError,
-        {workspaceId: string;agentId: string;data: UpdateAgentRequest},
-        TContext
-      > => {
-      return useMutation(getUpdateAgentWorkspacesWorkspaceIdAgentsAgentIdPatchMutationOptions(options), queryClient);
-    }
+export const useUpdateAgentWorkspacesWorkspaceIdAgentsAgentIdPatch = <
+  TError = HTTPValidationError,
+  TContext = unknown,
+>(
+  options?: {
+    mutation?: UseMutationOptions<
+      Awaited<
+        ReturnType<typeof updateAgentWorkspacesWorkspaceIdAgentsAgentIdPatch>
+      >,
+      TError,
+      { workspaceId: string; agentId: string; data: UpdateAgentRequest },
+      TContext
+    >;
+    request?: SecondParameter<typeof customInstance>;
+  },
+  queryClient?: QueryClient,
+): UseMutationResult<
+  Awaited<
+    ReturnType<typeof updateAgentWorkspacesWorkspaceIdAgentsAgentIdPatch>
+  >,
+  TError,
+  { workspaceId: string; agentId: string; data: UpdateAgentRequest },
+  TContext
+> => {
+  return useMutation(
+    getUpdateAgentWorkspacesWorkspaceIdAgentsAgentIdPatchMutationOptions(
+      options,
+    ),
+    queryClient,
+  );
+};

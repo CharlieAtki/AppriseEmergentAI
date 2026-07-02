@@ -4,14 +4,13 @@
  * FastAPI
  * OpenAPI spec version: 0.1.0
  */
-import {
-  useMutation,
-  useQuery
-} from '@tanstack/react-query';
+import { z } from "zod";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type {
   DataTag,
   DefinedInitialDataOptions,
   DefinedUseQueryResult,
+  InvalidateOptions,
   MutationFunction,
   QueryClient,
   QueryFunction,
@@ -20,29 +19,25 @@ import type {
   UseMutationOptions,
   UseMutationResult,
   UseQueryOptions,
-  UseQueryResult
-} from '@tanstack/react-query';
+  UseQueryResult,
+} from "@tanstack/react-query";
 
-import type {
-  ApiKeyCreatedResponse,
-  ApiKeyResponse,
-  CreateApiKeyRequest,
-  HTTPValidationError
-} from '../fastAPI.schemas';
+import type { CreateApiKeyRequest, HTTPValidationError } from "../model";
+import { ApiKeyCreatedResponse, ApiKeyResponse } from "../model";
 
-import { customInstance } from '../../client';
-
+import { customInstance } from "../../client";
 
 type SecondParameter<T extends (...args: never) => unknown> = Parameters<T>[1];
 
-
-
-const withQueryKey = <T extends object, K>(query: T, queryKey: K): T & { queryKey: K } => {
+const withQueryKey = <T extends object, K>(
+  query: T,
+  queryKey: K,
+): T & { queryKey: K } => {
   const result = { queryKey } as T & { queryKey: K };
   for (const key of Object.keys(query)) {
     // The explicit queryKey always wins, matching the previous
     // `{ ...query, queryKey }` spread where it was set last.
-    if (key === 'queryKey') continue;
+    if (key === "queryKey") continue;
     Object.defineProperty(result, key, {
       enumerable: true,
       configurable: true,
@@ -52,303 +47,475 @@ const withQueryKey = <T extends object, K>(query: T, queryKey: K): T & { queryKe
   return result;
 };
 
-export type createApiKeyWorkspacesWorkspaceIdApiKeysPostResponse201 = {
-  data: ApiKeyCreatedResponse
-  status: 201
-}
-
-export type createApiKeyWorkspacesWorkspaceIdApiKeysPostResponse422 = {
-  data: HTTPValidationError
-  status: 422
-}
-
-export type createApiKeyWorkspacesWorkspaceIdApiKeysPostResponseSuccess = (createApiKeyWorkspacesWorkspaceIdApiKeysPostResponse201) & {
-  headers: Headers;
-};
-export type createApiKeyWorkspacesWorkspaceIdApiKeysPostResponseError = (createApiKeyWorkspacesWorkspaceIdApiKeysPostResponse422) & {
-  headers: Headers;
-};
-
-export type createApiKeyWorkspacesWorkspaceIdApiKeysPostResponse = (createApiKeyWorkspacesWorkspaceIdApiKeysPostResponseSuccess | createApiKeyWorkspacesWorkspaceIdApiKeysPostResponseError)
-
-export const getCreateApiKeyWorkspacesWorkspaceIdApiKeysPostUrl = (workspaceId: string,) => {
-
-
-
-
-  return `/workspaces/${workspaceId}/api-keys`
-}
-
 /**
  * @summary Create Api Key
  */
-export const createApiKeyWorkspacesWorkspaceIdApiKeysPost = async (workspaceId: string,
-    createApiKeyRequest: CreateApiKeyRequest, options?: RequestInit): Promise<createApiKeyWorkspacesWorkspaceIdApiKeysPostResponse> => {
-
-  return customInstance<createApiKeyWorkspacesWorkspaceIdApiKeysPostResponse>(getCreateApiKeyWorkspacesWorkspaceIdApiKeysPostUrl(workspaceId),
-  {
-    ...options,
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...options?.headers },
-    body: JSON.stringify(createApiKeyRequest)
-  }
-);}
-
-
-
-
-
-export const getCreateApiKeyWorkspacesWorkspaceIdApiKeysPostMutationOptions = <TError = HTTPValidationError,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createApiKeyWorkspacesWorkspaceIdApiKeysPost>>, TError,{workspaceId: string;data: CreateApiKeyRequest}, TContext>, request?: SecondParameter<typeof customInstance>}
-): UseMutationOptions<Awaited<ReturnType<typeof createApiKeyWorkspacesWorkspaceIdApiKeysPost>>, TError,{workspaceId: string;data: CreateApiKeyRequest}, TContext> => {
-
-const mutationKey = ['createApiKeyWorkspacesWorkspaceIdApiKeysPost'];
-const {mutation: mutationOptions, request: requestOptions} = options ?
-      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
-      options
-      : {...options, mutation: {...options.mutation, mutationKey}}
-      : {mutation: { mutationKey, }, request: undefined};
-
-
-
-
-      const mutationFn: MutationFunction<Awaited<ReturnType<typeof createApiKeyWorkspacesWorkspaceIdApiKeysPost>>, {workspaceId: string;data: CreateApiKeyRequest}> = (props) => {
-          const {workspaceId,data} = props ?? {};
-
-          return  createApiKeyWorkspacesWorkspaceIdApiKeysPost(workspaceId,data,requestOptions)
-        }
-
-
-
-
-
-
-  return  { mutationFn, ...mutationOptions }}
-
-    export type CreateApiKeyWorkspacesWorkspaceIdApiKeysPostMutationResult = NonNullable<Awaited<ReturnType<typeof createApiKeyWorkspacesWorkspaceIdApiKeysPost>>>
-    export type CreateApiKeyWorkspacesWorkspaceIdApiKeysPostMutationBody = CreateApiKeyRequest
-    export type CreateApiKeyWorkspacesWorkspaceIdApiKeysPostMutationError = HTTPValidationError
-
-    /**
- * @summary Create Api Key
- */
-export const useCreateApiKeyWorkspacesWorkspaceIdApiKeysPost = <TError = HTTPValidationError,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createApiKeyWorkspacesWorkspaceIdApiKeysPost>>, TError,{workspaceId: string;data: CreateApiKeyRequest}, TContext>, request?: SecondParameter<typeof customInstance>}
- , queryClient?: QueryClient): UseMutationResult<
-        Awaited<ReturnType<typeof createApiKeyWorkspacesWorkspaceIdApiKeysPost>>,
-        TError,
-        {workspaceId: string;data: CreateApiKeyRequest},
-        TContext
-      > => {
-      return useMutation(getCreateApiKeyWorkspacesWorkspaceIdApiKeysPostMutationOptions(options), queryClient);
-    }
-    export type listApiKeysWorkspacesWorkspaceIdApiKeysGetResponse200 = {
-  data: ApiKeyResponse[]
-  status: 200
-}
-
-export type listApiKeysWorkspacesWorkspaceIdApiKeysGetResponse422 = {
-  data: HTTPValidationError
-  status: 422
-}
-
-export type listApiKeysWorkspacesWorkspaceIdApiKeysGetResponseSuccess = (listApiKeysWorkspacesWorkspaceIdApiKeysGetResponse200) & {
-  headers: Headers;
-};
-export type listApiKeysWorkspacesWorkspaceIdApiKeysGetResponseError = (listApiKeysWorkspacesWorkspaceIdApiKeysGetResponse422) & {
-  headers: Headers;
-};
-
-export type listApiKeysWorkspacesWorkspaceIdApiKeysGetResponse = (listApiKeysWorkspacesWorkspaceIdApiKeysGetResponseSuccess | listApiKeysWorkspacesWorkspaceIdApiKeysGetResponseError)
-
-export const getListApiKeysWorkspacesWorkspaceIdApiKeysGetUrl = (workspaceId: string,) => {
-
-
-
-
-  return `/workspaces/${workspaceId}/api-keys`
-}
-
-/**
- * @summary List Api Keys
- */
-export const listApiKeysWorkspacesWorkspaceIdApiKeysGet = async (workspaceId: string, options?: RequestInit): Promise<listApiKeysWorkspacesWorkspaceIdApiKeysGetResponse> => {
-
-  return customInstance<listApiKeysWorkspacesWorkspaceIdApiKeysGetResponse>(getListApiKeysWorkspacesWorkspaceIdApiKeysGetUrl(workspaceId),
-  {
-    ...options,
-    method: 'GET'
-
-
-  }
-);}
-
-
-
-
-
-export const getListApiKeysWorkspacesWorkspaceIdApiKeysGetQueryKey = (workspaceId: string,) => {
-    return [
-    `/workspaces/${workspaceId}/api-keys`
-    ] as const;
-    }
-
-
-export const getListApiKeysWorkspacesWorkspaceIdApiKeysGetQueryOptions = <TData = Awaited<ReturnType<typeof listApiKeysWorkspacesWorkspaceIdApiKeysGet>>, TError = HTTPValidationError>(workspaceId: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listApiKeysWorkspacesWorkspaceIdApiKeysGet>>, TError, TData>>, request?: SecondParameter<typeof customInstance>}
+export const createApiKeyWorkspacesWorkspaceIdApiKeysPost = (
+  workspaceId: string,
+  createApiKeyRequest: CreateApiKeyRequest,
+  options?: SecondParameter<typeof customInstance>,
+  signal?: AbortSignal,
 ) => {
+  return customInstance<ApiKeyCreatedResponse>(
+    {
+      url: `/workspaces/${workspaceId}/api-keys`,
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      data: createApiKeyRequest,
+      ...(signal ? { signal } : {}),
+    },
+    options,
+    ApiKeyCreatedResponse,
+  );
+};
 
-const {query: queryOptions, request: requestOptions} = options ?? {};
+export const getCreateApiKeyWorkspacesWorkspaceIdApiKeysPostMutationOptions = <
+  TError = HTTPValidationError,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof createApiKeyWorkspacesWorkspaceIdApiKeysPost>>,
+    TError,
+    { workspaceId: string; data: CreateApiKeyRequest },
+    TContext
+  >;
+  request?: SecondParameter<typeof customInstance>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof createApiKeyWorkspacesWorkspaceIdApiKeysPost>>,
+  TError,
+  { workspaceId: string; data: CreateApiKeyRequest },
+  TContext
+> => {
+  const mutationKey = ["createApiKeyWorkspacesWorkspaceIdApiKeysPost"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
 
-  const queryKey =  queryOptions?.queryKey ?? getListApiKeysWorkspacesWorkspaceIdApiKeysGetQueryKey(workspaceId);
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof createApiKeyWorkspacesWorkspaceIdApiKeysPost>>,
+    { workspaceId: string; data: CreateApiKeyRequest }
+  > = (props) => {
+    const { workspaceId, data } = props ?? {};
 
+    return createApiKeyWorkspacesWorkspaceIdApiKeysPost(
+      workspaceId,
+      data,
+      requestOptions,
+    );
+  };
 
+  return { mutationFn, ...mutationOptions };
+};
 
-    const queryFn: QueryFunction<Awaited<ReturnType<typeof listApiKeysWorkspacesWorkspaceIdApiKeysGet>>> = ({ signal }) => listApiKeysWorkspacesWorkspaceIdApiKeysGet(workspaceId, { signal, ...requestOptions });
+export type CreateApiKeyWorkspacesWorkspaceIdApiKeysPostMutationResult =
+  NonNullable<
+    Awaited<ReturnType<typeof createApiKeyWorkspacesWorkspaceIdApiKeysPost>>
+  >;
+export type CreateApiKeyWorkspacesWorkspaceIdApiKeysPostMutationBody =
+  CreateApiKeyRequest;
+export type CreateApiKeyWorkspacesWorkspaceIdApiKeysPostMutationError =
+  HTTPValidationError;
 
+/**
+ * @summary Create Api Key
+ */
+export const useCreateApiKeyWorkspacesWorkspaceIdApiKeysPost = <
+  TError = HTTPValidationError,
+  TContext = unknown,
+>(
+  options?: {
+    mutation?: UseMutationOptions<
+      Awaited<ReturnType<typeof createApiKeyWorkspacesWorkspaceIdApiKeysPost>>,
+      TError,
+      { workspaceId: string; data: CreateApiKeyRequest },
+      TContext
+    >;
+    request?: SecondParameter<typeof customInstance>;
+  },
+  queryClient?: QueryClient,
+): UseMutationResult<
+  Awaited<ReturnType<typeof createApiKeyWorkspacesWorkspaceIdApiKeysPost>>,
+  TError,
+  { workspaceId: string; data: CreateApiKeyRequest },
+  TContext
+> => {
+  return useMutation(
+    getCreateApiKeyWorkspacesWorkspaceIdApiKeysPostMutationOptions(options),
+    queryClient,
+  );
+};
+/**
+ * @summary List Api Keys
+ */
+export const listApiKeysWorkspacesWorkspaceIdApiKeysGet = (
+  workspaceId: string,
+  options?: SecondParameter<typeof customInstance>,
+  signal?: AbortSignal,
+) => {
+  return customInstance<ApiKeyResponse[]>(
+    {
+      url: `/workspaces/${workspaceId}/api-keys`,
+      method: "GET",
+      ...(signal ? { signal } : {}),
+    },
+    options,
+    z.array(ApiKeyResponse),
+  );
+};
 
+export const getListApiKeysWorkspacesWorkspaceIdApiKeysGetQueryKey = (
+  workspaceId: string,
+) => {
+  return [`/workspaces/${workspaceId}/api-keys`] as const;
+};
 
+export const getListApiKeysWorkspacesWorkspaceIdApiKeysGetQueryOptions = <
+  TData = Awaited<
+    ReturnType<typeof listApiKeysWorkspacesWorkspaceIdApiKeysGet>
+  >,
+  TError = HTTPValidationError,
+>(
+  workspaceId: string,
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<ReturnType<typeof listApiKeysWorkspacesWorkspaceIdApiKeysGet>>,
+        TError,
+        TData
+      >
+    >;
+    request?: SecondParameter<typeof customInstance>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
 
+  const queryKey =
+    queryOptions?.queryKey ??
+    getListApiKeysWorkspacesWorkspaceIdApiKeysGetQueryKey(workspaceId);
 
-   return  { queryKey, queryFn, enabled: workspaceId !== null && workspaceId !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listApiKeysWorkspacesWorkspaceIdApiKeysGet>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
-}
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof listApiKeysWorkspacesWorkspaceIdApiKeysGet>>
+  > = ({ signal }) =>
+    listApiKeysWorkspacesWorkspaceIdApiKeysGet(
+      workspaceId,
+      requestOptions,
+      signal,
+    );
 
-export type ListApiKeysWorkspacesWorkspaceIdApiKeysGetQueryResult = NonNullable<Awaited<ReturnType<typeof listApiKeysWorkspacesWorkspaceIdApiKeysGet>>>
-export type ListApiKeysWorkspacesWorkspaceIdApiKeysGetQueryError = HTTPValidationError
+  return {
+    queryKey,
+    queryFn,
+    enabled: workspaceId !== null && workspaceId !== undefined,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof listApiKeysWorkspacesWorkspaceIdApiKeysGet>>,
+    TError,
+    TData
+  > & { queryKey: DataTag<QueryKey, TData, TError> };
+};
 
+export type ListApiKeysWorkspacesWorkspaceIdApiKeysGetQueryResult = NonNullable<
+  Awaited<ReturnType<typeof listApiKeysWorkspacesWorkspaceIdApiKeysGet>>
+>;
+export type ListApiKeysWorkspacesWorkspaceIdApiKeysGetQueryError =
+  HTTPValidationError;
 
-export function useListApiKeysWorkspacesWorkspaceIdApiKeysGet<TData = Awaited<ReturnType<typeof listApiKeysWorkspacesWorkspaceIdApiKeysGet>>, TError = HTTPValidationError>(
- workspaceId: string, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof listApiKeysWorkspacesWorkspaceIdApiKeysGet>>, TError, TData>> & Pick<
+export function useListApiKeysWorkspacesWorkspaceIdApiKeysGet<
+  TData = Awaited<
+    ReturnType<typeof listApiKeysWorkspacesWorkspaceIdApiKeysGet>
+  >,
+  TError = HTTPValidationError,
+>(
+  workspaceId: string,
+  options: {
+    query: Partial<
+      UseQueryOptions<
+        Awaited<ReturnType<typeof listApiKeysWorkspacesWorkspaceIdApiKeysGet>>,
+        TError,
+        TData
+      >
+    > &
+      Pick<
         DefinedInitialDataOptions<
-          Awaited<ReturnType<typeof listApiKeysWorkspacesWorkspaceIdApiKeysGet>>,
+          Awaited<
+            ReturnType<typeof listApiKeysWorkspacesWorkspaceIdApiKeysGet>
+          >,
           TError,
           Awaited<ReturnType<typeof listApiKeysWorkspacesWorkspaceIdApiKeysGet>>
-        > , 'initialData'
-      >, request?: SecondParameter<typeof customInstance>}
- , queryClient?: QueryClient
-  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-export function useListApiKeysWorkspacesWorkspaceIdApiKeysGet<TData = Awaited<ReturnType<typeof listApiKeysWorkspacesWorkspaceIdApiKeysGet>>, TError = HTTPValidationError>(
- workspaceId: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listApiKeysWorkspacesWorkspaceIdApiKeysGet>>, TError, TData>> & Pick<
+        >,
+        "initialData"
+      >;
+    request?: SecondParameter<typeof customInstance>;
+  },
+  queryClient?: QueryClient,
+): DefinedUseQueryResult<TData, TError> & {
+  queryKey: DataTag<QueryKey, TData, TError>;
+};
+export function useListApiKeysWorkspacesWorkspaceIdApiKeysGet<
+  TData = Awaited<
+    ReturnType<typeof listApiKeysWorkspacesWorkspaceIdApiKeysGet>
+  >,
+  TError = HTTPValidationError,
+>(
+  workspaceId: string,
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<ReturnType<typeof listApiKeysWorkspacesWorkspaceIdApiKeysGet>>,
+        TError,
+        TData
+      >
+    > &
+      Pick<
         UndefinedInitialDataOptions<
-          Awaited<ReturnType<typeof listApiKeysWorkspacesWorkspaceIdApiKeysGet>>,
+          Awaited<
+            ReturnType<typeof listApiKeysWorkspacesWorkspaceIdApiKeysGet>
+          >,
           TError,
           Awaited<ReturnType<typeof listApiKeysWorkspacesWorkspaceIdApiKeysGet>>
-        > , 'initialData'
-      >, request?: SecondParameter<typeof customInstance>}
- , queryClient?: QueryClient
-  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-export function useListApiKeysWorkspacesWorkspaceIdApiKeysGet<TData = Awaited<ReturnType<typeof listApiKeysWorkspacesWorkspaceIdApiKeysGet>>, TError = HTTPValidationError>(
- workspaceId: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listApiKeysWorkspacesWorkspaceIdApiKeysGet>>, TError, TData>>, request?: SecondParameter<typeof customInstance>}
- , queryClient?: QueryClient
-  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+        >,
+        "initialData"
+      >;
+    request?: SecondParameter<typeof customInstance>;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & {
+  queryKey: DataTag<QueryKey, TData, TError>;
+};
+export function useListApiKeysWorkspacesWorkspaceIdApiKeysGet<
+  TData = Awaited<
+    ReturnType<typeof listApiKeysWorkspacesWorkspaceIdApiKeysGet>
+  >,
+  TError = HTTPValidationError,
+>(
+  workspaceId: string,
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<ReturnType<typeof listApiKeysWorkspacesWorkspaceIdApiKeysGet>>,
+        TError,
+        TData
+      >
+    >;
+    request?: SecondParameter<typeof customInstance>;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & {
+  queryKey: DataTag<QueryKey, TData, TError>;
+};
 /**
  * @summary List Api Keys
  */
 
-export function useListApiKeysWorkspacesWorkspaceIdApiKeysGet<TData = Awaited<ReturnType<typeof listApiKeysWorkspacesWorkspaceIdApiKeysGet>>, TError = HTTPValidationError>(
- workspaceId: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listApiKeysWorkspacesWorkspaceIdApiKeysGet>>, TError, TData>>, request?: SecondParameter<typeof customInstance>}
- , queryClient?: QueryClient
- ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+export function useListApiKeysWorkspacesWorkspaceIdApiKeysGet<
+  TData = Awaited<
+    ReturnType<typeof listApiKeysWorkspacesWorkspaceIdApiKeysGet>
+  >,
+  TError = HTTPValidationError,
+>(
+  workspaceId: string,
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<ReturnType<typeof listApiKeysWorkspacesWorkspaceIdApiKeysGet>>,
+        TError,
+        TData
+      >
+    >;
+    request?: SecondParameter<typeof customInstance>;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & {
+  queryKey: DataTag<QueryKey, TData, TError>;
+} {
+  const queryOptions =
+    getListApiKeysWorkspacesWorkspaceIdApiKeysGetQueryOptions(
+      workspaceId,
+      options,
+    );
 
-  const queryOptions = getListApiKeysWorkspacesWorkspaceIdApiKeysGetQueryOptions(workspaceId,options)
-
-  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+  const query = useQuery(queryOptions, queryClient) as UseQueryResult<
+    TData,
+    TError
+  > & { queryKey: DataTag<QueryKey, TData, TError> };
 
   return withQueryKey(query, queryOptions.queryKey);
 }
 
+/**
+ * @summary List Api Keys
+ */
+export const invalidateListApiKeysWorkspacesWorkspaceIdApiKeysGet = async (
+  queryClient: QueryClient,
+  workspaceId: string,
+  options?: InvalidateOptions,
+): Promise<QueryClient> => {
+  await queryClient.invalidateQueries(
+    {
+      queryKey:
+        getListApiKeysWorkspacesWorkspaceIdApiKeysGetQueryKey(workspaceId),
+    },
+    options,
+  );
 
-
-
-
-
-export type revokeApiKeyWorkspacesWorkspaceIdApiKeysKeyIdDeleteResponse204 = {
-  data: void
-  status: 204
-}
-
-export type revokeApiKeyWorkspacesWorkspaceIdApiKeysKeyIdDeleteResponse422 = {
-  data: HTTPValidationError
-  status: 422
-}
-
-export type revokeApiKeyWorkspacesWorkspaceIdApiKeysKeyIdDeleteResponseSuccess = (revokeApiKeyWorkspacesWorkspaceIdApiKeysKeyIdDeleteResponse204) & {
-  headers: Headers;
-};
-export type revokeApiKeyWorkspacesWorkspaceIdApiKeysKeyIdDeleteResponseError = (revokeApiKeyWorkspacesWorkspaceIdApiKeysKeyIdDeleteResponse422) & {
-  headers: Headers;
+  return queryClient;
 };
 
-export type revokeApiKeyWorkspacesWorkspaceIdApiKeysKeyIdDeleteResponse = (revokeApiKeyWorkspacesWorkspaceIdApiKeysKeyIdDeleteResponseSuccess | revokeApiKeyWorkspacesWorkspaceIdApiKeysKeyIdDeleteResponseError)
+/**
+ * @summary List Api Keys
+ */
+export const useSetListApiKeysWorkspacesWorkspaceIdApiKeysGetQueryData = () => {
+  const queryClient = useQueryClient();
+  return (
+    workspaceId: string,
+    updater:
+      | Awaited<ReturnType<typeof listApiKeysWorkspacesWorkspaceIdApiKeysGet>>
+      | undefined
+      | ((
+          old:
+            | Awaited<
+                ReturnType<typeof listApiKeysWorkspacesWorkspaceIdApiKeysGet>
+              >
+            | undefined,
+        ) =>
+          | Awaited<
+              ReturnType<typeof listApiKeysWorkspacesWorkspaceIdApiKeysGet>
+            >
+          | undefined),
+  ) => {
+    queryClient.setQueriesData<
+      Awaited<ReturnType<typeof listApiKeysWorkspacesWorkspaceIdApiKeysGet>>
+    >(
+      {
+        queryKey:
+          getListApiKeysWorkspacesWorkspaceIdApiKeysGetQueryKey(workspaceId),
+      },
+      updater,
+    );
+  };
+};
 
-export const getRevokeApiKeyWorkspacesWorkspaceIdApiKeysKeyIdDeleteUrl = (workspaceId: string,
-    keyId: string,) => {
-
-
-
-
-  return `/workspaces/${workspaceId}/api-keys/${keyId}`
-}
+/**
+ * @summary List Api Keys
+ */
+export const useGetListApiKeysWorkspacesWorkspaceIdApiKeysGetQueryData = () => {
+  const queryClient = useQueryClient();
+  return (workspaceId: string) =>
+    queryClient.getQueryData<
+      Awaited<ReturnType<typeof listApiKeysWorkspacesWorkspaceIdApiKeysGet>>
+    >(getListApiKeysWorkspacesWorkspaceIdApiKeysGetQueryKey(workspaceId));
+};
 
 /**
  * @summary Revoke Api Key
  */
-export const revokeApiKeyWorkspacesWorkspaceIdApiKeysKeyIdDelete = async (workspaceId: string,
-    keyId: string, options?: RequestInit): Promise<revokeApiKeyWorkspacesWorkspaceIdApiKeysKeyIdDeleteResponse> => {
+export const revokeApiKeyWorkspacesWorkspaceIdApiKeysKeyIdDelete = (
+  workspaceId: string,
+  keyId: string,
+  options?: SecondParameter<typeof customInstance>,
+  signal?: AbortSignal,
+) => {
+  return customInstance<void>(
+    {
+      url: `/workspaces/${workspaceId}/api-keys/${keyId}`,
+      method: "DELETE",
+      ...(signal ? { signal } : {}),
+    },
+    options,
+  );
+};
 
-  return customInstance<revokeApiKeyWorkspacesWorkspaceIdApiKeysKeyIdDeleteResponse>(getRevokeApiKeyWorkspacesWorkspaceIdApiKeysKeyIdDeleteUrl(workspaceId,keyId),
-  {
-    ...options,
-    method: 'DELETE'
+export const getRevokeApiKeyWorkspacesWorkspaceIdApiKeysKeyIdDeleteMutationOptions =
+  <TError = HTTPValidationError, TContext = unknown>(options?: {
+    mutation?: UseMutationOptions<
+      Awaited<
+        ReturnType<typeof revokeApiKeyWorkspacesWorkspaceIdApiKeysKeyIdDelete>
+      >,
+      TError,
+      { workspaceId: string; keyId: string },
+      TContext
+    >;
+    request?: SecondParameter<typeof customInstance>;
+  }): UseMutationOptions<
+    Awaited<
+      ReturnType<typeof revokeApiKeyWorkspacesWorkspaceIdApiKeysKeyIdDelete>
+    >,
+    TError,
+    { workspaceId: string; keyId: string },
+    TContext
+  > => {
+    const mutationKey = ["revokeApiKeyWorkspacesWorkspaceIdApiKeysKeyIdDelete"];
+    const { mutation: mutationOptions, request: requestOptions } = options
+      ? options.mutation &&
+        "mutationKey" in options.mutation &&
+        options.mutation.mutationKey
+        ? options
+        : { ...options, mutation: { ...options.mutation, mutationKey } }
+      : { mutation: { mutationKey }, request: undefined };
 
+    const mutationFn: MutationFunction<
+      Awaited<
+        ReturnType<typeof revokeApiKeyWorkspacesWorkspaceIdApiKeysKeyIdDelete>
+      >,
+      { workspaceId: string; keyId: string }
+    > = (props) => {
+      const { workspaceId, keyId } = props ?? {};
 
-  }
-);}
+      return revokeApiKeyWorkspacesWorkspaceIdApiKeysKeyIdDelete(
+        workspaceId,
+        keyId,
+        requestOptions,
+      );
+    };
 
+    return { mutationFn, ...mutationOptions };
+  };
 
+export type RevokeApiKeyWorkspacesWorkspaceIdApiKeysKeyIdDeleteMutationResult =
+  NonNullable<
+    Awaited<
+      ReturnType<typeof revokeApiKeyWorkspacesWorkspaceIdApiKeysKeyIdDelete>
+    >
+  >;
 
+export type RevokeApiKeyWorkspacesWorkspaceIdApiKeysKeyIdDeleteMutationError =
+  HTTPValidationError;
 
-
-export const getRevokeApiKeyWorkspacesWorkspaceIdApiKeysKeyIdDeleteMutationOptions = <TError = HTTPValidationError,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof revokeApiKeyWorkspacesWorkspaceIdApiKeysKeyIdDelete>>, TError,{workspaceId: string;keyId: string}, TContext>, request?: SecondParameter<typeof customInstance>}
-): UseMutationOptions<Awaited<ReturnType<typeof revokeApiKeyWorkspacesWorkspaceIdApiKeysKeyIdDelete>>, TError,{workspaceId: string;keyId: string}, TContext> => {
-
-const mutationKey = ['revokeApiKeyWorkspacesWorkspaceIdApiKeysKeyIdDelete'];
-const {mutation: mutationOptions, request: requestOptions} = options ?
-      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
-      options
-      : {...options, mutation: {...options.mutation, mutationKey}}
-      : {mutation: { mutationKey, }, request: undefined};
-
-
-
-
-      const mutationFn: MutationFunction<Awaited<ReturnType<typeof revokeApiKeyWorkspacesWorkspaceIdApiKeysKeyIdDelete>>, {workspaceId: string;keyId: string}> = (props) => {
-          const {workspaceId,keyId} = props ?? {};
-
-          return  revokeApiKeyWorkspacesWorkspaceIdApiKeysKeyIdDelete(workspaceId,keyId,requestOptions)
-        }
-
-
-
-
-
-
-  return  { mutationFn, ...mutationOptions }}
-
-    export type RevokeApiKeyWorkspacesWorkspaceIdApiKeysKeyIdDeleteMutationResult = NonNullable<Awaited<ReturnType<typeof revokeApiKeyWorkspacesWorkspaceIdApiKeysKeyIdDelete>>>
-
-    export type RevokeApiKeyWorkspacesWorkspaceIdApiKeysKeyIdDeleteMutationError = HTTPValidationError
-
-    /**
+/**
  * @summary Revoke Api Key
  */
-export const useRevokeApiKeyWorkspacesWorkspaceIdApiKeysKeyIdDelete = <TError = HTTPValidationError,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof revokeApiKeyWorkspacesWorkspaceIdApiKeysKeyIdDelete>>, TError,{workspaceId: string;keyId: string}, TContext>, request?: SecondParameter<typeof customInstance>}
- , queryClient?: QueryClient): UseMutationResult<
-        Awaited<ReturnType<typeof revokeApiKeyWorkspacesWorkspaceIdApiKeysKeyIdDelete>>,
-        TError,
-        {workspaceId: string;keyId: string},
-        TContext
-      > => {
-      return useMutation(getRevokeApiKeyWorkspacesWorkspaceIdApiKeysKeyIdDeleteMutationOptions(options), queryClient);
-    }
+export const useRevokeApiKeyWorkspacesWorkspaceIdApiKeysKeyIdDelete = <
+  TError = HTTPValidationError,
+  TContext = unknown,
+>(
+  options?: {
+    mutation?: UseMutationOptions<
+      Awaited<
+        ReturnType<typeof revokeApiKeyWorkspacesWorkspaceIdApiKeysKeyIdDelete>
+      >,
+      TError,
+      { workspaceId: string; keyId: string },
+      TContext
+    >;
+    request?: SecondParameter<typeof customInstance>;
+  },
+  queryClient?: QueryClient,
+): UseMutationResult<
+  Awaited<
+    ReturnType<typeof revokeApiKeyWorkspacesWorkspaceIdApiKeysKeyIdDelete>
+  >,
+  TError,
+  { workspaceId: string; keyId: string },
+  TContext
+> => {
+  return useMutation(
+    getRevokeApiKeyWorkspacesWorkspaceIdApiKeysKeyIdDeleteMutationOptions(
+      options,
+    ),
+    queryClient,
+  );
+};

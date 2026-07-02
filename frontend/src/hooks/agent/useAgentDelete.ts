@@ -3,9 +3,8 @@ import { useQueryClient } from '@tanstack/react-query'
 import {
   useDeleteAgentWorkspacesWorkspaceIdAgentsAgentIdDelete,
   getListAgentsWorkspacesWorkspaceIdAgentsGetQueryKey,
-  type listAgentsWorkspacesWorkspaceIdAgentsGetResponse,
 } from '@/api/generated/agents/agents'
-import type { AgentResponse } from '@/api/generated/fastAPI.schemas'
+import type { AgentResponse } from '@/api/generated/model'
 import { useToastStore } from '@/stores/toast'
 
 export const DELETE_UNDO_DURATION_MS = 5000
@@ -24,13 +23,11 @@ export function useAgentDelete(workspaceId: string) {
   const deleteAgent = useCallback(
     (agent: AgentResponse) => {
       const queryKey = getListAgentsWorkspacesWorkspaceIdAgentsGetQueryKey(workspaceId)
-      const snapshot = queryClient.getQueryData<listAgentsWorkspacesWorkspaceIdAgentsGetResponse>(queryKey)
-      const originalIndex = snapshot?.status === 200
-        ? snapshot.data.findIndex((a) => a.id === agent.id)
-        : -1
+      const snapshot = queryClient.getQueryData<AgentResponse[]>(queryKey)
+      const originalIndex = snapshot?.findIndex((a) => a.id === agent.id) ?? -1
 
-      queryClient.setQueryData<listAgentsWorkspacesWorkspaceIdAgentsGetResponse>(queryKey, (old) =>
-        old?.status === 200 ? { ...old, data: old.data.filter((a) => a.id !== agent.id) } : old
+      queryClient.setQueryData<AgentResponse[]>(queryKey, (old) =>
+        old ? old.filter((a) => a.id !== agent.id) : old
       )
 
       const toastId = crypto.randomUUID()
@@ -38,16 +35,12 @@ export function useAgentDelete(workspaceId: string) {
       const timeoutId = window.setTimeout(async () => {
         try {
           await mutateAsync({ workspaceId, agentId: agent.id })
-          queryClient.setQueryData<listAgentsWorkspacesWorkspaceIdAgentsGetResponse>(queryKey, (current) =>
-            current?.status === 200
-              ? { ...current, data: current.data.filter((a) => a.id !== agent.id) }
-              : current
+          queryClient.setQueryData<AgentResponse[]>(queryKey, (current) =>
+            current ? current.filter((a) => a.id !== agent.id) : current
           )
         } catch {
-          queryClient.setQueryData<listAgentsWorkspacesWorkspaceIdAgentsGetResponse>(queryKey, (current) =>
-            current?.status === 200
-              ? { ...current, data: insertAt(current.data, agent, originalIndex) }
-              : snapshot
+          queryClient.setQueryData<AgentResponse[]>(queryKey, (current) =>
+            current ? insertAt(current, agent, originalIndex) : snapshot
           )
           toast({ title: 'Failed to delete agent', description: agent.name, variant: 'error' })
         } finally {
@@ -63,10 +56,8 @@ export function useAgentDelete(workspaceId: string) {
         duration: DELETE_UNDO_DURATION_MS,
         undoAction: () => {
           clearTimeout(timeoutId)
-          queryClient.setQueryData<listAgentsWorkspacesWorkspaceIdAgentsGetResponse>(queryKey, (current) =>
-            current?.status === 200
-              ? { ...current, data: insertAt(current.data, agent, originalIndex) }
-              : snapshot
+          queryClient.setQueryData<AgentResponse[]>(queryKey, (current) =>
+            current ? insertAt(current, agent, originalIndex) : snapshot
           )
           dismiss(toastId)
         },

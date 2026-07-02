@@ -4,7 +4,7 @@ import * as Popover from '@radix-ui/react-popover'
 import { Info, Copy, Check } from 'lucide-react'
 import { useState } from 'react'
 import { format } from 'date-fns'
-import type { WorkspaceResponse } from '@/api/generated/fastAPI.schemas'
+import type { WorkspaceResponse } from '@/api/generated/model'
 import { Badge } from '@/components/ui/Badge'
 
 interface WorkspaceInfoPopoverProps {

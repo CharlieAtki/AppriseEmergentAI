@@ -1,7 +1,7 @@
 'use client'
 
 import { motion, AnimatePresence } from 'framer-motion'
-import type { WorkspaceResponse } from '@/api/generated/fastAPI.schemas'
+import type { WorkspaceResponse } from '@/api/generated/model'
 import { WorkspaceCard } from './WorkspaceCard'
 import { NewWorkspaceCard } from './NewWorkspaceCard'
 import { cardEntrance } from '@/lib/motion'

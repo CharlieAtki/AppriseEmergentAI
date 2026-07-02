@@ -12,7 +12,7 @@ import { Badge } from '@/components/ui/Badge'
 import { IconEdit, IconActivate, IconDeactivate, IconDelete } from '@/lib/icons'
 import { useAgentDelete } from '@/hooks/agent/useAgentDelete'
 import { getAgentRingBorderClass, getAgentAccentVar } from '@/lib/agentColour'
-import type { AgentResponse } from '@/api/generated/fastAPI.schemas'
+import type { AgentResponse } from '@/api/generated/model'
 
 type AgentNodeData = AgentResponse & {
   onDeactivate: (id: string) => void

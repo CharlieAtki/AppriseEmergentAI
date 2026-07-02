@@ -10,7 +10,8 @@ import {
   useUpdateWorkspaceWorkspacesWorkspaceIdPatch,
   getListWorkspacesWorkspacesGetQueryKey,
 } from '@/api/generated/workspaces/workspaces'
-import { UpdateWorkspaceRequestStatus, type WorkspaceResponse } from '@/api/generated/fastAPI.schemas'
+import { UpdateWorkspaceRequestStatus } from '@/api/generated/model/updateWorkspaceRequestStatus'
+import type { WorkspaceResponse } from '@/api/generated/model'
 
 interface EditWorkspaceDialogProps {
   workspace: WorkspaceResponse

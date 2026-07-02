@@ -11,7 +11,7 @@ import { useAgentReactivate } from '@/hooks/agent/useAgentReactivate'
 import { AgentNode } from './AgentNode'
 import { SpawnAgentButton } from './SpawnAgentButton'
 import { SpawnAgentDialog } from './SpawnAgentDialog'
-import type { AgentResponse } from '@/api/generated/fastAPI.schemas'
+import type { AgentResponse } from '@/api/generated/model'
 
 // Must be defined at module scope — ReactFlow re-renders all nodes if nodeTypes
 // is a new object reference on each render.
@@ -60,7 +60,7 @@ export function AgentGraph({ workspaceId }: AgentGraphProps) {
   const [searchQuery, setSearchQuery] = useState('')
 
   const { data: agentsResponse } = useListAgentsWorkspacesWorkspaceIdAgentsGet(workspaceId)
-  const agents = agentsResponse?.status === 200 ? agentsResponse.data : []
+  const agents = agentsResponse ?? []
   const activeCount = agents.filter((a) => a.status === 'active').length
 
   const { deactivateAgent } = useAgentDeactivate(workspaceId)

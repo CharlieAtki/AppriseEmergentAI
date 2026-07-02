@@ -3,9 +3,8 @@ import { useQueryClient } from '@tanstack/react-query'
 import {
   useUpdateAgentWorkspacesWorkspaceIdAgentsAgentIdPatch,
   getListAgentsWorkspacesWorkspaceIdAgentsGetQueryKey,
-  type listAgentsWorkspacesWorkspaceIdAgentsGetResponse,
 } from '@/api/generated/agents/agents'
-import { AgentStatus } from '@/api/generated/fastAPI.schemas'
+import type { AgentResponse } from '@/api/generated/model'
 import { useToastStore } from '@/stores/toast'
 
 const REACTIVATE_TOAST_DURATION_MS = 4000
@@ -17,22 +16,15 @@ export function useAgentReactivate(workspaceId: string) {
   const { mutate, isPending } = useUpdateAgentWorkspacesWorkspaceIdAgentsAgentIdPatch({
     mutation: {
       onSuccess: (response) => {
-        if (response.status !== 200) return
         const queryKey = getListAgentsWorkspacesWorkspaceIdAgentsGetQueryKey(workspaceId)
-        queryClient.setQueryData<listAgentsWorkspacesWorkspaceIdAgentsGetResponse>(queryKey, (old) => {
-          if (!old || old.status !== 200) return old
-          return {
-            ...old,
-            data: old.data.map((a) =>
-              a.id === response.data.id ? { ...a, status: response.data.status } : a,
-            ),
-          }
-        })
+        queryClient.setQueryData<AgentResponse[]>(queryKey, (old) =>
+          old ? old.map((a) => a.id === response.id ? { ...a, status: response.status } : a) : old
+        )
         const toastId = crypto.randomUUID()
         toast({
           id: toastId,
           title: 'Agent reactivated',
-          description: response.data.name,
+          description: response.name,
           variant: 'success',
           duration: REACTIVATE_TOAST_DURATION_MS,
         })
@@ -43,7 +35,7 @@ export function useAgentReactivate(workspaceId: string) {
 
   const reactivateAgent = useCallback(
     (agentId: string) => {
-      mutate({ workspaceId, agentId, data: { status: AgentStatus.active } })
+      mutate({ workspaceId, agentId, data: { status: 'active' } })
     },
     [mutate, workspaceId],
   )

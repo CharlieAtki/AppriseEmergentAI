@@ -2,7 +2,7 @@
 
 import * as AlertDialog from '@radix-ui/react-alert-dialog'
 import { Trash2 } from 'lucide-react'
-import type { WorkspaceResponse } from '@/api/generated/fastAPI.schemas'
+import type { WorkspaceResponse } from '@/api/generated/model'
 
 interface DeleteWorkspaceDialogProps {
   workspace: WorkspaceResponse

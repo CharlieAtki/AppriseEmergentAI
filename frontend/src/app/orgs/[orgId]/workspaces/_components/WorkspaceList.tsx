@@ -14,7 +14,7 @@ export function WorkspaceList() {
   const [view, setView] = useState<View>('grid')
   const { data, isPending, isError } = useListWorkspacesWorkspacesGet()
 
-  const allWorkspaces = data?.data ?? []
+  const allWorkspaces = data ?? []
   const workspaces = query
     ? allWorkspaces.filter((ws) =>
         ws.name.toLowerCase().includes(query.toLowerCase())

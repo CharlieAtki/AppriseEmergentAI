@@ -9,7 +9,7 @@ import {
   getListAgentsWorkspacesWorkspaceIdAgentsGetQueryKey,
 } from '@/api/generated/agents/agents'
 import { IconAgent, IconClose } from '@/lib/icons'
-import type { AgentResponse } from '@/api/generated/fastAPI.schemas'
+import type { AgentResponse } from '@/api/generated/model'
 
 interface EditAgentDialogProps {
   agent: AgentResponse

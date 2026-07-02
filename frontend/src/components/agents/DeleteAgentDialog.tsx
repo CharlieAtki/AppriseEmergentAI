@@ -2,7 +2,7 @@
 
 import * as AlertDialog from '@radix-ui/react-alert-dialog'
 import { IconDelete } from '@/lib/icons'
-import type { AgentResponse } from '@/api/generated/fastAPI.schemas'
+import type { AgentResponse } from '@/api/generated/model'
 
 interface DeleteAgentDialogProps {
   agent: AgentResponse

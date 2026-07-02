@@ -3,9 +3,8 @@ import { useQueryClient } from '@tanstack/react-query'
 import {
   useDeleteWorkspaceWorkspacesWorkspaceIdDelete,
   getListWorkspacesWorkspacesGetQueryKey,
-  type listWorkspacesWorkspacesGetResponse,
 } from '@/api/generated/workspaces/workspaces'
-import type { WorkspaceResponse } from '@/api/generated/fastAPI.schemas'
+import type { WorkspaceResponse } from '@/api/generated/model'
 import { useToastStore } from '@/stores/toast'
 
 export const DELETE_UNDO_DURATION_MS = 5000
@@ -24,12 +23,11 @@ export function useWorkspaceDelete() {
   const deleteWorkspace = useCallback(
     (workspace: WorkspaceResponse) => {
       const queryKey = getListWorkspacesWorkspacesGetQueryKey()
-      const snapshot = queryClient.getQueryData<listWorkspacesWorkspacesGetResponse>(queryKey)
-      const originalIndex = snapshot?.data.findIndex((w) => w.id === workspace.id) ?? -1
+      const snapshot = queryClient.getQueryData<WorkspaceResponse[]>(queryKey)
+      const originalIndex = snapshot?.findIndex((w) => w.id === workspace.id) ?? -1
 
-      // Optimistically remove the card immediately
-      queryClient.setQueryData<listWorkspacesWorkspacesGetResponse>(queryKey, (old) =>
-        old ? { ...old, data: old.data.filter((w) => w.id !== workspace.id) } : old
+      queryClient.setQueryData<WorkspaceResponse[]>(queryKey, (old) =>
+        old ? old.filter((w) => w.id !== workspace.id) : old
       )
 
       const toastId = crypto.randomUUID()
@@ -37,21 +35,14 @@ export function useWorkspaceDelete() {
       const timeoutId = window.setTimeout(async () => {
         try {
           await mutateAsync({ workspaceId: workspace.id })
-          // Confirm the optimistic removal without a refetch — a full invalidation here
-          // would show server state mid-flight while other pending deletes haven't committed yet.
-          queryClient.setQueryData<listWorkspacesWorkspacesGetResponse>(queryKey, (current) =>
-            current ? { ...current, data: current.data.filter((w) => w.id !== workspace.id) } : current
+          queryClient.setQueryData<WorkspaceResponse[]>(queryKey, (current) =>
+            current ? current.filter((w) => w.id !== workspace.id) : current
           )
         } catch {
-          // Restore only this workspace into current cache state on failure
-          queryClient.setQueryData<listWorkspacesWorkspacesGetResponse>(queryKey, (current) =>
-            current ? { ...current, data: insertAt(current.data, workspace, originalIndex) } : snapshot
+          queryClient.setQueryData<WorkspaceResponse[]>(queryKey, (current) =>
+            current ? insertAt(current, workspace, originalIndex) : snapshot
           )
-          toast({
-            title: 'Failed to delete workspace',
-            description: workspace.name,
-            variant: 'error',
-          })
+          toast({ title: 'Failed to delete workspace', description: workspace.name, variant: 'error' })
         } finally {
           dismiss(toastId)
         }
@@ -65,9 +56,8 @@ export function useWorkspaceDelete() {
         duration: DELETE_UNDO_DURATION_MS,
         undoAction: () => {
           clearTimeout(timeoutId)
-          // Insert only this workspace back at its original position in the current list
-          queryClient.setQueryData<listWorkspacesWorkspacesGetResponse>(queryKey, (current) =>
-            current ? { ...current, data: insertAt(current.data, workspace, originalIndex) } : snapshot
+          queryClient.setQueryData<WorkspaceResponse[]>(queryKey, (current) =>
+            current ? insertAt(current, workspace, originalIndex) : snapshot
           )
           dismiss(toastId)
         },

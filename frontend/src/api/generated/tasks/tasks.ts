@@ -4,14 +4,13 @@
  * FastAPI
  * OpenAPI spec version: 0.1.0
  */
-import {
-  useMutation,
-  useQuery
-} from '@tanstack/react-query';
+import { z } from "zod";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type {
   DataTag,
   DefinedInitialDataOptions,
   DefinedUseQueryResult,
+  InvalidateOptions,
   MutationFunction,
   QueryClient,
   QueryFunction,
@@ -20,29 +19,25 @@ import type {
   UseMutationOptions,
   UseMutationResult,
   UseQueryOptions,
-  UseQueryResult
-} from '@tanstack/react-query';
+  UseQueryResult,
+} from "@tanstack/react-query";
 
-import type {
-  CreateTaskRequest,
-  HTTPValidationError,
-  TaskCreatedResponse,
-  TaskResponse
-} from '../fastAPI.schemas';
+import type { CreateTaskRequest, HTTPValidationError } from "../model";
+import { TaskCreatedResponse, TaskResponse } from "../model";
 
-import { customInstance } from '../../client';
-
+import { customInstance } from "../../client";
 
 type SecondParameter<T extends (...args: never) => unknown> = Parameters<T>[1];
 
-
-
-const withQueryKey = <T extends object, K>(query: T, queryKey: K): T & { queryKey: K } => {
+const withQueryKey = <T extends object, K>(
+  query: T,
+  queryKey: K,
+): T & { queryKey: K } => {
   const result = { queryKey } as T & { queryKey: K };
   for (const key of Object.keys(query)) {
     // The explicit queryKey always wins, matching the previous
     // `{ ...query, queryKey }` spread where it was set last.
-    if (key === 'queryKey') continue;
+    if (key === "queryKey") continue;
     Object.defineProperty(result, key, {
       enumerable: true,
       configurable: true,
@@ -52,33 +47,6 @@ const withQueryKey = <T extends object, K>(query: T, queryKey: K): T & { queryKe
   return result;
 };
 
-export type createTaskWorkspacesWorkspaceIdTasksPostResponse202 = {
-  data: TaskCreatedResponse
-  status: 202
-}
-
-export type createTaskWorkspacesWorkspaceIdTasksPostResponse422 = {
-  data: HTTPValidationError
-  status: 422
-}
-
-export type createTaskWorkspacesWorkspaceIdTasksPostResponseSuccess = (createTaskWorkspacesWorkspaceIdTasksPostResponse202) & {
-  headers: Headers;
-};
-export type createTaskWorkspacesWorkspaceIdTasksPostResponseError = (createTaskWorkspacesWorkspaceIdTasksPostResponse422) & {
-  headers: Headers;
-};
-
-export type createTaskWorkspacesWorkspaceIdTasksPostResponse = (createTaskWorkspacesWorkspaceIdTasksPostResponseSuccess | createTaskWorkspacesWorkspaceIdTasksPostResponseError)
-
-export const getCreateTaskWorkspacesWorkspaceIdTasksPostUrl = (workspaceId: string,) => {
-
-
-
-
-  return `/workspaces/${workspaceId}/tasks`
-}
-
 /**
  * Create a task and enqueue enrichment as a durable ARQ job.
  *
@@ -87,303 +55,624 @@ export const getCreateTaskWorkspacesWorkspaceIdTasksPostUrl = (workspaceId: stri
  * AsyncSession instance — FastAPI deduplicates Depends(get_db).
  * @summary Create Task
  */
-export const createTaskWorkspacesWorkspaceIdTasksPost = async (workspaceId: string,
-    createTaskRequest: CreateTaskRequest, options?: RequestInit): Promise<createTaskWorkspacesWorkspaceIdTasksPostResponse> => {
+export const createTaskWorkspacesWorkspaceIdTasksPost = (
+  workspaceId: string,
+  createTaskRequest: CreateTaskRequest,
+  options?: SecondParameter<typeof customInstance>,
+  signal?: AbortSignal,
+) => {
+  return customInstance<TaskCreatedResponse>(
+    {
+      url: `/workspaces/${workspaceId}/tasks`,
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      data: createTaskRequest,
+      ...(signal ? { signal } : {}),
+    },
+    options,
+    TaskCreatedResponse,
+  );
+};
 
-  return customInstance<createTaskWorkspacesWorkspaceIdTasksPostResponse>(getCreateTaskWorkspacesWorkspaceIdTasksPostUrl(workspaceId),
-  {
-    ...options,
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...options?.headers },
-    body: JSON.stringify(createTaskRequest)
-  }
-);}
+export const getCreateTaskWorkspacesWorkspaceIdTasksPostMutationOptions = <
+  TError = HTTPValidationError,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof createTaskWorkspacesWorkspaceIdTasksPost>>,
+    TError,
+    { workspaceId: string; data: CreateTaskRequest },
+    TContext
+  >;
+  request?: SecondParameter<typeof customInstance>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof createTaskWorkspacesWorkspaceIdTasksPost>>,
+  TError,
+  { workspaceId: string; data: CreateTaskRequest },
+  TContext
+> => {
+  const mutationKey = ["createTaskWorkspacesWorkspaceIdTasksPost"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
 
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof createTaskWorkspacesWorkspaceIdTasksPost>>,
+    { workspaceId: string; data: CreateTaskRequest }
+  > = (props) => {
+    const { workspaceId, data } = props ?? {};
 
+    return createTaskWorkspacesWorkspaceIdTasksPost(
+      workspaceId,
+      data,
+      requestOptions,
+    );
+  };
 
+  return { mutationFn, ...mutationOptions };
+};
 
+export type CreateTaskWorkspacesWorkspaceIdTasksPostMutationResult =
+  NonNullable<
+    Awaited<ReturnType<typeof createTaskWorkspacesWorkspaceIdTasksPost>>
+  >;
+export type CreateTaskWorkspacesWorkspaceIdTasksPostMutationBody =
+  CreateTaskRequest;
+export type CreateTaskWorkspacesWorkspaceIdTasksPostMutationError =
+  HTTPValidationError;
 
-export const getCreateTaskWorkspacesWorkspaceIdTasksPostMutationOptions = <TError = HTTPValidationError,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createTaskWorkspacesWorkspaceIdTasksPost>>, TError,{workspaceId: string;data: CreateTaskRequest}, TContext>, request?: SecondParameter<typeof customInstance>}
-): UseMutationOptions<Awaited<ReturnType<typeof createTaskWorkspacesWorkspaceIdTasksPost>>, TError,{workspaceId: string;data: CreateTaskRequest}, TContext> => {
-
-const mutationKey = ['createTaskWorkspacesWorkspaceIdTasksPost'];
-const {mutation: mutationOptions, request: requestOptions} = options ?
-      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
-      options
-      : {...options, mutation: {...options.mutation, mutationKey}}
-      : {mutation: { mutationKey, }, request: undefined};
-
-
-
-
-      const mutationFn: MutationFunction<Awaited<ReturnType<typeof createTaskWorkspacesWorkspaceIdTasksPost>>, {workspaceId: string;data: CreateTaskRequest}> = (props) => {
-          const {workspaceId,data} = props ?? {};
-
-          return  createTaskWorkspacesWorkspaceIdTasksPost(workspaceId,data,requestOptions)
-        }
-
-
-
-
-
-
-  return  { mutationFn, ...mutationOptions }}
-
-    export type CreateTaskWorkspacesWorkspaceIdTasksPostMutationResult = NonNullable<Awaited<ReturnType<typeof createTaskWorkspacesWorkspaceIdTasksPost>>>
-    export type CreateTaskWorkspacesWorkspaceIdTasksPostMutationBody = CreateTaskRequest
-    export type CreateTaskWorkspacesWorkspaceIdTasksPostMutationError = HTTPValidationError
-
-    /**
+/**
  * @summary Create Task
  */
-export const useCreateTaskWorkspacesWorkspaceIdTasksPost = <TError = HTTPValidationError,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createTaskWorkspacesWorkspaceIdTasksPost>>, TError,{workspaceId: string;data: CreateTaskRequest}, TContext>, request?: SecondParameter<typeof customInstance>}
- , queryClient?: QueryClient): UseMutationResult<
-        Awaited<ReturnType<typeof createTaskWorkspacesWorkspaceIdTasksPost>>,
+export const useCreateTaskWorkspacesWorkspaceIdTasksPost = <
+  TError = HTTPValidationError,
+  TContext = unknown,
+>(
+  options?: {
+    mutation?: UseMutationOptions<
+      Awaited<ReturnType<typeof createTaskWorkspacesWorkspaceIdTasksPost>>,
+      TError,
+      { workspaceId: string; data: CreateTaskRequest },
+      TContext
+    >;
+    request?: SecondParameter<typeof customInstance>;
+  },
+  queryClient?: QueryClient,
+): UseMutationResult<
+  Awaited<ReturnType<typeof createTaskWorkspacesWorkspaceIdTasksPost>>,
+  TError,
+  { workspaceId: string; data: CreateTaskRequest },
+  TContext
+> => {
+  return useMutation(
+    getCreateTaskWorkspacesWorkspaceIdTasksPostMutationOptions(options),
+    queryClient,
+  );
+};
+/**
+ * @summary List Tasks
+ */
+export const listTasksWorkspacesWorkspaceIdTasksGet = (
+  workspaceId: string,
+  options?: SecondParameter<typeof customInstance>,
+  signal?: AbortSignal,
+) => {
+  return customInstance<TaskResponse[]>(
+    {
+      url: `/workspaces/${workspaceId}/tasks`,
+      method: "GET",
+      ...(signal ? { signal } : {}),
+    },
+    options,
+    z.array(TaskResponse),
+  );
+};
+
+export const getListTasksWorkspacesWorkspaceIdTasksGetQueryKey = (
+  workspaceId: string,
+) => {
+  return [`/workspaces/${workspaceId}/tasks`] as const;
+};
+
+export const getListTasksWorkspacesWorkspaceIdTasksGetQueryOptions = <
+  TData = Awaited<ReturnType<typeof listTasksWorkspacesWorkspaceIdTasksGet>>,
+  TError = HTTPValidationError,
+>(
+  workspaceId: string,
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<ReturnType<typeof listTasksWorkspacesWorkspaceIdTasksGet>>,
         TError,
-        {workspaceId: string;data: CreateTaskRequest},
-        TContext
-      > => {
-      return useMutation(getCreateTaskWorkspacesWorkspaceIdTasksPostMutationOptions(options), queryClient);
-    }
-    export type listTasksWorkspacesWorkspaceIdTasksGetResponse200 = {
-  data: TaskResponse[]
-  status: 200
-}
+        TData
+      >
+    >;
+    request?: SecondParameter<typeof customInstance>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
 
-export type listTasksWorkspacesWorkspaceIdTasksGetResponse422 = {
-  data: HTTPValidationError
-  status: 422
-}
+  const queryKey =
+    queryOptions?.queryKey ??
+    getListTasksWorkspacesWorkspaceIdTasksGetQueryKey(workspaceId);
 
-export type listTasksWorkspacesWorkspaceIdTasksGetResponseSuccess = (listTasksWorkspacesWorkspaceIdTasksGetResponse200) & {
-  headers: Headers;
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof listTasksWorkspacesWorkspaceIdTasksGet>>
+  > = ({ signal }) =>
+    listTasksWorkspacesWorkspaceIdTasksGet(workspaceId, requestOptions, signal);
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: workspaceId !== null && workspaceId !== undefined,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof listTasksWorkspacesWorkspaceIdTasksGet>>,
+    TError,
+    TData
+  > & { queryKey: DataTag<QueryKey, TData, TError> };
 };
-export type listTasksWorkspacesWorkspaceIdTasksGetResponseError = (listTasksWorkspacesWorkspaceIdTasksGetResponse422) & {
-  headers: Headers;
+
+export type ListTasksWorkspacesWorkspaceIdTasksGetQueryResult = NonNullable<
+  Awaited<ReturnType<typeof listTasksWorkspacesWorkspaceIdTasksGet>>
+>;
+export type ListTasksWorkspacesWorkspaceIdTasksGetQueryError =
+  HTTPValidationError;
+
+export function useListTasksWorkspacesWorkspaceIdTasksGet<
+  TData = Awaited<ReturnType<typeof listTasksWorkspacesWorkspaceIdTasksGet>>,
+  TError = HTTPValidationError,
+>(
+  workspaceId: string,
+  options: {
+    query: Partial<
+      UseQueryOptions<
+        Awaited<ReturnType<typeof listTasksWorkspacesWorkspaceIdTasksGet>>,
+        TError,
+        TData
+      >
+    > &
+      Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof listTasksWorkspacesWorkspaceIdTasksGet>>,
+          TError,
+          Awaited<ReturnType<typeof listTasksWorkspacesWorkspaceIdTasksGet>>
+        >,
+        "initialData"
+      >;
+    request?: SecondParameter<typeof customInstance>;
+  },
+  queryClient?: QueryClient,
+): DefinedUseQueryResult<TData, TError> & {
+  queryKey: DataTag<QueryKey, TData, TError>;
 };
+export function useListTasksWorkspacesWorkspaceIdTasksGet<
+  TData = Awaited<ReturnType<typeof listTasksWorkspacesWorkspaceIdTasksGet>>,
+  TError = HTTPValidationError,
+>(
+  workspaceId: string,
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<ReturnType<typeof listTasksWorkspacesWorkspaceIdTasksGet>>,
+        TError,
+        TData
+      >
+    > &
+      Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof listTasksWorkspacesWorkspaceIdTasksGet>>,
+          TError,
+          Awaited<ReturnType<typeof listTasksWorkspacesWorkspaceIdTasksGet>>
+        >,
+        "initialData"
+      >;
+    request?: SecondParameter<typeof customInstance>;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & {
+  queryKey: DataTag<QueryKey, TData, TError>;
+};
+export function useListTasksWorkspacesWorkspaceIdTasksGet<
+  TData = Awaited<ReturnType<typeof listTasksWorkspacesWorkspaceIdTasksGet>>,
+  TError = HTTPValidationError,
+>(
+  workspaceId: string,
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<ReturnType<typeof listTasksWorkspacesWorkspaceIdTasksGet>>,
+        TError,
+        TData
+      >
+    >;
+    request?: SecondParameter<typeof customInstance>;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & {
+  queryKey: DataTag<QueryKey, TData, TError>;
+};
+/**
+ * @summary List Tasks
+ */
 
-export type listTasksWorkspacesWorkspaceIdTasksGetResponse = (listTasksWorkspacesWorkspaceIdTasksGetResponseSuccess | listTasksWorkspacesWorkspaceIdTasksGetResponseError)
+export function useListTasksWorkspacesWorkspaceIdTasksGet<
+  TData = Awaited<ReturnType<typeof listTasksWorkspacesWorkspaceIdTasksGet>>,
+  TError = HTTPValidationError,
+>(
+  workspaceId: string,
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<ReturnType<typeof listTasksWorkspacesWorkspaceIdTasksGet>>,
+        TError,
+        TData
+      >
+    >;
+    request?: SecondParameter<typeof customInstance>;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & {
+  queryKey: DataTag<QueryKey, TData, TError>;
+} {
+  const queryOptions = getListTasksWorkspacesWorkspaceIdTasksGetQueryOptions(
+    workspaceId,
+    options,
+  );
 
-export const getListTasksWorkspacesWorkspaceIdTasksGetUrl = (workspaceId: string,) => {
+  const query = useQuery(queryOptions, queryClient) as UseQueryResult<
+    TData,
+    TError
+  > & { queryKey: DataTag<QueryKey, TData, TError> };
 
-
-
-
-  return `/workspaces/${workspaceId}/tasks`
+  return withQueryKey(query, queryOptions.queryKey);
 }
 
 /**
  * @summary List Tasks
  */
-export const listTasksWorkspacesWorkspaceIdTasksGet = async (workspaceId: string, options?: RequestInit): Promise<listTasksWorkspacesWorkspaceIdTasksGetResponse> => {
+export const invalidateListTasksWorkspacesWorkspaceIdTasksGet = async (
+  queryClient: QueryClient,
+  workspaceId: string,
+  options?: InvalidateOptions,
+): Promise<QueryClient> => {
+  await queryClient.invalidateQueries(
+    {
+      queryKey: getListTasksWorkspacesWorkspaceIdTasksGetQueryKey(workspaceId),
+    },
+    options,
+  );
 
-  return customInstance<listTasksWorkspacesWorkspaceIdTasksGetResponse>(getListTasksWorkspacesWorkspaceIdTasksGetUrl(workspaceId),
-  {
-    ...options,
-    method: 'GET'
+  return queryClient;
+};
 
-
-  }
-);}
-
-
-
-
-
-export const getListTasksWorkspacesWorkspaceIdTasksGetQueryKey = (workspaceId: string,) => {
-    return [
-    `/workspaces/${workspaceId}/tasks`
-    ] as const;
-    }
-
-
-export const getListTasksWorkspacesWorkspaceIdTasksGetQueryOptions = <TData = Awaited<ReturnType<typeof listTasksWorkspacesWorkspaceIdTasksGet>>, TError = HTTPValidationError>(workspaceId: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listTasksWorkspacesWorkspaceIdTasksGet>>, TError, TData>>, request?: SecondParameter<typeof customInstance>}
-) => {
-
-const {query: queryOptions, request: requestOptions} = options ?? {};
-
-  const queryKey =  queryOptions?.queryKey ?? getListTasksWorkspacesWorkspaceIdTasksGetQueryKey(workspaceId);
-
-
-
-    const queryFn: QueryFunction<Awaited<ReturnType<typeof listTasksWorkspacesWorkspaceIdTasksGet>>> = ({ signal }) => listTasksWorkspacesWorkspaceIdTasksGet(workspaceId, { signal, ...requestOptions });
-
-
-
-
-
-   return  { queryKey, queryFn, enabled: workspaceId !== null && workspaceId !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listTasksWorkspacesWorkspaceIdTasksGet>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
-}
-
-export type ListTasksWorkspacesWorkspaceIdTasksGetQueryResult = NonNullable<Awaited<ReturnType<typeof listTasksWorkspacesWorkspaceIdTasksGet>>>
-export type ListTasksWorkspacesWorkspaceIdTasksGetQueryError = HTTPValidationError
-
-
-export function useListTasksWorkspacesWorkspaceIdTasksGet<TData = Awaited<ReturnType<typeof listTasksWorkspacesWorkspaceIdTasksGet>>, TError = HTTPValidationError>(
- workspaceId: string, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof listTasksWorkspacesWorkspaceIdTasksGet>>, TError, TData>> & Pick<
-        DefinedInitialDataOptions<
-          Awaited<ReturnType<typeof listTasksWorkspacesWorkspaceIdTasksGet>>,
-          TError,
-          Awaited<ReturnType<typeof listTasksWorkspacesWorkspaceIdTasksGet>>
-        > , 'initialData'
-      >, request?: SecondParameter<typeof customInstance>}
- , queryClient?: QueryClient
-  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-export function useListTasksWorkspacesWorkspaceIdTasksGet<TData = Awaited<ReturnType<typeof listTasksWorkspacesWorkspaceIdTasksGet>>, TError = HTTPValidationError>(
- workspaceId: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listTasksWorkspacesWorkspaceIdTasksGet>>, TError, TData>> & Pick<
-        UndefinedInitialDataOptions<
-          Awaited<ReturnType<typeof listTasksWorkspacesWorkspaceIdTasksGet>>,
-          TError,
-          Awaited<ReturnType<typeof listTasksWorkspacesWorkspaceIdTasksGet>>
-        > , 'initialData'
-      >, request?: SecondParameter<typeof customInstance>}
- , queryClient?: QueryClient
-  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-export function useListTasksWorkspacesWorkspaceIdTasksGet<TData = Awaited<ReturnType<typeof listTasksWorkspacesWorkspaceIdTasksGet>>, TError = HTTPValidationError>(
- workspaceId: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listTasksWorkspacesWorkspaceIdTasksGet>>, TError, TData>>, request?: SecondParameter<typeof customInstance>}
- , queryClient?: QueryClient
-  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
 /**
  * @summary List Tasks
  */
-
-export function useListTasksWorkspacesWorkspaceIdTasksGet<TData = Awaited<ReturnType<typeof listTasksWorkspacesWorkspaceIdTasksGet>>, TError = HTTPValidationError>(
- workspaceId: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listTasksWorkspacesWorkspaceIdTasksGet>>, TError, TData>>, request?: SecondParameter<typeof customInstance>}
- , queryClient?: QueryClient
- ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
-
-  const queryOptions = getListTasksWorkspacesWorkspaceIdTasksGetQueryOptions(workspaceId,options)
-
-  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
-
-  return withQueryKey(query, queryOptions.queryKey);
-}
-
-
-
-
-
-
-export type getTaskWorkspacesWorkspaceIdTasksTaskIdGetResponse200 = {
-  data: TaskResponse
-  status: 200
-}
-
-export type getTaskWorkspacesWorkspaceIdTasksTaskIdGetResponse422 = {
-  data: HTTPValidationError
-  status: 422
-}
-
-export type getTaskWorkspacesWorkspaceIdTasksTaskIdGetResponseSuccess = (getTaskWorkspacesWorkspaceIdTasksTaskIdGetResponse200) & {
-  headers: Headers;
-};
-export type getTaskWorkspacesWorkspaceIdTasksTaskIdGetResponseError = (getTaskWorkspacesWorkspaceIdTasksTaskIdGetResponse422) & {
-  headers: Headers;
+export const useSetListTasksWorkspacesWorkspaceIdTasksGetQueryData = () => {
+  const queryClient = useQueryClient();
+  return (
+    workspaceId: string,
+    updater:
+      | Awaited<ReturnType<typeof listTasksWorkspacesWorkspaceIdTasksGet>>
+      | undefined
+      | ((
+          old:
+            | Awaited<ReturnType<typeof listTasksWorkspacesWorkspaceIdTasksGet>>
+            | undefined,
+        ) =>
+          | Awaited<ReturnType<typeof listTasksWorkspacesWorkspaceIdTasksGet>>
+          | undefined),
+  ) => {
+    queryClient.setQueriesData<
+      Awaited<ReturnType<typeof listTasksWorkspacesWorkspaceIdTasksGet>>
+    >(
+      {
+        queryKey:
+          getListTasksWorkspacesWorkspaceIdTasksGetQueryKey(workspaceId),
+      },
+      updater,
+    );
+  };
 };
 
-export type getTaskWorkspacesWorkspaceIdTasksTaskIdGetResponse = (getTaskWorkspacesWorkspaceIdTasksTaskIdGetResponseSuccess | getTaskWorkspacesWorkspaceIdTasksTaskIdGetResponseError)
-
-export const getGetTaskWorkspacesWorkspaceIdTasksTaskIdGetUrl = (workspaceId: string,
-    taskId: string,) => {
-
-
-
-
-  return `/workspaces/${workspaceId}/tasks/${taskId}`
-}
+/**
+ * @summary List Tasks
+ */
+export const useGetListTasksWorkspacesWorkspaceIdTasksGetQueryData = () => {
+  const queryClient = useQueryClient();
+  return (workspaceId: string) =>
+    queryClient.getQueryData<
+      Awaited<ReturnType<typeof listTasksWorkspacesWorkspaceIdTasksGet>>
+    >(getListTasksWorkspacesWorkspaceIdTasksGetQueryKey(workspaceId));
+};
 
 /**
  * @summary Get Task
  */
-export const getTaskWorkspacesWorkspaceIdTasksTaskIdGet = async (workspaceId: string,
-    taskId: string, options?: RequestInit): Promise<getTaskWorkspacesWorkspaceIdTasksTaskIdGetResponse> => {
-
-  return customInstance<getTaskWorkspacesWorkspaceIdTasksTaskIdGetResponse>(getGetTaskWorkspacesWorkspaceIdTasksTaskIdGetUrl(workspaceId,taskId),
-  {
-    ...options,
-    method: 'GET'
-
-
-  }
-);}
-
-
-
-
-
-export const getGetTaskWorkspacesWorkspaceIdTasksTaskIdGetQueryKey = (workspaceId: string,
-    taskId: string,) => {
-    return [
-    `/workspaces/${workspaceId}/tasks/${taskId}`
-    ] as const;
-    }
-
-
-export const getGetTaskWorkspacesWorkspaceIdTasksTaskIdGetQueryOptions = <TData = Awaited<ReturnType<typeof getTaskWorkspacesWorkspaceIdTasksTaskIdGet>>, TError = HTTPValidationError>(workspaceId: string,
-    taskId: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getTaskWorkspacesWorkspaceIdTasksTaskIdGet>>, TError, TData>>, request?: SecondParameter<typeof customInstance>}
+export const getTaskWorkspacesWorkspaceIdTasksTaskIdGet = (
+  workspaceId: string,
+  taskId: string,
+  options?: SecondParameter<typeof customInstance>,
+  signal?: AbortSignal,
 ) => {
+  return customInstance<TaskResponse>(
+    {
+      url: `/workspaces/${workspaceId}/tasks/${taskId}`,
+      method: "GET",
+      ...(signal ? { signal } : {}),
+    },
+    options,
+    TaskResponse,
+  );
+};
 
-const {query: queryOptions, request: requestOptions} = options ?? {};
+export const getGetTaskWorkspacesWorkspaceIdTasksTaskIdGetQueryKey = (
+  workspaceId: string,
+  taskId: string,
+) => {
+  return [`/workspaces/${workspaceId}/tasks/${taskId}`] as const;
+};
 
-  const queryKey =  queryOptions?.queryKey ?? getGetTaskWorkspacesWorkspaceIdTasksTaskIdGetQueryKey(workspaceId,taskId);
+export const getGetTaskWorkspacesWorkspaceIdTasksTaskIdGetQueryOptions = <
+  TData = Awaited<
+    ReturnType<typeof getTaskWorkspacesWorkspaceIdTasksTaskIdGet>
+  >,
+  TError = HTTPValidationError,
+>(
+  workspaceId: string,
+  taskId: string,
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<ReturnType<typeof getTaskWorkspacesWorkspaceIdTasksTaskIdGet>>,
+        TError,
+        TData
+      >
+    >;
+    request?: SecondParameter<typeof customInstance>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
 
+  const queryKey =
+    queryOptions?.queryKey ??
+    getGetTaskWorkspacesWorkspaceIdTasksTaskIdGetQueryKey(workspaceId, taskId);
 
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getTaskWorkspacesWorkspaceIdTasksTaskIdGet>>
+  > = ({ signal }) =>
+    getTaskWorkspacesWorkspaceIdTasksTaskIdGet(
+      workspaceId,
+      taskId,
+      requestOptions,
+      signal,
+    );
 
-    const queryFn: QueryFunction<Awaited<ReturnType<typeof getTaskWorkspacesWorkspaceIdTasksTaskIdGet>>> = ({ signal }) => getTaskWorkspacesWorkspaceIdTasksTaskIdGet(workspaceId,taskId, { signal, ...requestOptions });
+  return {
+    queryKey,
+    queryFn,
+    enabled:
+      workspaceId !== null &&
+      workspaceId !== undefined &&
+      taskId !== null &&
+      taskId !== undefined,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof getTaskWorkspacesWorkspaceIdTasksTaskIdGet>>,
+    TError,
+    TData
+  > & { queryKey: DataTag<QueryKey, TData, TError> };
+};
 
+export type GetTaskWorkspacesWorkspaceIdTasksTaskIdGetQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getTaskWorkspacesWorkspaceIdTasksTaskIdGet>>
+>;
+export type GetTaskWorkspacesWorkspaceIdTasksTaskIdGetQueryError =
+  HTTPValidationError;
 
-
-
-
-   return  { queryKey, queryFn, enabled: workspaceId !== null && workspaceId !== undefined && taskId !== null && taskId !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getTaskWorkspacesWorkspaceIdTasksTaskIdGet>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
-}
-
-export type GetTaskWorkspacesWorkspaceIdTasksTaskIdGetQueryResult = NonNullable<Awaited<ReturnType<typeof getTaskWorkspacesWorkspaceIdTasksTaskIdGet>>>
-export type GetTaskWorkspacesWorkspaceIdTasksTaskIdGetQueryError = HTTPValidationError
-
-
-export function useGetTaskWorkspacesWorkspaceIdTasksTaskIdGet<TData = Awaited<ReturnType<typeof getTaskWorkspacesWorkspaceIdTasksTaskIdGet>>, TError = HTTPValidationError>(
- workspaceId: string,
-    taskId: string, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof getTaskWorkspacesWorkspaceIdTasksTaskIdGet>>, TError, TData>> & Pick<
+export function useGetTaskWorkspacesWorkspaceIdTasksTaskIdGet<
+  TData = Awaited<
+    ReturnType<typeof getTaskWorkspacesWorkspaceIdTasksTaskIdGet>
+  >,
+  TError = HTTPValidationError,
+>(
+  workspaceId: string,
+  taskId: string,
+  options: {
+    query: Partial<
+      UseQueryOptions<
+        Awaited<ReturnType<typeof getTaskWorkspacesWorkspaceIdTasksTaskIdGet>>,
+        TError,
+        TData
+      >
+    > &
+      Pick<
         DefinedInitialDataOptions<
-          Awaited<ReturnType<typeof getTaskWorkspacesWorkspaceIdTasksTaskIdGet>>,
+          Awaited<
+            ReturnType<typeof getTaskWorkspacesWorkspaceIdTasksTaskIdGet>
+          >,
           TError,
           Awaited<ReturnType<typeof getTaskWorkspacesWorkspaceIdTasksTaskIdGet>>
-        > , 'initialData'
-      >, request?: SecondParameter<typeof customInstance>}
- , queryClient?: QueryClient
-  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-export function useGetTaskWorkspacesWorkspaceIdTasksTaskIdGet<TData = Awaited<ReturnType<typeof getTaskWorkspacesWorkspaceIdTasksTaskIdGet>>, TError = HTTPValidationError>(
- workspaceId: string,
-    taskId: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getTaskWorkspacesWorkspaceIdTasksTaskIdGet>>, TError, TData>> & Pick<
+        >,
+        "initialData"
+      >;
+    request?: SecondParameter<typeof customInstance>;
+  },
+  queryClient?: QueryClient,
+): DefinedUseQueryResult<TData, TError> & {
+  queryKey: DataTag<QueryKey, TData, TError>;
+};
+export function useGetTaskWorkspacesWorkspaceIdTasksTaskIdGet<
+  TData = Awaited<
+    ReturnType<typeof getTaskWorkspacesWorkspaceIdTasksTaskIdGet>
+  >,
+  TError = HTTPValidationError,
+>(
+  workspaceId: string,
+  taskId: string,
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<ReturnType<typeof getTaskWorkspacesWorkspaceIdTasksTaskIdGet>>,
+        TError,
+        TData
+      >
+    > &
+      Pick<
         UndefinedInitialDataOptions<
-          Awaited<ReturnType<typeof getTaskWorkspacesWorkspaceIdTasksTaskIdGet>>,
+          Awaited<
+            ReturnType<typeof getTaskWorkspacesWorkspaceIdTasksTaskIdGet>
+          >,
           TError,
           Awaited<ReturnType<typeof getTaskWorkspacesWorkspaceIdTasksTaskIdGet>>
-        > , 'initialData'
-      >, request?: SecondParameter<typeof customInstance>}
- , queryClient?: QueryClient
-  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-export function useGetTaskWorkspacesWorkspaceIdTasksTaskIdGet<TData = Awaited<ReturnType<typeof getTaskWorkspacesWorkspaceIdTasksTaskIdGet>>, TError = HTTPValidationError>(
- workspaceId: string,
-    taskId: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getTaskWorkspacesWorkspaceIdTasksTaskIdGet>>, TError, TData>>, request?: SecondParameter<typeof customInstance>}
- , queryClient?: QueryClient
-  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+        >,
+        "initialData"
+      >;
+    request?: SecondParameter<typeof customInstance>;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & {
+  queryKey: DataTag<QueryKey, TData, TError>;
+};
+export function useGetTaskWorkspacesWorkspaceIdTasksTaskIdGet<
+  TData = Awaited<
+    ReturnType<typeof getTaskWorkspacesWorkspaceIdTasksTaskIdGet>
+  >,
+  TError = HTTPValidationError,
+>(
+  workspaceId: string,
+  taskId: string,
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<ReturnType<typeof getTaskWorkspacesWorkspaceIdTasksTaskIdGet>>,
+        TError,
+        TData
+      >
+    >;
+    request?: SecondParameter<typeof customInstance>;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & {
+  queryKey: DataTag<QueryKey, TData, TError>;
+};
 /**
  * @summary Get Task
  */
 
-export function useGetTaskWorkspacesWorkspaceIdTasksTaskIdGet<TData = Awaited<ReturnType<typeof getTaskWorkspacesWorkspaceIdTasksTaskIdGet>>, TError = HTTPValidationError>(
- workspaceId: string,
-    taskId: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getTaskWorkspacesWorkspaceIdTasksTaskIdGet>>, TError, TData>>, request?: SecondParameter<typeof customInstance>}
- , queryClient?: QueryClient
- ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+export function useGetTaskWorkspacesWorkspaceIdTasksTaskIdGet<
+  TData = Awaited<
+    ReturnType<typeof getTaskWorkspacesWorkspaceIdTasksTaskIdGet>
+  >,
+  TError = HTTPValidationError,
+>(
+  workspaceId: string,
+  taskId: string,
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<ReturnType<typeof getTaskWorkspacesWorkspaceIdTasksTaskIdGet>>,
+        TError,
+        TData
+      >
+    >;
+    request?: SecondParameter<typeof customInstance>;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & {
+  queryKey: DataTag<QueryKey, TData, TError>;
+} {
+  const queryOptions =
+    getGetTaskWorkspacesWorkspaceIdTasksTaskIdGetQueryOptions(
+      workspaceId,
+      taskId,
+      options,
+    );
 
-  const queryOptions = getGetTaskWorkspacesWorkspaceIdTasksTaskIdGetQueryOptions(workspaceId,taskId,options)
-
-  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+  const query = useQuery(queryOptions, queryClient) as UseQueryResult<
+    TData,
+    TError
+  > & { queryKey: DataTag<QueryKey, TData, TError> };
 
   return withQueryKey(query, queryOptions.queryKey);
 }
+
+/**
+ * @summary Get Task
+ */
+export const invalidateGetTaskWorkspacesWorkspaceIdTasksTaskIdGet = async (
+  queryClient: QueryClient,
+  workspaceId: string,
+  taskId: string,
+  options?: InvalidateOptions,
+): Promise<QueryClient> => {
+  await queryClient.invalidateQueries(
+    {
+      queryKey: getGetTaskWorkspacesWorkspaceIdTasksTaskIdGetQueryKey(
+        workspaceId,
+        taskId,
+      ),
+    },
+    options,
+  );
+
+  return queryClient;
+};
+
+/**
+ * @summary Get Task
+ */
+export const useSetGetTaskWorkspacesWorkspaceIdTasksTaskIdGetQueryData = () => {
+  const queryClient = useQueryClient();
+  return (
+    workspaceId: string,
+    taskId: string,
+    updater:
+      | Awaited<ReturnType<typeof getTaskWorkspacesWorkspaceIdTasksTaskIdGet>>
+      | undefined
+      | ((
+          old:
+            | Awaited<
+                ReturnType<typeof getTaskWorkspacesWorkspaceIdTasksTaskIdGet>
+              >
+            | undefined,
+        ) =>
+          | Awaited<
+              ReturnType<typeof getTaskWorkspacesWorkspaceIdTasksTaskIdGet>
+            >
+          | undefined),
+  ) => {
+    queryClient.setQueriesData<
+      Awaited<ReturnType<typeof getTaskWorkspacesWorkspaceIdTasksTaskIdGet>>
+    >(
+      {
+        queryKey: getGetTaskWorkspacesWorkspaceIdTasksTaskIdGetQueryKey(
+          workspaceId,
+          taskId,
+        ),
+      },
+      updater,
+    );
+  };
+};
+
+/**
+ * @summary Get Task
+ */
+export const useGetGetTaskWorkspacesWorkspaceIdTasksTaskIdGetQueryData = () => {
+  const queryClient = useQueryClient();
+  return (workspaceId: string, taskId: string) =>
+    queryClient.getQueryData<
+      Awaited<ReturnType<typeof getTaskWorkspacesWorkspaceIdTasksTaskIdGet>>
+    >(
+      getGetTaskWorkspacesWorkspaceIdTasksTaskIdGetQueryKey(
+        workspaceId,
+        taskId,
+      ),
+    );
+};

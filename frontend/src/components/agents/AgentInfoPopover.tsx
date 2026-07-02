@@ -5,7 +5,7 @@ import { useState, useEffect, useRef } from 'react'
 import { format } from 'date-fns'
 import { Badge } from '@/components/ui/Badge'
 import { IconInfo, IconCopy, IconCheck } from '@/lib/icons'
-import type { AgentResponse } from '@/api/generated/fastAPI.schemas'
+import type { AgentResponse } from '@/api/generated/model'
 
 interface AgentInfoPopoverProps {
   agent: AgentResponse

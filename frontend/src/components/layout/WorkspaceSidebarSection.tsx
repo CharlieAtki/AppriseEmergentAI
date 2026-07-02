@@ -20,7 +20,7 @@ export function WorkspaceSidebarSection({ orgId }: WorkspaceSidebarSectionProps)
   // FAVOURITES STUB: When implemented, favourited workspace IDs will be read from a
   // Zustand store persisted to localStorage. Favourited workspaces render first with a
   // visual separator before the rest. See stores/workspaceFavourites.ts (to be created).
-  const workspaces = data?.data ?? []
+  const workspaces = data ?? []
 
   const currentSegment = (() => {
     const { workspaceId } = params
