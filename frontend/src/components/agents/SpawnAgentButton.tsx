@@ -1,7 +1,7 @@
 'use client'
 
 import { motion } from 'framer-motion'
-import { IconAdd } from '@/lib/icons'
+import { IconAgent } from '@/lib/icons'
 
 interface SpawnAgentButtonProps {
   onClick: () => void
@@ -16,9 +16,9 @@ export function SpawnAgentButton({ onClick }: SpawnAgentButtonProps) {
       whileHover={{ scale: 1.04, transition: { type: 'spring', damping: 30, stiffness: 400 } }}
       whileTap={{ scale: 0.97 }}
       transition={{ delay: 0.3, duration: 0.25, ease: [0.4, 0, 0.2, 1] }}
-      className="flex items-center gap-2 rounded-lg bg-brand-primary px-4 py-2 text-body font-medium text-background shadow-lg transition-colors hover:bg-brand-hover"
+      className="spawn-agent-btn flex items-center gap-2 rounded-lg bg-brand-primary px-4 py-2 text-body font-medium text-background transition-colors hover:bg-brand-hover"
     >
-      <IconAdd size={16} />
+      <IconAgent size={16} />
       Spawn agent
     </motion.button>
   )

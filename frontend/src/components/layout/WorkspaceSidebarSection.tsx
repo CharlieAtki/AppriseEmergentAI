@@ -2,7 +2,7 @@
 
 import { Plus } from 'lucide-react'
 import Link from 'next/link'
-import { useParams } from 'next/navigation'
+import { useParams, usePathname } from 'next/navigation'
 import { useState } from 'react'
 import { useListWorkspacesWorkspacesGet } from '@/api/generated/workspaces/workspaces'
 import { WorkspaceAvatar } from '@/components/workspaces/WorkspaceAvatar'
@@ -15,11 +15,20 @@ interface WorkspaceSidebarSectionProps {
 export function WorkspaceSidebarSection({ orgId }: WorkspaceSidebarSectionProps) {
   const [dialogOpen, setDialogOpen] = useState(false)
   const params = useParams<{ workspaceId?: string }>()
+  const pathname = usePathname()
   const { data } = useListWorkspacesWorkspacesGet()
   // FAVOURITES STUB: When implemented, favourited workspace IDs will be read from a
   // Zustand store persisted to localStorage. Favourited workspaces render first with a
   // visual separator before the rest. See stores/workspaceFavourites.ts (to be created).
   const workspaces = data?.data ?? []
+
+  const currentSegment = (() => {
+    const { workspaceId } = params
+    if (!workspaceId) return null
+    const base = `/orgs/${orgId}/workspaces/${workspaceId}`
+    const rest = pathname.startsWith(base) ? pathname.slice(base.length) : ''
+    return rest.replace(/^\//, '').split('/')[0] || null
+  })()
 
   return (
     <>
@@ -34,11 +43,11 @@ export function WorkspaceSidebarSection({ orgId }: WorkspaceSidebarSectionProps)
             return (
               <li key={ws.id}>
                 <Link
-                  href={`/orgs/${orgId}/workspaces/${ws.id}`}
-                  className={`flex items-center gap-2 rounded-md px-2 py-1.5 text-body transition-colors ${
+                  href={`/orgs/${orgId}/workspaces/${ws.id}${currentSegment ? `/${currentSegment}` : ''}`}
+                  className={`flex items-center gap-2 py-1.5 text-body transition-colors ${
                     isActive
-                      ? 'bg-brand-primary/10 font-medium text-brand-primary'
-                      : 'text-secondary hover:bg-elevated hover:text-foreground'
+                      ? 'rounded-r-md border-l-2 border-brand-primary bg-brand-primary/10 pl-[6px] pr-2 font-medium text-brand-primary'
+                      : 'rounded-md px-2 text-secondary hover:bg-elevated hover:text-foreground'
                   }`}
                 >
                   <WorkspaceAvatar name={ws.name} size="sm" />

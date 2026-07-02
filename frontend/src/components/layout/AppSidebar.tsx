@@ -121,12 +121,12 @@ export function AppSidebar({ orgId }: AppSidebarProps) {
                   : null
 
                 const cls = [
-                  'flex w-full items-center gap-3 rounded-md px-3 py-2 text-body transition-colors',
+                  'flex w-full items-center gap-3 py-2 text-body transition-colors',
                   active
-                    ? 'bg-brand-primary/10 font-medium text-brand-primary'
+                    ? 'rounded-r-md border-l-2 border-brand-primary bg-brand-primary/10 pl-[10px] pr-3 font-medium text-brand-primary'
                     : disabled || !href
-                      ? 'cursor-not-allowed opacity-50 text-muted'
-                      : 'text-secondary hover:bg-elevated hover:text-foreground',
+                      ? 'cursor-not-allowed rounded-md px-3 opacity-50 text-muted'
+                      : 'rounded-md px-3 text-secondary hover:bg-elevated hover:text-foreground',
                 ].join(' ')
 
                 const inner = (
