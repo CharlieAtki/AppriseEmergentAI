@@ -6,10 +6,11 @@
  */
 import { z as zod } from "zod";
 
-export const createApiKeyRequestScopesDefault = [`tasks:read`, `tasks:write`];
 export const CreateApiKeyRequest = zod.object({
   name: zod.string(),
-  scopes: zod.array(zod.string()).default(createApiKeyRequestScopesDefault),
+  scopes: zod
+    .array(zod.enum(["tasks:read", "tasks:write"]))
+    .default([`tasks:read`, `tasks:write`]),
   expires_at: zod
     .union([zod.iso.datetime({ offset: true }), zod.null()])
     .optional(),

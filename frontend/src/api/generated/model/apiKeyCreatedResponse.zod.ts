@@ -11,7 +11,7 @@ export const ApiKeyCreatedResponse = zod.object({
   key: zod.string(),
   key_prefix: zod.string(),
   name: zod.string(),
-  scopes: zod.array(zod.string()),
+  scopes: zod.array(zod.enum(["tasks:read", "tasks:write"])),
 });
 
 export type ApiKeyCreatedResponse = zod.input<typeof ApiKeyCreatedResponse>;

@@ -11,7 +11,7 @@ export const WorkspaceResponse = zod.object({
   id: zod.uuid(),
   organisation_id: zod.uuid(),
   name: zod.string(),
-  status: zod.string(),
+  status: zod.enum(["active", "paused", "archived"]),
   result_webhook_url: zod.union([zod.string(), zod.null()]),
   created_at: zod.union([zod.iso.datetime({ offset: true }), zod.null()]),
   agent_count: zod.number().default(workspaceResponseAgentCountDefault),

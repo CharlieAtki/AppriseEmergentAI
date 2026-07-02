@@ -444,6 +444,41 @@ bun run tsc --noEmit   # type errors = broken contracts
 
 Generated files in `src/api/generated/` are committed to git. CI runs `tsc --noEmit` without a live API server — a schema drift that is not regenerated blocks the PR.
 
+### Types and Zod schemas — how the generated layer works
+
+Orval generates two things per model type:
+
+- `model/agentResponse.ts` — TypeScript interface (compile-time only, not exported from the barrel)
+- `model/agentResponse.zod.ts` — Zod schema that is both a runtime validator and the TypeScript type source
+
+`model/index.ts` exports **only** from `.zod.ts` files. This means every import from `@/api/generated/model` gives you a Zod schema (a runtime value), not a bare TypeScript interface.
+
+**Rules that must not regress:**
+
+```ts
+// correct — flat response, type comes from the barrel (Zod source)
+import type { AgentResponse } from '@/api/generated/model'
+const agents = data ?? []           // data is AgentResponse[] directly
+
+// wrong — old wrapper shape no longer exists
+const agents = data?.data ?? []     // data is not { data: AgentResponse[] }
+const ok = response.status === 200  // HTTP status is not on the response object
+```
+
+Sub-types that are inlined into parent schemas (`AgentResponseSkills`, `UpdateWorkspaceRequestStatus`, etc.) have no `.zod.ts` file and are not in the barrel. Import them directly from their `.ts` file:
+
+```ts
+// correct — not in barrel, import the specific file
+import { UpdateWorkspaceRequestStatus } from '@/api/generated/model/updateWorkspaceRequestStatus'
+
+// wrong — not exported from the barrel index
+import { UpdateWorkspaceRequestStatus } from '@/api/generated/model'
+```
+
+Every `customInstance` call in the generated hooks passes the Zod schema as a third argument. `client.ts` calls `schema.parse(res.data)` at runtime — if the backend sends a shape that doesn't match, it throws immediately at the HTTP boundary, not deep in the UI.
+
+`httpClient: 'axios'` in `orval.config.ts` means generated hooks receive flat response types. If you ever see `Argument of type '{ url: string, method: string }' is not assignable to parameter of type 'string'` after regenerating, it means the config changed — do not change `customInstance` to accept a URL string.
+
 ### Icons
 
 Lucide React only. No other icon library. No inline SVGs for UI icons.

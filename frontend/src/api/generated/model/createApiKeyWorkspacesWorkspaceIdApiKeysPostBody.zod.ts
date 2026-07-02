@@ -6,15 +6,11 @@
  */
 import { z as zod } from "zod";
 
-export const createApiKeyWorkspacesWorkspaceIdApiKeysPostBodyScopesDefault = [
-  `tasks:read`,
-  `tasks:write`,
-];
 export const CreateApiKeyWorkspacesWorkspaceIdApiKeysPostBody = zod.object({
   name: zod.string(),
   scopes: zod
-    .array(zod.string())
-    .default(createApiKeyWorkspacesWorkspaceIdApiKeysPostBodyScopesDefault),
+    .array(zod.enum(["tasks:read", "tasks:write"]))
+    .default([`tasks:read`, `tasks:write`]),
   expires_at: zod
     .union([zod.iso.datetime({ offset: true }), zod.null()])
     .optional(),

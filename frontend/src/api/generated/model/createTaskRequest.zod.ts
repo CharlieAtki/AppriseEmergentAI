@@ -12,7 +12,9 @@ export const CreateTaskRequest = zod.object({
   title: zod.string(),
   description: zod.union([zod.string(), zod.null()]).optional(),
   task_type: zod.union([zod.string(), zod.null()]).optional(),
-  priority: zod.union([zod.string(), zod.null()]).optional(),
+  priority: zod
+    .union([zod.enum(["low", "normal", "high", "critical"]), zod.null()])
+    .optional(),
   deadline_at: zod
     .union([zod.iso.datetime({ offset: true }), zod.null()])
     .optional(),

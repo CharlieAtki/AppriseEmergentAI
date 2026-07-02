@@ -2,6 +2,7 @@ from core.models.agents import Agent
 from core.models.artifacts import Artifact, ArtifactContribution, ArtifactOperation
 from core.models.auth import ApiKey
 from core.models.base import Base, CreatedAtMixin, TimestampMixin
+from core.models.enums import AgentStatus, TaskPriority, TaskStatus, WorkspaceStatus
 from core.models.intelligence import Model, WorkspaceModelRouting
 from core.models.observability import (
     EmergenceEvent,
@@ -16,6 +17,7 @@ from core.models.tools import Tool, WorkspaceTool
 
 __all__ = [
     "Agent",
+    "AgentStatus",
     "ApiKey",
     "Artifact",
     "ArtifactContribution",
@@ -31,6 +33,8 @@ __all__ = [
     "SkillSnapshot",
     "Task",
     "TaskExecution",
+    "TaskPriority",
+    "TaskStatus",
     "TimestampMixin",
     "Tool",
     "User",
@@ -38,5 +42,6 @@ __all__ = [
     "Workspace",
     "WorkspaceMetricsSnapshot",
     "WorkspaceModelRouting",
+    "WorkspaceStatus",
     "WorkspaceTool",
 ]

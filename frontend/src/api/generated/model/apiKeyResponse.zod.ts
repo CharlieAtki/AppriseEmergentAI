@@ -10,7 +10,10 @@ export const ApiKeyResponse = zod.object({
   id: zod.uuid(),
   key_prefix: zod.string(),
   name: zod.string(),
-  scopes: zod.union([zod.array(zod.string()), zod.null()]),
+  scopes: zod.union([
+    zod.array(zod.enum(["tasks:read", "tasks:write"])),
+    zod.null(),
+  ]),
   last_used_at: zod.union([zod.iso.datetime({ offset: true }), zod.null()]),
   expires_at: zod.union([zod.iso.datetime({ offset: true }), zod.null()]),
   revoked: zod.boolean(),

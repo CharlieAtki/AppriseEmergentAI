@@ -10,7 +10,7 @@ import {
   useUpdateWorkspaceWorkspacesWorkspaceIdPatch,
   getListWorkspacesWorkspacesGetQueryKey,
 } from '@/api/generated/workspaces/workspaces'
-import { UpdateWorkspaceRequestStatus } from '@/api/generated/model/updateWorkspaceRequestStatus'
+import { WorkspaceStatus } from '@/api/generated/model'
 import type { WorkspaceResponse } from '@/api/generated/model'
 
 interface EditWorkspaceDialogProps {
@@ -21,22 +21,14 @@ interface EditWorkspaceDialogProps {
 
 export function EditWorkspaceDialog({ workspace, open, onOpenChange }: EditWorkspaceDialogProps) {
   const [name, setName] = useState(workspace.name)
-  const [status, setStatus] = useState<typeof UpdateWorkspaceRequestStatus[keyof typeof UpdateWorkspaceRequestStatus]>(
-    workspace.status in UpdateWorkspaceRequestStatus
-      ? workspace.status as typeof UpdateWorkspaceRequestStatus[keyof typeof UpdateWorkspaceRequestStatus]
-      : UpdateWorkspaceRequestStatus.active
-  )
+  const [status, setStatus] = useState<WorkspaceStatus>(workspace.status)
   const queryClient = useQueryClient()
 
   // Sync local state from the (potentially cache-refreshed) workspace prop each time the dialog opens.
   useEffect(() => {
     if (open) {
       setName(workspace.name)
-      setStatus(
-        workspace.status in UpdateWorkspaceRequestStatus
-          ? workspace.status as typeof UpdateWorkspaceRequestStatus[keyof typeof UpdateWorkspaceRequestStatus]
-          : UpdateWorkspaceRequestStatus.active
-      )
+      setStatus(workspace.status)
     }
   }, [open, workspace.name, workspace.status])
 
@@ -88,10 +80,10 @@ export function EditWorkspaceDialog({ workspace, open, onOpenChange }: EditWorks
             <Form.Field name="status" className="space-y-1.5">
               <Form.Label className="text-label font-medium text-secondary">Status</Form.Label>
               {/* Hidden input so Radix Form sees the value — Select.Root manages visual state */}
-              <input type="hidden" name="status" value={status ?? UpdateWorkspaceRequestStatus.active} />
+              <input type="hidden" name="status" value={status} />
               <Select.Root
-                value={status ?? UpdateWorkspaceRequestStatus.active}
-                onValueChange={(v) => setStatus(v as typeof UpdateWorkspaceRequestStatus[keyof typeof UpdateWorkspaceRequestStatus])}
+                value={status}
+                onValueChange={(v) => setStatus(v as WorkspaceStatus)}
               >
                 <Select.Trigger className="flex w-full items-center justify-between rounded-lg border border-border bg-elevated px-3 py-2 text-body text-foreground transition-colors hover:border-brand-primary focus:border-brand-primary focus:outline-none focus:ring-1 focus:ring-brand-primary data-[placeholder]:text-muted">
                   <Select.Value />
@@ -107,7 +99,7 @@ export function EditWorkspaceDialog({ workspace, open, onOpenChange }: EditWorks
                     className="z-50 w-[var(--radix-select-trigger-width)] overflow-hidden rounded-lg border border-border bg-elevated shadow-xl"
                   >
                     <Select.Viewport className="p-1">
-                      {Object.values(UpdateWorkspaceRequestStatus).map((s) => (
+                      {WorkspaceStatus.options.map((s) => (
                         <Select.Item
                           key={s}
                           value={s}

@@ -4,7 +4,17 @@ import uuid
 from datetime import UTC, datetime
 from typing import Any
 
+from core.models.enums import TaskPriority, TaskStatus
 from pydantic import BaseModel, Field, field_validator
+
+__all__ = [
+    "CreateTaskRequest",
+    "TaskCreatedResponse",
+    "TaskOverrides",
+    "TaskPriority",
+    "TaskResponse",
+    "TaskStatus",
+]
 
 
 class TaskOverrides(BaseModel):
@@ -17,7 +27,7 @@ class CreateTaskRequest(BaseModel):
     title: str
     description: str | None = None
     task_type: str | None = None
-    priority: str | None = None
+    priority: TaskPriority | None = None
     deadline_at: datetime | None = None
     external_ref: str | None = None
     overrides: TaskOverrides | None = None
@@ -36,17 +46,10 @@ class CreateTaskRequest(BaseModel):
             raise ValueError("deadline_at must be in the future")
         return v
 
-    @field_validator("priority")
-    @classmethod
-    def priority_enum(cls, v: str | None) -> str | None:
-        if v is not None and v not in {"low", "normal", "high", "critical"}:
-            raise ValueError("priority must be low, normal, high, or critical")
-        return v
-
 
 class TaskCreatedResponse(BaseModel):
     task_id: uuid.UUID
-    status: str
+    status: TaskStatus
     workspace_id: uuid.UUID
 
 
@@ -56,11 +59,11 @@ class TaskResponse(BaseModel):
     id: uuid.UUID
     workspace_id: uuid.UUID
     organisation_id: uuid.UUID
-    status: str
+    status: TaskStatus
     title: str
     description: str | None
     task_type: str | None
-    priority: str | None
+    priority: TaskPriority | None
     deadline_at: datetime | None
     external_ref: str | None
     idempotency_key: str | None

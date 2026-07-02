@@ -2,14 +2,11 @@ from __future__ import annotations
 
 import uuid
 from datetime import datetime
-from enum import StrEnum
 
+from core.models.enums import AgentStatus
 from pydantic import BaseModel
 
-
-class AgentStatus(StrEnum):
-    active = "active"
-    inactive = "inactive"
+__all__ = ["AgentResponse", "AgentStatus", "CreateAgentRequest", "UpdateAgentRequest"]
 
 
 class CreateAgentRequest(BaseModel):

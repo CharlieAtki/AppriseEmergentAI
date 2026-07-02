@@ -32,7 +32,7 @@ Every tool choice in this stack accounts for all three phases. Nothing built for
 | Icons | Lucide React | latest |
 | Animation | Framer Motion | latest (Phase 2+, not yet installed) |
 | Data visualisation | TBD | — |
-| Graph / node visualisation | ReactFlow (`@xyflow/react`) | latest (Phase 2+, not yet installed) |
+| Graph / node visualisation | ReactFlow (`@xyflow/react`) | latest |
 | Code editor | Monaco Editor | latest (Phase 2+, not yet installed) |
 | Date utilities | date-fns | latest |
 
@@ -153,59 +153,76 @@ bun run tsc --noEmit # type-check without emitting
 
 **Why it was chosen**: FastAPI automatically generates an OpenAPI 3.0 specification from Pydantic models and exposes it at `/openapi.json`. Every endpoint, request shape, and response shape is formally described there. Orval reads that specification and generates:
 
-- TypeScript interfaces for every request and response type
-- TanStack Query hooks for every endpoint (`useGetWorkspacesIdAgents`, `usePostWorkspacesIdTasks`, and so on)
-- Zod validation schemas for every response type
+- Zod schemas for every named type in `src/api/generated/model/` (`.zod.ts` files). The barrel (`model/index.ts`) exports only from `.zod.ts` files — Zod schemas are the source of truth for types, not bare TypeScript interfaces.
+- TanStack Query hooks for every endpoint, with a Zod schema injected as a third argument to `customInstance` on every call.
+- Query key factories, invalidate helpers, `getQueryData`/`setQueryData` helpers.
 
-The FastAPI Pydantic models are the single source of truth for the entire type system. A backend schema change propagates to the frontend at the next `bun run orval`, surfacing as TypeScript errors at the call sites where the contract broke — before it reaches a browser.
+The FastAPI Pydantic models are the single source of truth for the entire type system. A backend schema change propagates to the frontend at the next `bun run orval`, surfacing as TypeScript errors at the call sites where the contract broke — before it reaches a browser. If the mismatch only appears at runtime, `schema.parse(res.data)` in `customInstance` throws at the HTTP boundary.
+
+**Named enums**: Pydantic `StrEnum` types (`AgentStatus`, `WorkspaceStatus`, `TaskStatus`, `TaskPriority`) generate named Zod enums in the barrel. Import them from `@/api/generated/model` and use `.options` to iterate values. Inline `Literal` fields do not get named schemas — use a `StrEnum` on the backend if the frontend needs to iterate the values.
+
+**Flat response types**: `httpClient: 'axios'` in the config means hooks return the data directly. The response is `AgentResponse`, not `{ data: AgentResponse, status: 200 }`. All `setQueryData`/`getQueryData` calls use the flat type — no `.data` unwrapping.
 
 **Configuration**:
 
 ```ts
-// orval.config.ts (root of the frontend directory)
-export default {
+// orval.config.ts
+import { defineConfig } from 'orval'
+
+export default defineConfig({
   apprise: {
-    input: {
-      target: 'http://localhost:8000/openapi.json',
-    },
+    input: { target: 'http://localhost:8000/openapi.json' },
     output: {
-      mode: 'tags-split',       // one generated file per FastAPI router tag
-      target: './src/api/generated',
+      mode: 'tags-split',
+      target: 'src/api/generated',
+      schemas: { type: 'zod', path: 'src/api/generated/model' },
       client: 'react-query',
+      httpClient: 'axios',
+      formatter: 'prettier',
       override: {
-        mutator: {
-          path: './src/api/client.ts',
-          name: 'customInstance',
+        mutator: { path: 'src/api/client.ts', name: 'customInstance' },
+        query: {
+          useInfinite: false,
+          signal: true,
+          useInvalidate: true,
+          useGetQueryData: true,
+          useSetQueryData: true,
         },
       },
     },
+    hooks: {
+      afterAllFilesWrite: {
+        command: 'node scripts/inject-zod-validation.mjs && bunx prettier --write src/api/generated',
+        injectGeneratedDirsAndFiles: false,
+      },
+    },
   },
-}
+})
 ```
 
-`mode: 'tags-split'` produces one file per FastAPI router tag (workspaces, agents, tasks, metrics). This keeps the generated directory navigable as the API surface grows across phases.
+`mode: 'tags-split'` produces one file per FastAPI router tag. `afterAllFilesWrite` runs the injection script automatically after every generation — no manual step.
 
-**The custom fetcher**: Orval routes every HTTP request through a single custom fetcher function (`customInstance`). This is the one place where the Axios instance is configured — base URL, request/response interceptors. Orval 8 calls mutators as `(url, fetchOptions)` where `fetchOptions` uses fetch-style `body`, not Axios-style `data`. The bridge handles the mapping.
+**The injection script** (`scripts/inject-zod-validation.mjs`) promotes `import type { Foo }` to value imports and injects the Zod schema as a third argument to every `customInstance<Foo>(...)` call. For array responses it wraps the schema: `z.array(AgentResponse)`. This is the correct pattern for Orval v8 with a custom mutator — the native `runtimeValidation: true` option does not work across config entries with a custom mutator.
 
-Clerk token injection is handled separately by `AxiosAuthSync` (a render-null component inside `Providers`) using the `useAuth().getToken()` hook, which registers an Axios interceptor tied to the active Clerk session.
+**The custom fetcher**: All HTTP goes through `customInstance`. This is the only place the Axios instance is configured — base URL, auth interceptors, error normalisation. Clerk token injection is handled by `AxiosAuthSync` (a render-null component in `Providers`) that registers an Axios interceptor tied to the active Clerk session.
 
 ```ts
 // src/api/client.ts
 import Axios, { type AxiosRequestConfig } from 'axios'
+import type { ZodType } from 'zod'
 
 export const AXIOS_INSTANCE = Axios.create({
   baseURL: process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8000',
 })
 
-// Orval 8 signature: (url: string, options?: RequestInit)
-export const customInstance = async <T>(url: string, options?: RequestInit): Promise<T> => {
-  const config: AxiosRequestConfig = { url }
-  if (options?.method !== undefined) config.method = options.method
-  if (options?.headers !== undefined) config.headers = options.headers as Record<string, string>
-  if (options?.body !== undefined) config.data = options.body
-  if (options?.signal !== undefined) config.signal = options.signal as AbortSignal
+export const customInstance = async <T>(
+  config: AxiosRequestConfig,
+  _options?: unknown,
+  schema?: ZodType,
+): Promise<T> => {
   const res = await AXIOS_INSTANCE.request<T>(config)
-  return res.data as T
+  const data = schema ? schema.parse(res.data) : res.data
+  return data as T
 }
 ```
 
@@ -352,7 +369,9 @@ Stores live in `src/stores/`, one file per domain. Keep stores small and domain-
 
 **Two distinct jobs in this codebase**:
 
-**Job 1 — REST types (via Orval)**: Orval generates TypeScript interfaces for every API request and response type. This provides compile-time safety — a backend schema change surfaces as a TypeScript error at every call site after `bun run orval`. Runtime Zod validation of REST responses is not currently enabled (would require adding `zod: true` to `orval.config.ts`).
+**Job 1 — REST response validation (via Orval)**: Orval generates Zod schemas for every named API type. The barrel (`model/index.ts`) exports only `.zod.ts` files — these are both the runtime validators and the TypeScript type source. Every generated hook passes the Zod schema to `customInstance` as a third argument; `customInstance` calls `schema.parse(res.data)` before returning. A shape mismatch throws at the HTTP boundary with a descriptive Zod error, not silently deep in the UI.
+
+Response types are flat — `AgentResponse` not `{ data: AgentResponse, status: 200 }`. Never unwrap `.data` from query results.
 
 **Job 2 — WebSocket event validation (manual)**: Orval does not cover the WebSocket protocol. Every event type published by the backend to the stream endpoint requires a manually written Zod schema. These live in `src/hooks/useWorkspaceStream.ts`.
 

@@ -8,7 +8,16 @@ import { z as zod } from "zod";
 
 export const TaskCreatedResponse = zod.object({
   task_id: zod.uuid(),
-  status: zod.string(),
+  status: zod.enum([
+    "pending",
+    "enriching",
+    "open",
+    "reserved",
+    "executing",
+    "completed",
+    "failed",
+    "expired",
+  ]),
   workspace_id: zod.uuid(),
 });
 
