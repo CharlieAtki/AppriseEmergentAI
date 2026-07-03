@@ -16,9 +16,11 @@ from core.intelligence.llm_router import LLMRouter
 from core.intelligence.registry import registry
 from core.intelligence.routing_config import resolve_routing
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.openapi.utils import get_openapi
 from redis.asyncio import Redis
 
+from api.config import api_settings
 from api.handlers.task_bridge import TaskCreatedRedisPublisher
 from api.middleware.auth import AuthMiddleware
 from api.routers import agents as agents_router
@@ -26,6 +28,7 @@ from api.routers import api_keys as api_keys_router
 from api.routers import tasks as tasks_router
 from api.routers import workspace_tools as workspace_tools_router
 from api.routers import workspaces as workspaces_router
+from api.routers.webhooks import router as webhooks_router
 
 
 @asynccontextmanager
@@ -80,7 +83,25 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
 
 
 app = FastAPI(lifespan=lifespan)
+
 app.add_middleware(AuthMiddleware)
+
+# CORSMiddleware is only registered when cors_origins is explicitly configured.
+# Local dev: set CORS_ORIGINS=http://localhost:3000 in backend/.env.
+# Production deployments that handle CORS at the reverse proxy / edge layer
+# (nginx, ALB, Cloudflare) should leave CORS_ORIGINS unset — the middleware
+# is not registered and the proxy handles preflight responses instead.
+# Starlette LIFO order: CORSMiddleware (added last) runs before AuthMiddleware.
+if api_settings.cors_origins:
+    if "*" in api_settings.cors_origins:
+        raise ValueError("CORS_ORIGINS cannot include '*' when credentials are allowed")
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=api_settings.cors_origins,
+        allow_credentials=True,
+        allow_methods=["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
+        allow_headers=["Authorization", "X-API-Key", "Content-Type"],
+    )
 
 
 def _custom_openapi() -> dict[str, Any]:
@@ -104,6 +125,11 @@ async def health() -> dict:
     return {"status": "ok"}
 
 
+app.include_router(
+    webhooks_router,
+    prefix="/webhooks",
+    tags=["webhooks"],
+)
 app.include_router(
     workspaces_router.router,
     prefix="/workspaces",

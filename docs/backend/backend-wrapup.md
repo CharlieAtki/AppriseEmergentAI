@@ -46,24 +46,12 @@ where the work lands, ordered roughly by impact.
 
 ### API
 
-#### 1. Clerk JWT middleware is wired but not activated
+#### ~~1. Clerk JWT middleware is wired but not activated~~
 
-`AuthMiddleware` has a full `validate_clerk_token` implementation — it does the DB lookup
-and maps Clerk string IDs (`clerk_user_id`, `clerk_org_id`) to internal UUIDs. The Bearer
-branch runs. But `app.state.clerk` is never assigned in the FastAPI lifespan, so every
-Bearer request hits `AttributeError` and returns 401. Machine clients using `X-API-Key`
-are unaffected.
-
-**What is needed:**
-
-```python
-# api/api/main.py — inside the lifespan async with block
-from clerk_backend_api import Clerk
-app.state.clerk = Clerk(secret_key=settings.clerk_secret_key)
-```
-
-Add `CLERK_SECRET_KEY` to both `config.py` (as a `str` field with no default) and `.env`.
-That is the entire change — the rest of the auth path already works.
+`app.state.clerk` is now set in the FastAPI lifespan. Bearer JWT auth resolves correctly
+for users whose `clerk_org_id` / `clerk_user_id` exist in the DB. For local dev, use
+`backend/scripts/seed_dev.py --clerk-user-id <id> --clerk-org-id <id>` to create the
+matching rows. Production requires the Clerk webhook handler (see API gap #11).
 
 ---
 
@@ -361,28 +349,16 @@ Registration goes in both `worker/startup.py` (the worker creates and updates ta
 
 ---
 
-#### 2. No tests
+#### ~~2. No tests~~
 
-Nothing in the event layer, coordination layer, or worker handlers is tested. This is
-the largest quality gap in the codebase. The `InMemoryBus` already exists as the test
-double for `RedisBus` — the infrastructure to write good tests is already there.
+Substantial test coverage now exists across `worker/tests/unit/` and `core/tests/unit/`.
+The originally highest-priority items are covered: rollup handler, bidding/scoring, agent
+credit, reflect pipeline, webhook delivery, task state machine, span, influence, and skills.
+An integration test (`test_event_bus_flow.py`) covers bus dispatch and handler isolation.
 
-Priority order:
-
-| Test file | What it covers |
-|-----------|----------------|
-| `test_bidding_handler.py` | Agent scoring, threshold filtering, reservation, `execute_task` enqueue, no-agents path |
-| `test_rollup_handler.py` | Sibling query, all-terminal trigger, partial failure, concurrent race guard, reflect job enqueue |
-| `test_event_bus.py` | `bind`, MRO routing, fire-and-forget, `drain_pending`, subscriber lifecycle |
-| `test_activity_loggers.py` | `TaskActivityLogger` publishes correct events; `AsyncMock` as publish callable |
-| `test_snapshots.py` | `from_domain` for flat fields, nested snapshots, nullable fields, tuple collections |
-| `test_stream_subscriber.py` | `_parse_stream_event` for each type, unknown type returns `None`, start/stop lifecycle |
-| `test_handlers.py` | `Retry` backoff, `Filtering` predicate, `Timeout` cancellation, `SyncToAsync` dispatch |
-| `test_social_memory_handler.py` | Peer query, fan-out, single peer failure does not block others |
-| `test_task_context.py` | `TaskContext.from_task()`, `MAX_DELEGATION_DEPTH`, depth guard in `execute_task` |
-
-`test_bidding_handler.py` and `test_rollup_handler.py` are highest priority — they cover
-the most complex stateful logic with the most edge cases.
+**Still missing:** `test_stream_subscriber.py`, `test_handlers.py` (composable wrappers),
+`test_activity_loggers.py`, `test_snapshots.py`, `test_social_memory_handler.py`,
+`test_task_context.py`. See `event-bus-gaps.md` for the full breakdown.
 
 ---
 
@@ -464,5 +440,5 @@ sampling agents whose social observations are recent. Non-issue at Phase 1 scale
 | `JobSpan` ContextVar audit | Worker | Low — needs code audit |
 | Stream event registry static | Worker | Low — consistency decision |
 | No audit log handler (needs table first) | Event bus | Medium |
-| No tests | Event bus | High — largest quality gap |
+| Tests — partial | Event bus | ⚠️ Partial — 13 files exist; stream subscriber, wrappers, loggers, snapshots still missing |
 | Memory gaps 1–7 | Memory | Deferred — Phase 2+ |

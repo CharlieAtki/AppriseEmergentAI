@@ -26,7 +26,7 @@ async def create_api_key(
         workspace_id=workspace.id,
         created_by_user_id=user_id,
         name=body.name,
-        scopes=body.scopes,
+        scopes=[str(s) for s in body.scopes],
         expires_at=body.expires_at,
     )
     key_data, raw_key = await service.create(cmd)

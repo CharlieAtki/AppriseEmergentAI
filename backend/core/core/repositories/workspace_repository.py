@@ -4,7 +4,7 @@ import uuid
 from collections.abc import Mapping
 from typing import Any
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.models.tenant import Workspace
@@ -57,6 +57,18 @@ class WorkspaceRepository:
             .order_by(Workspace.created_at.desc())
         )
         return list(result.scalars().all())
+
+    async def list_with_agent_counts(self, org_id: uuid.UUID) -> list[tuple[Workspace, int]]:
+        from core.models.agents import Agent  # local import — avoids circular at module level
+
+        result = await self._session.execute(
+            select(Workspace, func.count(Agent.id).label("agent_count"))
+            .outerjoin(Agent, Agent.workspace_id == Workspace.id)
+            .where(Workspace.organisation_id == org_id)
+            .group_by(Workspace.id)
+            .order_by(Workspace.created_at.desc())
+        )
+        return [(row[0], row[1]) for row in result.all()]
 
     async def save(self, ws: Workspace) -> None:
         """Re-stage after field mutations (update path). No flush — session commits on exit."""

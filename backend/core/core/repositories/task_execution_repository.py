@@ -120,6 +120,20 @@ class TaskExecutionRepository:
             )
         ).scalar()
 
+    async def has_active_for_agent(self, agent_id: uuid.UUID) -> bool:
+        """Check if agent has any non-terminal executions.
+
+        Returns True if there are any executing/failed/retry executions; False otherwise.
+        Used to guard agent deletion and prevent loss of active execution history.
+        """
+        result = await self._session.execute(
+            select(func.count(TaskExecution.id)).where(
+                TaskExecution.agent_id == agent_id,
+                TaskExecution.status.in_(["executing", "failed", "retry"]),
+            )
+        )
+        return (result.scalar() or 0) > 0
+
     async def save(self, execution: TaskExecution) -> None:
         """Stage execution for persistence. async for interface consistency —
         session.add() is not I/O. On detached objects this is a merge operation,

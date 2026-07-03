@@ -18,3 +18,6 @@ class ClerkConfig(BaseSettings):
     model_config = SettingsConfigDict(env_prefix="CLERK__")
 
     secret_key: SecretStr = SecretStr("")
+    # Svix signing secret for inbound webhook verification.
+    # Set via CLERK__WEBHOOK_SECRET (whsec_... value from Clerk dashboard).
+    webhook_secret: SecretStr = SecretStr("")

@@ -399,6 +399,102 @@ Default to writing no comments. Add one only when the **why** is non-obvious: a 
 
 ---
 
+## Frontend (`frontend/`)
+
+### State ownership
+
+Server state (anything from the API or WebSocket) → TanStack Query. UI-only state (open panels, view modes, ephemeral config) → Zustand. Never put API response data in Zustand.
+
+### Client boundary
+
+Place a single `'use client'` in `app/orgs/[orgId]/workspaces/[workspaceId]/layout.tsx`. Every component inside that subtree inherits the boundary — none need their own directive. Do not add `'use client'` to individual dashboard leaf components.
+
+### Cache invalidation — always use Orval-generated key factories
+
+```ts
+// correct — factory stays in sync with the generated hook
+queryClient.invalidateQueries({
+  queryKey: getListTasksWorkspacesWorkspaceIdTasksGetQueryKey(workspaceId),
+})
+
+// wrong — hand-written key that can drift
+queryClient.invalidateQueries({ queryKey: ['workspaces', workspaceId, 'tasks'] })
+```
+
+### `invalidateQueries` vs `setQueryData`
+
+Use `invalidateQueries` when the server has authoritative state (task completions, emergence events, agent skill updates — the event carries deltas, not full state). Use `setQueryData` only when the WebSocket event carries the complete new state and an immediate local update is preferable to a round trip.
+
+### Axios — never import directly in components
+
+All HTTP goes through Orval's custom fetcher (`src/api/client.ts`). Components never import from `axios`. The `AXIOS_INSTANCE` in `client.ts` is the only place to configure the base URL, auth interceptors, and error normalisation.
+
+### WebSocket event validation — Zod at the boundary
+
+Every new backend event type needs a Zod schema added to the `WorkspaceEvent` discriminated union in `frontend/src/hooks/workspace/useWorkspaceStream.ts`. All incoming messages go through `WorkspaceEvent.safeParse()` before touching the query cache — malformed events are silently discarded. The `discriminatedUnion` on `type` enables exhaustiveness checking: adding an event to the union without handling it in the switch is a compile error.### Orval regeneration workflow
+
+After any backend schema change:
+
+```bash
+bun run orval          # regenerate the API client
+bun run tsc --noEmit   # type errors = broken contracts
+```
+
+Generated files in `src/api/generated/` are committed to git. CI runs `tsc --noEmit` without a live API server — a schema drift that is not regenerated blocks the PR.
+
+### Types and Zod schemas — how the generated layer works
+
+Orval generates two things per model type:
+
+- `model/agentResponse.ts` — TypeScript interface (compile-time only, not exported from the barrel)
+- `model/agentResponse.zod.ts` — Zod schema that is both a runtime validator and the TypeScript type source
+
+`model/index.ts` exports **only** from `.zod.ts` files. This means every import from `@/api/generated/model` gives you a Zod schema (a runtime value), not a bare TypeScript interface.
+
+**Rules that must not regress:**
+
+```ts
+// correct — flat response, type comes from the barrel (Zod source)
+import type { AgentResponse } from '@/api/generated/model'
+const agents = data ?? []           // data is AgentResponse[] directly
+
+// wrong — old wrapper shape no longer exists
+const agents = data?.data ?? []     // data is not { data: AgentResponse[] }
+const ok = response.status === 200  // HTTP status is not on the response object
+```
+
+Sub-types that are inlined into parent schemas (`AgentResponseSkills`, `UpdateWorkspaceRequestStatus`, etc.) have no `.zod.ts` file and are not in the barrel. Import them directly from their `.ts` file:
+
+```ts
+// correct — not in barrel, import the specific file
+import { UpdateWorkspaceRequestStatus } from '@/api/generated/model/updateWorkspaceRequestStatus'
+
+// wrong — not exported from the barrel index
+import { UpdateWorkspaceRequestStatus } from '@/api/generated/model'
+```
+
+Every `customInstance` call in the generated hooks passes the Zod schema as a third argument. `client.ts` calls `schema.parse(res.data)` at runtime — if the backend sends a shape that doesn't match, it throws immediately at the HTTP boundary, not deep in the UI.
+
+`httpClient: 'axios'` in `orval.config.ts` means generated hooks receive flat response types. If you ever see `Argument of type '{ url: string, method: string }' is not assignable to parameter of type 'string'` after regenerating, it means the config changed — do not change `customInstance` to accept a URL string.
+
+### Icons
+
+Lucide React only. No other icon library. No inline SVGs for UI icons.
+
+### Framer Motion
+
+Use only for animations that are genuinely stateful or physics-based. Do not reach for it when a CSS transition suffices — it adds bundle weight.
+
+### Adding a new feature
+
+1. Check if the backend endpoint exists. If so, `bun run orval` — the hook is already generated.
+2. Server state → TanStack Query. UI-only state → Zustand.
+3. If the feature responds to live events, add the Zod schema to the `WorkspaceEvent` union first.
+4. Place the component inside `app/orgs/[orgId]/workspaces/[workspaceId]/` — it inherits the client boundary and WebSocket connection automatically.
+5. Run `bun run tsc --noEmit` before opening a PR.
+
+---
+
 ## Agent skills
 
 ### Issue tracker

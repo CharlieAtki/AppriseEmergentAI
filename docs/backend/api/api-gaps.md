@@ -327,22 +327,26 @@ customer-visible impact, purely an internal naming issue.
 
 ---
 
-### 11. No Clerk webhook handler — human JWT auth broken in production
+### ~~11. No Clerk webhook handler — human JWT auth broken in production~~
 
-**Gap:** `validate_clerk_token` looks up `clerk_org_id` / `clerk_user_id` in the `organisations`
-and `users` tables, but nothing ever creates those rows. There is no `POST /webhooks/clerk`
-endpoint to receive Clerk lifecycle events. In production, every Bearer JWT request returns 401
-because the DB is empty.
+**Gap:** `validate_clerk_token` looked up `clerk_org_id` / `clerk_user_id` in the `organisations`
+and `users` tables, but nothing ever created those rows. Every Bearer JWT request returned 401
+in production because the DB was empty.
 
-**Workaround:** `backend/scripts/seed_dev.py` inserts fake rows directly. Acceptable locally;
-breaks in production.
-
-**What is needed:**
-- `api/routers/webhooks.py` — `POST /webhooks/clerk`, exempt from `AuthMiddleware`.
-- Svix signature verification using `CLERK__WEBHOOK_SECRET`.
-- Handlers for: `organization.created`, `user.created`, `organizationMembership.created`,
-  `organization.deleted`, `user.deleted`.
-- `svix` added to `api/pyproject.toml`.
+**What was done:**
+- `api/routers/webhooks/clerk.py` — `POST /webhooks/clerk`, exempt from `AuthMiddleware` via
+  `EXEMPT_PREFIXES = {"/webhooks"}`. Svix HMAC signature verified via `_verify_svix` dependency.
+- `api/routers/webhooks/__init__.py` — aggregates webhook routers; registered at `/webhooks` in `main.py`.
+- `api/services/clerk_webhook_service.py` — `ClerkWebhookService.handle()` dispatches on event type.
+  Handles: `organization.created/deleted`, `user.created/deleted`, `organizationMembership.created/deleted`.
+  Unknown event types silently return 200 (prevents Svix retry loops).
+- `core/repositories/org_repository.py` — `upsert()`, `delete_by_external_id()`, `upsert_member()`,
+  `delete_member()` added. All writes use PostgreSQL `INSERT ... ON CONFLICT DO UPDATE` for idempotency.
+- `core/repositories/user_repository.py` — `upsert()`, `delete_by_external_id()` added.
+- `core/config/vendors/clerk.py` — `webhook_secret: SecretStr` added (`CLERK__WEBHOOK_SECRET`).
+- `api/pyproject.toml` — `svix>=1.96.1` added.
+- `docker-compose.yml` — `CLERK__WEBHOOK_SECRET` passed through to api container.
+- See `docs/backend/api/clerk-identity-sync.md` for full design rationale.
 
 ---
 
@@ -411,10 +415,10 @@ disconnect (leaked subscriptions compound with workspace count).
 | Response schema gaps | ✅ Closed |
 | Idempotency key not enforced | ✅ Closed |
 | Insufficient task schema validation | ✅ Closed |
-| `overrides` field missing from `CreateTaskRequest` | ❌ Open — customers cannot bypass enrichment |
-| `idempotency_key` is a body field, not HTTP header | ❌ Open — misalignment with Notion spec and industry convention |
-| API key prefix format (`appr_` vs `apk_live_`) | ❌ Open — customer-facing, needs decision |
-| `artifact_uri` column name misleading | ❌ Open — low priority naming issue, no runtime bug |
+| `overrides` field missing from `CreateTaskRequest` | ✅ Closed — `TaskOverrides` + unified `enrich()` in core |
+| `idempotency_key` is a body field, not HTTP header | ✅ Closed — `Idempotency-Key` header wins; body field kept |
+| API key prefix format (`appr_` vs `apk_live_`) | ✅ Closed — full key is now `apk_live_{token}` |
+| `artifact_uri` column name misleading | ✅ Closed — renamed to `artifact`, migration 006 |
 | No Clerk webhook handler | ❌ Open — human JWT auth returns 401 in production; seed workaround for dev |
 | API key scope system has no role abstraction | ❌ Open — no Admin/Operator/Readonly roles; callers must know internal scope strings |
 | Enrichment classification accuracy | ❌ Open — coarse keyword rules cause silent mis-classification; LLM fallback never fires for high-confidence wrong matches |

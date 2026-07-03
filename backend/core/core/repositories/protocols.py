@@ -350,12 +350,12 @@ class ApiKeyRepositoryProtocol(Protocol):
 
 
 class OrganisationRepositoryProtocol(Protocol):
-    """Read-only Clerk identity lookup for Organisation."""
+    """Read-only identity lookup for Organisation."""
 
-    async def get_by_clerk_org_id(self, clerk_org_id: str) -> Organisation | None: ...
+    async def get_by_external_id(self, provider: str, external_id: str) -> Organisation | None: ...
 
 
 class UserRepositoryProtocol(Protocol):
-    """Read-only Clerk identity lookup for User."""
+    """Read-only identity lookup for User."""
 
-    async def get_by_clerk_user_id(self, clerk_user_id: str) -> User | None: ...
+    async def get_by_external_id(self, provider: str, external_id: str) -> User | None: ...

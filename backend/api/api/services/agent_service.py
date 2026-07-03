@@ -7,6 +7,7 @@ from datetime import datetime
 from typing import TYPE_CHECKING, Any
 
 from core.repositories.agent_repository import AgentRepository
+from core.repositories.task_execution_repository import TaskExecutionRepository
 
 if TYPE_CHECKING:
     from core.models.agents import Agent
@@ -60,8 +61,9 @@ class AgentData:
 class AgentService:
     """Agent lifecycle boundary — accepts Commands, returns AgentData; ORM never escapes."""
 
-    def __init__(self, repo: AgentRepository) -> None:
+    def __init__(self, repo: AgentRepository, exec_repo: TaskExecutionRepository) -> None:
         self._repo = repo
+        self._exec_repo = exec_repo
 
     async def create(self, cmd: CreateAgentCommand) -> AgentData:
         agent = await self._repo.create(
@@ -80,6 +82,15 @@ class AgentService:
     async def list(self, workspace_id: uuid.UUID) -> list[AgentData]:
         agents = await self._repo.list_all(workspace_id=workspace_id)
         return [AgentData.from_domain(a) for a in agents]
+
+    async def delete(self, agent_id: uuid.UUID, workspace_id: uuid.UUID) -> bool:
+        agent = await self._repo.get(agent_id, workspace_id)
+        if agent is None:
+            return False
+        if await self._exec_repo.has_active_for_agent(agent_id):
+            return False
+        await self._repo.delete(agent)
+        return True
 
     async def update(
         self,

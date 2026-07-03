@@ -15,6 +15,17 @@ from api.services.auth_service import validate_api_key, validate_clerk_token
 
 EXEMPT_PATHS = {"/health", "/docs", "/openapi.json", "/redoc"}
 
+# All routes under /webhooks use inbound HMAC verification (Svix) rather than
+# bearer/API-key credentials. AuthMiddleware is structurally not responsible
+# for them — each webhook router applies its own signature dependency.
+EXEMPT_PREFIXES = {"/webhooks"}
+
+# Requests that cannot carry credentials by design or HTTP specification are
+# passed through without authentication. OPTIONS preflights are the primary
+# case: the CORS spec forbids credentials on preflight requests, so there is
+# nothing to authenticate and rejecting them breaks the preflight handshake.
+EXEMPT_METHODS = frozenset({"OPTIONS"})
+
 
 class AuthMiddleware(BaseHTTPMiddleware):
     """Resolves caller identity and injects auth context into request.state.auth.
@@ -36,12 +47,22 @@ class AuthMiddleware(BaseHTTPMiddleware):
     app.state.clerk must be a Clerk SDK instance — set in the FastAPI lifespan.
     Any verification failure in either path returns 401; the error detail is
     intentionally generic to avoid leaking auth internals to callers.
+
+    BaseHTTPMiddleware safety: this middleware only ever returns JSONResponse
+    (non-streaming) or delegates via call_next. It never wraps a streaming
+    response, so the known Starlette BaseHTTPMiddleware streaming-response bug
+    does not apply here.
     """
 
     async def dispatch(
         self, request: Request, call_next: Callable[[Request], Awaitable[Response]]
     ) -> Response:
-        if request.url.path in EXEMPT_PATHS:
+        path = request.url.path
+        if (
+            path in EXEMPT_PATHS
+            or request.method in EXEMPT_METHODS
+            or any(path == p or path.startswith(p + "/") for p in EXEMPT_PREFIXES)
+        ):
             return await call_next(request)
 
         if api_key := request.headers.get("X-API-Key"):

@@ -1,26 +1,275 @@
 @import "tailwindcss";
 
+/* ─── Tier 1: Primitive palette ─────────────────────────────────────────────
+   Raw values only. Components never reference these directly.              */
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  /* Brand — forest green scale (RGB source values preserved as reference)
+     900: rgb(27 49 38) | 800: rgb(25 65 50) | 600: rgb(74 106 79) | 400: rgb(128 161 118) */
+  --brand-forest-50:  oklch(96% 0.02 155);
+  --brand-forest-400: oklch(67.3% 0.072 138.5);
+  --brand-forest-600: oklch(49.1% 0.057 148.8);
+  --brand-forest-800: oklch(34.2% 0.053 166.1);
+  --brand-forest-850: oklch(33.7% 0.067 169.0); /* logo deep green — #004231, higher chroma than 800 */
+  --brand-forest-900: oklch(29.1% 0.035 161.4);
+  --brand-purple-500: oklch(70% 0.15 280);
+  --brand-amber-500:  oklch(72% 0.18 45);
+
+  /* Neutrals — 900/800 lifted so cards sit above the new gradient background */
+  --neutral-950: #0a0a0f;
+  --neutral-900: oklch(21% 0.016 158);
+  --neutral-800: oklch(24% 0.012 160);
+  --neutral-700: #26263a;
+  --neutral-200: #c8c8d8;
+  --neutral-100: #ededed;
+
+  /* Status */
+  --status-success: oklch(68% 0.18 145);
+  --status-warning: oklch(75% 0.18 70);
+  --status-error:   oklch(62% 0.22 25);
+  --status-info:    oklch(68% 0.16 230);
 }
 
+/* ─── Tier 1a: Background scene primitives ──────────────────────────────────
+   Raw gradient stops + sidebar surface. Components never reference these.  */
+:root {
+  --bg-page-base:   oklch(18% 0.008 160);       /* neutral dark base — whole page */
+  --bg-glow-corner: oklch(17% 0.090 152);       /* green glow source — top-left corner */
+  --bg-sidebar:     oklch(13% 0.055 152 / 88%); /* semi-transparent green — gradient shows through */
+  --glow-shadow:    oklch(20% 0.10 150);        /* shared glow source — body gradient + hover shadows */
+}
+
+/* ─── Tier 1b: Type scale primitives ────────────────────────────────────────
+   Raw size values only. Semantic step names live in Tier 2.               */
+:root {
+  --size-display: 2.25rem;   /* 36px */
+  --size-heading: 1.5rem;    /* 24px */
+  --size-title:   1rem;      /* 16px */
+  --size-body:    0.875rem;  /* 14px */
+  --size-label:   0.75rem;   /* 12px */
+  --size-caption: 0.6875rem; /* 11px */
+  --size-code:    0.8125rem; /* 13px */
+}
+
+/* ─── Tier 2: Semantic tokens ────────────────────────────────────────────────
+   These are what components reference. When the brand pack lands,
+   update the right-hand values here and nothing else changes.             */
+:root {
+  --color-bg-base:        var(--neutral-950);
+  --color-bg-surface:     var(--neutral-900);
+  --color-bg-elevated:    var(--neutral-800);
+  --color-bg-hover:       var(--neutral-700);
+
+  --color-text-primary:   var(--neutral-100);
+  --color-text-secondary: var(--neutral-200);
+  --color-text-muted:     oklch(55% 0.02 250);
+
+  --border-default:       var(--neutral-700);
+  --border-subtle:        var(--neutral-800);
+
+  --color-brand:          var(--brand-forest-600);
+  --color-brand-hover:    var(--brand-forest-800);
+  --color-accent:         var(--brand-purple-500);
+  --color-highlight:      var(--brand-amber-500);
+
+  --color-status-success: var(--status-success);
+  --color-status-warning: var(--status-warning);
+  --color-status-error:   var(--status-error);
+  --color-status-info:    var(--status-info);
+
+  --color-bg-sidebar:     var(--bg-sidebar);
+}
+
+/* ─── Tier 3: Tailwind theme mapping ─────────────────────────────────────────
+   Maps semantic tokens → Tailwind utilities.
+   bg-surface, text-muted, border-border, text-brand-primary, etc.        */
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
+  --color-background:      var(--color-bg-base);
+  --color-surface:         var(--color-bg-surface);
+  --color-elevated:        var(--color-bg-elevated);
+  --color-hover:           var(--color-bg-hover);
+  --color-foreground:      var(--color-text-primary);
+  --color-secondary:       var(--color-text-secondary);
+  --color-muted:           var(--color-text-muted);
+  --color-border:          var(--border-default);
+  --color-border-subtle:   var(--border-subtle);
+  --color-brand-primary:   var(--color-brand);
+  --color-brand-hover:     var(--color-brand-hover);
+  --color-brand-accent:    var(--color-accent);
+  --color-brand-highlight: var(--color-highlight);
+  --color-success:         var(--color-status-success);
+  --color-warning:         var(--color-status-warning);
+  --color-error:           var(--color-status-error);
+  --color-info:            var(--color-status-info);
+  --color-sidebar:         var(--color-bg-sidebar);
+  --font-sans: var(--font-manrope);
+  --font-display: var(--font-space-grotesk);
+  --font-mono: var(--font-jetbrains);
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+  /* Type scale utilities — pair with font-{weight} and tracking-{tight/wide} */
+  --text-display: var(--size-display);
+  --text-display--line-height: 1.2;
+  --text-heading: var(--size-heading);
+  --text-heading--line-height: 1.3;
+  --text-title: var(--size-title);
+  --text-title--line-height: 1.4;
+  --text-body: var(--size-body);
+  --text-body--line-height: 1.5;
+  --text-label: var(--size-label);
+  --text-label--line-height: 1.4;
+  --text-caption: var(--size-caption);
+  --text-caption--line-height: 1.4;
+  --text-code: var(--size-code);
+  --text-code--line-height: 1.6;
+
+  /* Architectural tracking — uppercase labels at 0.08em */
+  --tracking-architectural: 0.08em;
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background-color: var(--bg-page-base);
+  background-image: radial-gradient(
+    ellipse 85% 85% at 0% 0%,
+    var(--glow-shadow) 0%,
+    oklch(20% 0.10 150 / 0%) 100%
+  );
+  background-attachment: fixed;
+  color: var(--color-text-primary);
+  isolation: isolate;
+}
+
+h1, h2, h3, h4, h5, h6 {
+  font-family: var(--font-space-grotesk);
+}
+
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background-image: url('/crack-pattern.svg');
+  background-size: 200px 200px;
+  background-repeat: repeat;
+  background-attachment: fixed;
+  opacity: 0.06;
+  pointer-events: none;
+  z-index: -1;
+}
+
+/* ─── Tier 1c: Motion primitives ────────────────────────────────────────────
+   CSS transitions only — Framer Motion uses src/lib/motion.ts instead.   */
+:root {
+  --duration-fast:   100ms;
+  --duration-base:   150ms;
+  --duration-slow:   250ms;
+  --ease-standard:   cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* ─── Spacing conventions (raw Tailwind — no tokens until density mode needed)
+   Component padding : p-4 (16px)
+   Section gaps      : gap-6 (24px)
+   Inline gaps       : gap-2 / gap-3 (8–12px)
+   Page gutters      : px-6 (24px)                                          */
+
+/* ─── Sidebar surface texture ────────────────────────────────────────────────
+   Augments the bg-sidebar Tailwind utility with the crack texture at 4%.
+   Same isolation + z-index pattern as body::before.                        */
+.bg-sidebar {
+  position: relative;
+  isolation: isolate;
+}
+
+.bg-sidebar::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-image: url('/crack-pattern.svg');
+  background-size: 200px 200px;
+  background-repeat: repeat;
+  opacity: 0.09;
+  pointer-events: none;
+  z-index: -1;
+}
+
+/* ─── Workspace card hover glow ─────────────────────────────────────────── */
+.workspace-card {
+  transition: box-shadow var(--duration-slow) var(--ease-standard),
+              border-color var(--duration-slow) var(--ease-standard);
+}
+
+.workspace-card:hover {
+  box-shadow: 0 0 0 1px var(--color-brand), 0 8px 24px oklch(from var(--glow-shadow) l c h / 0.4);
+  border-color: var(--color-brand);
+}
+
+
+/* ─── Dialog & Popover animations ───────────────────────────────────────── */
+/* Radix watches for animationend on Overlay/Content before unmounting.     */
+
+@keyframes dialog-overlay-in  { from { opacity: 0 }           to { opacity: 1 } }
+@keyframes dialog-overlay-out { from { opacity: 1 }           to { opacity: 0 } }
+@keyframes dialog-content-in  { from { opacity: 0; scale: 0.96 } to { opacity: 1; scale: 1 } }
+@keyframes dialog-content-out { from { opacity: 1; scale: 1 }    to { opacity: 0; scale: 0.96 } }
+@keyframes popover-in  { from { opacity: 0; scale: 0.95; translate: 0 4px } to { opacity: 1; scale: 1; translate: 0 0 } }
+@keyframes popover-out { from { opacity: 1; scale: 1;    translate: 0 0 }    to { opacity: 0; scale: 0.95; translate: 0 4px } }
+
+.dialog-overlay[data-state="open"]   { animation: dialog-overlay-in  150ms ease; }
+.dialog-overlay[data-state="closed"] { animation: dialog-overlay-out 150ms ease; }
+
+.dialog-content[data-state="open"]   { animation: dialog-content-in  200ms cubic-bezier(0.16, 1, 0.3, 1); }
+.dialog-content[data-state="closed"] { animation: dialog-content-out 150ms ease; }
+
+.popover-content[data-state="open"]   { animation: popover-in  150ms cubic-bezier(0.16, 1, 0.3, 1); }
+.popover-content[data-state="closed"] { animation: popover-out 100ms ease; }
+
+/* ─── Radix Collapsible animations ──────────────────────────────────────── */
+@keyframes collapsible-down {
+  from { height: 0 }
+  to   { height: var(--radix-collapsible-content-height) }
+}
+@keyframes collapsible-up {
+  from { height: var(--radix-collapsible-content-height) }
+  to   { height: 0 }
+}
+
+.animate-collapsible-down {
+  animation: collapsible-down 150ms ease-out;
+}
+.animate-collapsible-up {
+  animation: collapsible-up 150ms ease-out;
+}
+
+/* ─── ReactFlow theme overrides ─────────────────────────────────────────────
+   ReactFlow CSS loads after globals.css (client component import), so CSS
+   variable overrides get clobbered. We use higher-specificity selectors
+   (nested class = 0,2,0 vs ReactFlow's single class = 0,1,0) to win.        */
+
+.react-flow__controls .react-flow__controls-button {
+  background-color: var(--color-bg-surface);
+  border-color: var(--border-default);
+  color: var(--color-text-muted);
+  fill: var(--color-text-muted);
+}
+
+.react-flow__controls .react-flow__controls-button:hover {
+  background-color: var(--color-bg-elevated);
+  color: var(--color-text-primary);
+  fill: var(--color-text-primary);
+}
+
+.react-flow__controls .react-flow__controls-button svg {
+  fill: currentColor;
+}
+
+.react-flow__background {
+  background-color: transparent;
+}
+
+/* ─── Agent node hover glow ─────────────────────────────────────────────── */
+.agent-node {
+  transition: box-shadow var(--duration-slow) var(--ease-standard),
+              border-color var(--duration-slow) var(--ease-standard);
+}
+
+.agent-node:hover {
+  box-shadow: 0 0 0 1px var(--agent-accent, var(--color-brand)), 0 8px 24px oklch(from var(--glow-shadow) l c h / 0.4);
+  border-color: var(--agent-accent, var(--color-brand));
 }

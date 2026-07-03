@@ -50,6 +50,17 @@ async def get_agent(
     return AgentResponse.model_validate(agent)
 
 
+@router.delete("/{agent_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_agent(
+    agent_id: uuid.UUID,
+    workspace: Workspace = Depends(require_workspace("write")),
+    service: AgentService = Depends(get_agent_service),
+) -> None:
+    deleted = await service.delete(agent_id, workspace.id)
+    if not deleted:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Agent not found")
+
+
 @router.patch("/{agent_id}", response_model=AgentResponse)
 async def update_agent(
     agent_id: uuid.UUID,

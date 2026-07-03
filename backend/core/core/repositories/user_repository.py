@@ -1,26 +1,52 @@
 from __future__ import annotations
 
-from sqlalchemy import select
+from sqlalchemy import delete, select
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.models.tenant import User
 
 
 class UserRepository:
-    """Read-only Clerk identity lookup for User.
+    """Identity lookup and lifecycle writes for User.
 
-    Used by validate_clerk_token() in auth_service to resolve a Clerk user ID to an
-    internal UUID. No write methods — users are provisioned via the Clerk webhook
-    flow, not via direct API calls.
+    Write methods are called exclusively by the Clerk webhook handler to keep
+    Apprise's DB in sync with Clerk's identity data.
 
-    Transaction contract: never calls commit() or flush().
+    Transaction contract: never calls commit() or flush() — callers own the transaction.
     """
 
     def __init__(self, session: AsyncSession) -> None:
         self._session = session
 
-    async def get_by_clerk_user_id(self, clerk_user_id: str) -> User | None:
+    async def get_by_external_id(self, provider: str, external_id: str) -> User | None:
         result = await self._session.execute(
-            select(User).where(User.clerk_user_id == clerk_user_id)
+            select(User).where(
+                User.identity_provider == provider,
+                User.external_id == external_id,
+            )
         )
         return result.scalar_one_or_none()
+
+    async def upsert(
+        self, provider: str, external_id: str, email: str | None, name: str | None
+    ) -> User:
+        stmt = (
+            pg_insert(User)
+            .values(identity_provider=provider, external_id=external_id, email=email, name=name)
+            .on_conflict_do_update(
+                constraint="uq_users_provider_external_id",
+                set_={"email": email, "name": name},
+            )
+            .returning(User)
+        )
+        result = await self._session.execute(stmt)
+        return result.scalar_one()
+
+    async def delete_by_external_id(self, provider: str, external_id: str) -> None:
+        await self._session.execute(
+            delete(User).where(
+                User.identity_provider == provider,
+                User.external_id == external_id,
+            )
+        )
