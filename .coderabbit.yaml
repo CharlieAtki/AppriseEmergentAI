@@ -103,7 +103,6 @@ reviews:
     - "!**/*.lock"
     - "!**/node_modules/**"
     - "!**/__pycache__/**"
-    - "!**/migrations/**"
     - "!**/generated/**"
 
 integrations:
