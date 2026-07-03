@@ -58,7 +58,7 @@ services:
       MEMORY__QDRANT_URL: http://qdrant:6333
       ANTHROPIC__API_KEY: ${ANTHROPIC__API_KEY}
       CLERK__SECRET_KEY: ${CLERK__SECRET_KEY}
-      CLERK__WEBHOOK_SECRET: ${CLERK__WEBHOOK_SECRET:-}
+      CLERK__WEBHOOK_SECRET: ${CLERK__WEBHOOK_SECRET}
       CORS_ORIGINS: ${CORS_ORIGINS:-}
     command: >
       sh -c "cd /app/core && alembic upgrade head &&

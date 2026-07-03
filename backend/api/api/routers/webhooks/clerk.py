@@ -27,6 +27,11 @@ async def _verify_svix(request: Request) -> bytes:
     """
     body = await request.body()
     secret = core_settings.clerk.webhook_secret.get_secret_value()
+    if not secret:
+        raise HTTPException(
+            status_code=500,
+            detail="Clerk webhook secret not configured (set CLERK__WEBHOOK_SECRET)",
+        )
     try:
         wh = Webhook(secret)
         wh.verify(body, dict(request.headers))
@@ -35,7 +40,7 @@ async def _verify_svix(request: Request) -> bytes:
     return body
 
 
-@router.post("/", include_in_schema=False)
+@router.post("", include_in_schema=False)
 async def clerk_webhook(
     body: bytes = Depends(_verify_svix),
 ) -> Response:

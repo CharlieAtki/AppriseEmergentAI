@@ -6,6 +6,7 @@ import {
 } from '@/api/generated/agents/agents'
 import type { AgentResponse } from '@/api/generated/model'
 import { useToastStore } from '@/stores/toast'
+import { clearAgentDeletePending, markAgentDeletePending } from './pendingAgentDeletes'
 
 export const DELETE_UNDO_DURATION_MS = 5000
 
@@ -30,6 +31,8 @@ export function useAgentDelete(workspaceId: string) {
         old ? old.filter((a) => a.id !== agent.id) : old
       )
 
+      markAgentDeletePending(workspaceId)
+
       const toastId = crypto.randomUUID()
 
       const timeoutId = window.setTimeout(async () => {
@@ -44,6 +47,7 @@ export function useAgentDelete(workspaceId: string) {
           )
           toast({ title: 'Failed to delete agent', description: agent.name, variant: 'error' })
         } finally {
+          clearAgentDeletePending(workspaceId)
           dismiss(toastId)
         }
       }, DELETE_UNDO_DURATION_MS)
@@ -56,6 +60,7 @@ export function useAgentDelete(workspaceId: string) {
         duration: DELETE_UNDO_DURATION_MS,
         undoAction: () => {
           clearTimeout(timeoutId)
+          clearAgentDeletePending(workspaceId)
           queryClient.setQueryData<AgentResponse[]>(queryKey, (current) =>
             current ? insertAt(current, agent, originalIndex) : snapshot
           )

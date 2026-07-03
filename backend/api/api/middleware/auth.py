@@ -61,7 +61,7 @@ class AuthMiddleware(BaseHTTPMiddleware):
         if (
             path in EXEMPT_PATHS
             or request.method in EXEMPT_METHODS
-            or any(path.startswith(p) for p in EXEMPT_PREFIXES)
+            or any(path == p or path.startswith(p + "/") for p in EXEMPT_PREFIXES)
         ):
             return await call_next(request)
 

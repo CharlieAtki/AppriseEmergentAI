@@ -123,9 +123,11 @@ In **production** (static image build), `NEXT_PUBLIC_*` vars must be passed as D
 ```bash
 doppler run -- docker build \
   --build-arg NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY="$(doppler secrets get NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY --plain)" \
+  --build-arg NEXT_PUBLIC_CLERK_SIGN_IN_URL="/sign-in" \
+  --build-arg NEXT_PUBLIC_CLERK_SIGN_UP_URL="/sign-up" \
   -f frontend/Dockerfile ./frontend
 ```
-`NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` is non-secret (designed to be public) so baking it into the image is safe.
+All three are non-secret — `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` is designed to be public, and the sign-in/sign-up URLs are fixed routes matching what `docker-compose.yml` sets at dev runtime — so baking them into the image is safe.
 
 ---
 

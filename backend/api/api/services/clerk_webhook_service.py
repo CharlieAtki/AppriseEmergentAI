@@ -5,6 +5,7 @@ from typing import Any
 
 from core.repositories.org_repository import OrganisationRepository
 from core.repositories.user_repository import UserRepository
+from fastapi import logger
 
 _PROVIDER = "clerk"
 
@@ -105,8 +106,12 @@ class ClerkWebhookService:
         )
 
     async def _membership_deleted(self, data: dict[str, Any]) -> None:
-        org_external_id: str = data["organization"]["id"]
-        user_external_id: str = data["public_user_data"]["user_id"]
+        org_external_id = data.get("organization", {}).get("id")
+        user_external_id = data.get("public_user_data", {}).get("user_id")
+
+        if not org_external_id or not user_external_id:
+            logger.warning("clerk webhook: malformed membership payload, skipping")
+            return
 
         org = await self._org_repo.get_by_external_id(_PROVIDER, org_external_id)
         user = await self._user_repo.get_by_external_id(_PROVIDER, user_external_id)

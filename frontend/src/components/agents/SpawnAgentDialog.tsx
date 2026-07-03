@@ -39,7 +39,9 @@ export function SpawnAgentDialog({ workspaceId, open, onOpenChange }: SpawnAgent
             className="mt-5 space-y-4"
             onSubmit={(e) => {
               e.preventDefault()
-              createAgent(name.trim(), {
+              const trimmed = name.trim()
+              if (!trimmed) return
+              createAgent(trimmed, {
                 onSuccess: () => {
                   onOpenChange(false)
                   setName('')

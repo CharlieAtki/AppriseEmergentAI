@@ -3,7 +3,7 @@
 import * as Dialog from '@radix-ui/react-dialog'
 import * as Form from '@radix-ui/react-form'
 import { X } from 'lucide-react'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useWorkspaceCreate } from '@/hooks/workspace/useWorkspaceCreate'
 
 interface CreateWorkspaceDialogProps {
@@ -15,6 +15,11 @@ interface CreateWorkspaceDialogProps {
 export function CreateWorkspaceDialog({ orgId: _orgId, open, onOpenChange }: CreateWorkspaceDialogProps) {
   const [name, setName] = useState('')
   const { createWorkspace, isPending } = useWorkspaceCreate()
+
+  // Clear the draft whenever the dialog is dismissed so reopening starts fresh.
+  useEffect(() => {
+    if (!open) setName('')
+  }, [open])
 
   return (
     <Dialog.Root open={open} onOpenChange={onOpenChange}>
@@ -32,10 +37,10 @@ export function CreateWorkspaceDialog({ orgId: _orgId, open, onOpenChange }: Cre
             className="mt-5 space-y-4"
             onSubmit={(e) => {
               e.preventDefault()
+              if (name.trim().length === 0) return
               createWorkspace(name.trim(), {
                 onSuccess: () => {
                   onOpenChange(false)
-                  setName('')
                 },
               })
             }}

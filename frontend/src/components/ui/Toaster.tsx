@@ -25,11 +25,9 @@ const barStyles: Record<string, string> = {
 
 function CountdownBar({ variant, duration }: { variant: string; duration: number }) {
   return (
-    <motion.div
-      className={`absolute bottom-0 left-0 h-[2px] w-full origin-left rounded-full ${barStyles[variant]}`}
-      initial={{ scaleX: 1 }}
-      animate={{ scaleX: 0 }}
-      transition={{ duration: duration / 1000, ease: 'linear' }}
+    <div
+      className={`absolute bottom-0 left-0 h-[2px] w-full origin-left rounded-full scale-x-100 transition-transform ease-linear ${barStyles[variant]}`}
+      style={{ transitionDuration: `${duration}ms`, transform: 'scaleX(0)' }}
     />
   )
 }
@@ -56,9 +54,9 @@ export function Toaster() {
               animate={{ opacity: 1, y: 0, scale: 1 }}
               exit={{ opacity: 0, y: 12, scale: 0.94 }}
               transition={{ type: 'spring', damping: 26, stiffness: 360 }}
-              className={`relative flex items-start gap-3 overflow-hidden rounded-xl border bg-surface p-4 shadow-xl ${variantStyles[t.variant ?? 'default']}`}
+              className={`relative flex items-start gap-3 overflow-hidden rounded-xl border bg-surface p-4 shadow-xl ${variantStyles[t.variant ?? 'default'] ?? variantStyles.default}`}
             >
-              <span className={`mt-0.5 h-2 w-2 shrink-0 rounded-full ${dotStyles[t.variant ?? 'default']}`} />
+              <span className={`mt-0.5 h-2 w-2 shrink-0 rounded-full ${dotStyles[t.variant ?? 'default'] ?? dotStyles.default}`} />
 
               <div className="flex-1 min-w-0">
                 <Toast.Title className="text-body font-medium text-foreground">

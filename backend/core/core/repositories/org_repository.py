@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import uuid
+
 from sqlalchemy import delete, select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -49,7 +51,9 @@ class OrganisationRepository:
             )
         )
 
-    async def upsert_member(self, organisation_id: object, user_id: object, role: str) -> None:
+    async def upsert_member(
+        self, organisation_id: uuid.UUID, user_id: uuid.UUID, role: str
+    ) -> None:
         stmt = (
             pg_insert(OrganisationMember)
             .values(organisation_id=organisation_id, user_id=user_id, role=role)
@@ -60,7 +64,7 @@ class OrganisationRepository:
         )
         await self._session.execute(stmt)
 
-    async def delete_member(self, organisation_id: object, user_id: object) -> None:
+    async def delete_member(self, organisation_id: uuid.UUID, user_id: uuid.UUID) -> None:
         await self._session.execute(
             delete(OrganisationMember).where(
                 OrganisationMember.organisation_id == organisation_id,

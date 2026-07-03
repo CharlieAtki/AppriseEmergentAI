@@ -13,6 +13,7 @@ from core.intelligence.llm_router import LLMRouter
 from core.models.tenant import Workspace
 from core.repositories.agent_repository import AgentRepository
 from core.repositories.api_key_repository import ApiKeyRepository
+from core.repositories.task_execution_repository import TaskExecutionRepository
 from core.repositories.task_repository import TaskRepository
 from core.repositories.tool_repository import ToolRepository
 from core.repositories.workspace_repository import WorkspaceRepository
@@ -82,8 +83,15 @@ def get_task_service(repo: TaskRepository = Depends(get_task_repo)) -> TaskServi
     return TaskService(repo)
 
 
-def get_agent_service(repo: AgentRepository = Depends(get_agent_repo)) -> AgentService:
-    return AgentService(repo)
+def get_task_execution_repo(session: AsyncSession = Depends(get_db)) -> TaskExecutionRepository:
+    return TaskExecutionRepository(session)
+
+
+def get_agent_service(
+    repo: AgentRepository = Depends(get_agent_repo),
+    exec_repo: TaskExecutionRepository = Depends(get_task_execution_repo),
+) -> AgentService:
+    return AgentService(repo, exec_repo)
 
 
 def get_api_key_repo(session: AsyncSession = Depends(get_db)) -> ApiKeyRepository:

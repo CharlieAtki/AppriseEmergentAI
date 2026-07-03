@@ -59,7 +59,9 @@ export function EditAgentDialog({ agent, open, onOpenChange }: EditAgentDialogPr
             className="mt-5 space-y-4"
             onSubmit={(e) => {
               e.preventDefault()
-              mutate({ workspaceId: agent.workspace_id, agentId: agent.id, data: { name: name.trim() } })
+              const trimmed = name.trim()
+              if (!trimmed) return
+              mutate({ workspaceId: agent.workspace_id, agentId: agent.id, data: { name: trimmed } })
             }}
           >
             <Form.Field name="name" className="space-y-1.5">

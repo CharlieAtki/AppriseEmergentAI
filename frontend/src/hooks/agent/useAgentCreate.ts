@@ -5,30 +5,27 @@ import {
   getListAgentsWorkspacesWorkspaceIdAgentsGetQueryKey,
 } from '@/api/generated/agents/agents'
 import type { AgentResponse } from '@/api/generated/model'
-import { useToastStore } from '@/stores/toast'
+import { useAutoDismissToast } from '@/hooks/useAutoDismissToast'
 
 const CREATE_TOAST_DURATION_MS = 5000
 
 export function useAgentCreate(workspaceId: string) {
   const queryClient = useQueryClient()
-  const { toast, dismiss } = useToastStore()
+  const showToast = useAutoDismissToast()
 
   const { mutate, isPending } = useCreateAgentWorkspacesWorkspaceIdAgentsPost({
     mutation: {
       onSuccess: (response) => {
         const queryKey = getListAgentsWorkspacesWorkspaceIdAgentsGetQueryKey(workspaceId)
         queryClient.setQueryData<AgentResponse[]>(queryKey, (old) =>
-          old ? [...old, response] : old
+          old ? [...old, response] : [response]
         )
-        const toastId = crypto.randomUUID()
-        toast({
-          id: toastId,
+        showToast({
           title: 'Agent spawned',
           description: response.name,
           variant: 'success',
           duration: CREATE_TOAST_DURATION_MS,
         })
-        window.setTimeout(() => dismiss(toastId), CREATE_TOAST_DURATION_MS)
       },
     },
   })

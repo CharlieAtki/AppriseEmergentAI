@@ -16,7 +16,7 @@ export function WorkspaceSidebarSection({ orgId }: WorkspaceSidebarSectionProps)
   const [dialogOpen, setDialogOpen] = useState(false)
   const params = useParams<{ workspaceId?: string }>()
   const pathname = usePathname()
-  const { data } = useListWorkspacesWorkspacesGet()
+  const { data, isLoading, isError } = useListWorkspacesWorkspacesGet()
   // FAVOURITES STUB: When implemented, favourited workspace IDs will be read from a
   // Zustand store persisted to localStorage. Favourited workspaces render first with a
   // visual separator before the rest. See stores/workspaceFavourites.ts (to be created).
@@ -36,8 +36,14 @@ export function WorkspaceSidebarSection({ orgId }: WorkspaceSidebarSectionProps)
         <p className="mb-1 px-2 text-label font-semibold uppercase tracking-architectural text-muted">
           Workspaces
         </p>
+        {isLoading && (
+          <p className="px-2 py-1.5 text-body text-muted">Loading workspaces…</p>
+        )}
+        {isError && (
+          <p className="px-2 py-1.5 text-body text-error">Failed to load workspaces.</p>
+        )}
         <ul className="space-y-0.5">
-          {workspaces.map((ws) => {
+          {!isLoading && !isError && workspaces.map((ws) => {
             const isActive = params.workspaceId === ws.id
             const isOnline = ws.status === 'active'
             return (

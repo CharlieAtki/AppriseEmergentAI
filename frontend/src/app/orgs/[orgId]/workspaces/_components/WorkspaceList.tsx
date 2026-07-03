@@ -27,7 +27,7 @@ export function WorkspaceList() {
       <div>
         <div className="flex items-center gap-3">
           <h1 className="text-heading font-bold text-foreground">Workspaces</h1>
-          {!isPending && (
+          {!isPending && !isError && (
             <span className="inline-flex items-center rounded-full bg-elevated px-2.5 py-0.5 text-label font-medium text-muted tabular-nums">
               {allWorkspaces.length}
             </span>
@@ -73,7 +73,7 @@ export function WorkspaceList() {
       </div>
 
       {/* Content */}
-      {isPending && (
+      {isPending && !isError && (
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {Array.from({ length: 6 }).map((_, i) => (
             <div key={i} className="h-36 animate-pulse rounded-lg bg-surface" />

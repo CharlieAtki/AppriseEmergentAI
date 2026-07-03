@@ -1,9 +1,10 @@
 'use client'
 
 import { Bell, ChevronRight, CircleHelp, Settings } from 'lucide-react'
-import Image from 'next/image'
+import { AppriseLogo } from '@/components/ui/AppriseLogo'
+
 import Link from 'next/link'
-import { useParams, usePathname } from 'next/navigation'
+import { useParams, useSelectedLayoutSegments } from 'next/navigation'
 import { useOrganization } from '@clerk/nextjs'
 import { useGetWorkspaceWorkspacesWorkspaceIdGet } from '@/api/generated/workspaces/workspaces'
 import { useWorkspaceStream } from '@/hooks/workspace/useWorkspaceStream'
@@ -25,10 +26,10 @@ function WorkspaceLiveStatus({ workspaceId }: { workspaceId: string }) {
 function WorkspaceBreadcrumb({ workspaceId, orgId }: { workspaceId: string; orgId: string }) {
   const { data } = useGetWorkspaceWorkspacesWorkspaceIdGet(workspaceId)
   const name = data?.name ?? workspaceId
-  const pathname = usePathname()
   const base = `/orgs/${orgId}/workspaces/${workspaceId}`
-  const segments = pathname.split('/').filter(Boolean)
-  const section = segments.length > 4 ? segments[4] : null
+  // Relative to the nearest layout (orgs/[orgId]/layout.tsx): ['workspaces', workspaceId, section?]
+  const segments = useSelectedLayoutSegments()
+  const section = segments[2] ?? null
 
   return (
     <>
@@ -63,7 +64,7 @@ export function AppHeader({ orgId }: AppHeaderProps) {
       {/* Breadcrumbs */}
       <nav className="flex items-center gap-1.5 min-w-0" aria-label="Breadcrumb">
         <Link href={workspacesHref} className="shrink-0 opacity-40 hover:opacity-90 transition-opacity">
-          <Image src="/AppriseLogo.svg" alt="Apprise" width={16} height={16} className="brightness-0 invert" />
+          <AppriseLogo className="h-4 w-auto brightness-0 invert" />
         </Link>
         <ChevronRight size={13} className="shrink-0 text-muted" />
         <span className="text-caption text-muted shrink-0 truncate max-w-[100px]">{orgName}</span>

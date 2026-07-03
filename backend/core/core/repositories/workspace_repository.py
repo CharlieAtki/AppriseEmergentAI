@@ -4,7 +4,7 @@ import uuid
 from collections.abc import Mapping
 from typing import Any
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.models.tenant import Workspace
@@ -59,8 +59,6 @@ class WorkspaceRepository:
         return list(result.scalars().all())
 
     async def list_with_agent_counts(self, org_id: uuid.UUID) -> list[tuple[Workspace, int]]:
-        from sqlalchemy import func
-
         from core.models.agents import Agent  # local import — avoids circular at module level
 
         result = await self._session.execute(

@@ -431,9 +431,7 @@ All HTTP goes through Orval's custom fetcher (`src/api/client.ts`). Components n
 
 ### WebSocket event validation — Zod at the boundary
 
-Every new backend event type needs a Zod schema added to the `WorkspaceEvent` discriminated union in `src/hooks/useWorkspaceStream.ts`. All incoming messages go through `WorkspaceEvent.safeParse()` before touching the query cache — malformed events are silently discarded. The `discriminatedUnion` on `type` enables exhaustiveness checking: adding an event to the union without handling it in the switch is a compile error.
-
-### Orval regeneration workflow
+Every new backend event type needs a Zod schema added to the `WorkspaceEvent` discriminated union in `frontend/src/hooks/workspace/useWorkspaceStream.ts`. All incoming messages go through `WorkspaceEvent.safeParse()` before touching the query cache — malformed events are silently discarded. The `discriminatedUnion` on `type` enables exhaustiveness checking: adding an event to the union without handling it in the switch is a compile error.### Orval regeneration workflow
 
 After any backend schema change:
 

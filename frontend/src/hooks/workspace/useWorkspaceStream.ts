@@ -56,55 +56,77 @@ export function useWorkspaceStream(workspaceId: string): { connected: boolean } 
   const [connected, setConnected] = useState(false)
 
   useEffect(() => {
-    const wsUrl = process.env.NEXT_PUBLIC_WS_URL ?? 'ws://localhost:8000'
-    const ws = new WebSocket(`${wsUrl}/workspaces/${workspaceId}/stream`)
+    let ws: WebSocket
+    let retryTimeout: ReturnType<typeof setTimeout>
+    let attempt = 0
+    let cancelled = false
 
-    ws.onopen = () => setConnected(true)
-    ws.onclose = () => setConnected(false)
+    const connect = () => {
+      const wsUrl = process.env.NEXT_PUBLIC_WS_URL ?? 'ws://localhost:8000'
+      ws = new WebSocket(`${wsUrl}/workspaces/${workspaceId}/stream`)
 
-    ws.onmessage = (event: MessageEvent<string>) => {
-      let raw: unknown
-      try {
-        raw = JSON.parse(event.data)
-      } catch {
-        return
+      ws.onopen = () => {
+        attempt = 0
+        setConnected(true)
+      }
+      ws.onclose = () => {
+        setConnected(false)
+        if (!cancelled) {
+          const delay = Math.min(30000, 1000 * 2 ** attempt++)
+          retryTimeout = setTimeout(connect, delay)
+        }
       }
 
-      const result = WorkspaceEvent.safeParse(raw)
-      if (!result.success) return
+      ws.onmessage = (event: MessageEvent<string>) => {
+        let raw: unknown
+        try {
+          raw = JSON.parse(event.data)
+        } catch {
+          return
+        }
 
-      const e = result.data
+        const result = WorkspaceEvent.safeParse(raw)
+        if (!result.success) return
 
-      switch (e.type) {
-        case 'task.completed':
-        case 'task.executing':
-          void queryClient.invalidateQueries({
-            queryKey: getListTasksWorkspacesWorkspaceIdTasksGetQueryKey(workspaceId),
-          })
-          break
-        case 'agent.skill_updated':
-          void queryClient.invalidateQueries({
-            queryKey: getGetAgentWorkspacesWorkspaceIdAgentsAgentIdGetQueryKey(
-              workspaceId,
-              e.agent_id,
-            ),
-          })
-          void queryClient.invalidateQueries({
-            queryKey: getListAgentsWorkspacesWorkspaceIdAgentsGetQueryKey(workspaceId),
-          })
-          break
-        case 'emergence.detected':
-          break
+        const e = result.data
+
+        switch (e.type) {
+          case 'task.completed':
+          case 'task.executing':
+            void queryClient.invalidateQueries({
+              queryKey: getListTasksWorkspacesWorkspaceIdTasksGetQueryKey(workspaceId),
+            })
+            break
+          case 'agent.skill_updated':
+            void queryClient.invalidateQueries({
+              queryKey: getGetAgentWorkspacesWorkspaceIdAgentsAgentIdGetQueryKey(
+                workspaceId,
+                e.agent_id,
+              ),
+            })
+            void queryClient.invalidateQueries({
+              queryKey: getListAgentsWorkspacesWorkspaceIdAgentsGetQueryKey(workspaceId),
+            })
+            break
+          case 'emergence.detected':
+            break
+        }
+      }
+
+      ws.onerror = () => {
+        // Backend WS endpoint not yet implemented — see docs/frontend/frontend-gaps.md
+        console.warn('[WorkspaceStream] could not connect — backend stream endpoint pending')
+        setConnected(false)
       }
     }
 
-    ws.onerror = () => {
-      // Backend WS endpoint not yet implemented — see docs/frontend/frontend-gaps.md
-      console.warn('[WorkspaceStream] could not connect — backend stream endpoint pending')
-      setConnected(false)
-    }
+    connect()
 
-    return () => ws.close()
+    return () => {
+      cancelled = true
+      clearTimeout(retryTimeout)
+      ws.close()
+    }
   }, [workspaceId, queryClient])
 
   return { connected }

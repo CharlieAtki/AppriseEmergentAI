@@ -9,9 +9,11 @@ import { useQueryClient } from '@tanstack/react-query'
 import {
   useUpdateWorkspaceWorkspacesWorkspaceIdPatch,
   getListWorkspacesWorkspacesGetQueryKey,
+  getGetWorkspaceWorkspacesWorkspaceIdGetQueryKey,
 } from '@/api/generated/workspaces/workspaces'
 import { WorkspaceStatus } from '@/api/generated/model'
 import type { WorkspaceResponse } from '@/api/generated/model'
+import { useToastStore } from '@/stores/toast'
 
 interface EditWorkspaceDialogProps {
   workspace: WorkspaceResponse
@@ -23,6 +25,7 @@ export function EditWorkspaceDialog({ workspace, open, onOpenChange }: EditWorks
   const [name, setName] = useState(workspace.name)
   const [status, setStatus] = useState<WorkspaceStatus>(workspace.status)
   const queryClient = useQueryClient()
+  const { toast } = useToastStore()
 
   // Sync local state from the (potentially cache-refreshed) workspace prop each time the dialog opens.
   useEffect(() => {
@@ -36,7 +39,13 @@ export function EditWorkspaceDialog({ workspace, open, onOpenChange }: EditWorks
     mutation: {
       onSuccess: () => {
         void queryClient.invalidateQueries({ queryKey: getListWorkspacesWorkspacesGetQueryKey() })
+        void queryClient.invalidateQueries({
+          queryKey: getGetWorkspaceWorkspacesWorkspaceIdGetQueryKey(workspace.id),
+        })
         onOpenChange(false)
+      },
+      onError: () => {
+        toast({ title: 'Failed to update workspace', description: workspace.name, variant: 'error' })
       },
     },
   })

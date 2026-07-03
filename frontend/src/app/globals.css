@@ -35,6 +35,7 @@
   --bg-page-base:   oklch(18% 0.008 160);       /* neutral dark base — whole page */
   --bg-glow-corner: oklch(17% 0.090 152);       /* green glow source — top-left corner */
   --bg-sidebar:     oklch(13% 0.055 152 / 88%); /* semi-transparent green — gradient shows through */
+  --glow-shadow:    oklch(20% 0.10 150);        /* shared glow source — body gradient + hover shadows */
 }
 
 /* ─── Tier 1b: Type scale primitives ────────────────────────────────────────
@@ -128,7 +129,7 @@ body {
   background-color: var(--bg-page-base);
   background-image: radial-gradient(
     ellipse 85% 85% at 0% 0%,
-    oklch(20% 0.10 150) 0%,
+    var(--glow-shadow) 0%,
     oklch(20% 0.10 150 / 0%) 100%
   );
   background-attachment: fixed;
@@ -195,7 +196,7 @@ body::before {
 }
 
 .workspace-card:hover {
-  box-shadow: 0 0 0 1px var(--color-brand), 0 8px 24px oklch(20% 0.10 150 / 40%);
+  box-shadow: 0 0 0 1px var(--color-brand), 0 8px 24px oklch(from var(--glow-shadow) l c h / 0.4);
   border-color: var(--color-brand);
 }
 
@@ -262,16 +263,6 @@ body::before {
   background-color: transparent;
 }
 
-/* ─── Spawn agent button glow ───────────────────────────────────────────── */
-@keyframes spawn-glow {
-  0%, 100% { box-shadow: 0 0 0 0   oklch(49.1% 0.057 148.8 / 0  ), 0 4px 16px oklch(0% 0 0 / 0.25); }
-  50%       { box-shadow: 0 0 0 6px oklch(49.1% 0.057 148.8 / 0.3), 0 4px 24px oklch(0% 0 0 / 0.4); }
-}
-
-.spawn-agent-btn {
-  animation: spawn-glow 2.5s ease-in-out infinite;
-}
-
 /* ─── Agent node hover glow ─────────────────────────────────────────────── */
 .agent-node {
   transition: box-shadow var(--duration-slow) var(--ease-standard),
@@ -279,6 +270,6 @@ body::before {
 }
 
 .agent-node:hover {
-  box-shadow: 0 0 0 1px var(--agent-accent, var(--color-brand)), 0 8px 24px oklch(20% 0.10 150 / 40%);
+  box-shadow: 0 0 0 1px var(--agent-accent, var(--color-brand)), 0 8px 24px oklch(from var(--glow-shadow) l c h / 0.4);
   border-color: var(--agent-accent, var(--color-brand));
 }

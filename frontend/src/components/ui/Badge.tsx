@@ -1,12 +1,13 @@
+import type { WorkspaceStatus } from '@/api/generated/model'
+
 const statusStyles: Record<string, string> = {
   active:   'bg-success/10 text-success',
   inactive: 'bg-muted/10 text-muted',
 }
 
 const fallback = 'bg-info/10 text-info'
-
 interface BadgeProps {
-  status: string
+  status: WorkspaceStatus | string
 }
 
 export function Badge({ status }: BadgeProps) {

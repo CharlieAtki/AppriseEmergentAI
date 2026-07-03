@@ -93,12 +93,14 @@ app.add_middleware(AuthMiddleware)
 # is not registered and the proxy handles preflight responses instead.
 # Starlette LIFO order: CORSMiddleware (added last) runs before AuthMiddleware.
 if api_settings.cors_origins:
+    if "*" in api_settings.cors_origins:
+        raise ValueError("CORS_ORIGINS cannot include '*' when credentials are allowed")
     app.add_middleware(
         CORSMiddleware,
         allow_origins=api_settings.cors_origins,
         allow_credentials=True,
-        allow_methods=["*"],
-        allow_headers=["*"],
+        allow_methods=["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
+        allow_headers=["Authorization", "X-API-Key", "Content-Type"],
     )
 
 
