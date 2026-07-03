@@ -1,46 +1,124 @@
 language: "en-GB"
 
 reviews:
-  profile: "assertive"  # you want pushback, not chill nods
+  profile: "assertive"
   request_changes_workflow: true
 
   path_instructions:
-    - path: "backend/agents/**"
+    # ── Agent execution layer ──────────────────────────────────────────────────
+    - path: "backend/core/core/agents/**"
       instructions: |
-        This is the agent execution layer. Key invariants to enforce:
-        - ContractNet winner selection must ALWAYS be algorithmic — LLM role is justification text only, never bid outcome
-        - reflect() must produce exactly ONE LLM call (CallType.REFLECT) returning structured Pydantic output
-        - Episodic memory construction must be deterministic Python from GraphState data — never an LLM call
-        - Skill delta magnitudes must be computed from quality scores via learning rate formula, not LLM output
-        - Any new LLM call added to the hot path must be explicitly justified — flag all unreasoned additions
+        Agent execution layer (LangGraph graphs, tool dispatch).
+        - ContractNet winner selection must ALWAYS be algorithmic — LLM role is justification text only, never bid outcome.
+        - reflect() must produce exactly ONE LLM call (CallType.REFLECT) returning structured Pydantic output.
+        - Episodic memory construction must be deterministic Python from GraphState data — never an LLM call.
+        - Skill delta magnitudes must be computed from quality scores via the logistic growth formula in core/coordination/skills.py, not raw LLM output.
+        - _call_tool must catch exceptions and return a tool-error string to the LLM — never let a tool exception unwind the graph.
+        - Flag any new LLM call added to the hot path without explicit justification.
 
-    - path: "backend/workers/**"
+    # ── Worker jobs, handlers, reflection ────────────────────────────────────
+    - path: "backend/worker/worker/**"
       instructions: |
-        ARQ worker layer. LangGraph graphs are compiled once at startup, invoked per job.
-        - SETNX distributed locking patterns must be present for any shared state mutation
-        - Auctioneer job pattern must handle bidding centrally — flag anything that could cause evaluation storms
-        - Redis pub/sub fan-out for WebSocket events — check for missed publishes on state transitions
+        ARQ worker layer. Three responsibilities: LLM calls, graph execution, memory writes. Never HTTP, never session.commit() except where documented.
+        - LangGraph graphs must be compiled once at startup in WorkerContext.build(), never inside a job function.
+        - Stage functions and handler handle() methods must accept domain objects only — never infrastructure (span, session factory, bus, worker context).
+        - current_span() must be called at the use site, never threaded as a function argument.
+        - SETNX distributed locking must be present for any shared state mutation.
+        - Any enqueue_job() call must pass all required parameters — missing params cause silent ARQ TypeError at deserialisation.
+        - Flag anything that could cause evaluation storms (multiple workers simultaneously bidding without SETNX).
+        - WebhookDelivery row must be committed before the HTTP POST — not after.
 
-    - path: "backend/memory/**"
+    # ── Coordination (pure functions) ─────────────────────────────────────────
+    - path: "backend/core/core/coordination/**"
       instructions: |
-        Three-tier Chroma memory system (episodic, procedural, social).
-        - Procedural rule extraction must reference specific tools, error types, or code patterns — reject generic platitudes
-        - Supersession logic must be present when new rules contradict existing ones
-        - Qdrant used for procedural rule retrieval — check query construction is scoped correctly
+        Deterministic coordination layer — no I/O, no async, no DB reads.
+        - compute_bid_score, attempt_reservation, TaskStateMachine must remain pure functions.
+        - apply_skill_delta must use the logistic growth formula (positive: new = current + delta*(1-current); negative: new = current + delta*current).
+        - TaskStateMachine.is_terminal() is the single source of truth for terminal status — never inline a set of terminal statuses.
+        - Influence updates must use the EMA formula in core/coordination/influence.py — never a straight-line decay.
 
+    # ── Memory (episodic / procedural / social) ───────────────────────────────
+    - path: "backend/core/core/memory/**"
+      instructions: |
+        Three-tier memory system (episodic → Chroma, procedural → Qdrant, social → Qdrant).
+        - Procedural rule extraction must reference specific tools, error types, or code patterns — reject generic platitudes.
+        - Qdrant queries must be scoped to the agent's collection — cross-agent leakage is a data isolation bug.
+        - get_encoder() is not thread-safe on first call — pre-warm in WorkerContext.build() before accepting jobs.
+        - Social memory writes fan out N−1 per completion — any new write path must account for this.
+
+    # ── Eventing (bus, loggers, snapshots) ────────────────────────────────────
+    - path: "backend/core/core/eventing/**"
+      instructions: |
+        Event bus layer — two buses (in-process EventBus, cross-process RedisBus). Never conflate them.
+        - Snapshots must be taken BEFORE the mutation, not after. TaskSnapshot.from_domain() called on a mutated object is a bug.
+        - Producers must never touch the bus directly — all publishes go through an activity logger (TaskActivityLogger, TaskStreamLogger, etc.).
+        - Logger methods receive PublishFn / StreamPublishFn at construction — never the bus itself.
+        - StreamEvent subclasses must implement all four members: stream_key, event_type, to_payload(), from_payload().
+        - Handler handle() methods must accept domain objects only — no infrastructure dependencies.
+
+    # ── Intelligence (LLM routing, prompts, enrichment) ───────────────────────
+    - path: "backend/core/core/intelligence/**"
+      instructions: |
+        Intelligence layer — six files, six jobs. Enforce single responsibility strictly.
+        - registry.py must remain dependency-free: no DB import, no vendor SDK, no settings import, no credentials. Any import added here risks circular import and silent registration failure.
+        - sync.py must only be called at startup — never at request time.
+        - llm_router.py dispatches calls only — it must not register models or know about the global catalog.
+        - Prompt files must return a prompt string only — no dispatch, no response parsing.
+        - LLM calls in enrichment.py are only valid from the API process — not from worker jobs.
+        - Flag any LLM call outside of worker/worker/jobs/ (the only permitted site for agent-reasoning LLM calls).
+
+    # ── API layer ─────────────────────────────────────────────────────────────
+    - path: "backend/api/**"
+      instructions: |
+        FastAPI HTTP layer. Validates, stores, enqueues, queries. Never LLM calls, never LangGraph, never agent decisions.
+        - Services must follow Command in → ORM stays inside → DTO out. ORM models must never cross the service boundary into a router.
+        - Services must never call session.commit() — the router commits. Exception: create_task commits before enqueue_job() so the worker sees the row.
+        - Services must never raise HTTPException — return None and let the router decide the status code.
+        - Services must never import from api/schemas/ — the boundary runs between schemas and services.
+        - Response schemas must have model_config = {"from_attributes": True}.
+        - webhook_secret must never appear in API responses, logs, or SELECT statements outside deliver_webhook.
+        - require_workspace() is auth infrastructure — it returns the Workspace ORM model as an auth token. Do not add business logic to it.
+
+    # ── Frontend ──────────────────────────────────────────────────────────────
     - path: "frontend/**"
       instructions: |
-        Next.js 15 App Router. TanStack Query v5, Zustand, Orval-generated typed hooks, Tailwind v4.
-        - Data fetching must use Orval-generated hooks from OpenAPI spec — not raw fetch() calls
-        - Server components vs client components boundary must be respected
-        - Zustand slices should not duplicate TanStack Query server state
+        Next.js 15 App Router. TanStack Query v5 for server state, Zustand for UI-only state, Orval-generated typed hooks, Tailwind v4, Lucide React icons only.
+        - All HTTP goes through Orval-generated hooks — never raw fetch() or axios imports in components.
+        - 'use client' belongs only in app/orgs/[orgId]/workspaces/[workspaceId]/layout.tsx — never on individual dashboard leaf components.
+        - Cache invalidation must use Orval key factories (getList*QueryKey) — never hand-written query key arrays.
+        - WebSocket events must go through WorkspaceEvent.safeParse() before touching the query cache — malformed events must be silently discarded, not thrown.
+        - Zustand must not duplicate TanStack Query server state.
+        - No inline SVGs for UI icons — Lucide React only.
+        - Framer Motion only for genuinely stateful or physics-based animations — not CSS-replaceable transitions.
+
+    # ── Migrations ────────────────────────────────────────────────────────────
+    - path: "backend/core/core/migrations/**"
+      instructions: |
+        Alembic migrations. Every change to a core/models/ class that affects the DB schema needs a migration in the same PR.
+        - Migrations must be additive where possible — avoid DROP COLUMN or type changes without a transition plan.
+        - Check that the migration file name follows the NNN_describe_change.py convention.
+        - Nullable columns added to existing tables must have a server_default or be nullable=True to avoid locking large tables.
 
   path_filters:
     - "!**/*.lock"
     - "!**/node_modules/**"
     - "!**/__pycache__/**"
-    - "!**/migrations/**"  # unless you want schema reviewed
+    - "!**/migrations/**"
+    - "!**/generated/**"
+
+integrations:
+  linear:
+    enabled: true
 
 knowledge_base:
   learnings:
-    scope: auto  # learns from your comments and resolved threads over time
+    scope: auto
+  files:
+    - "CLAUDE.md"
+    - "docs/agents/issue-tracker.md"
+    - "docs/backend/api/api-gaps.md"
+    - "docs/backend/worker/worker-gaps.md"
+    - "docs/backend/eventing/event-bus-gaps.md"
+    - "docs/backend/memory/memory-gaps.md"
+    - "docs/backend/coordination/coordination-gaps.md"
+    - "docs/frontend/frontend-gaps.md"

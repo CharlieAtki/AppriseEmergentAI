@@ -419,6 +419,6 @@ disconnect (leaked subscriptions compound with workspace count).
 | `idempotency_key` is a body field, not HTTP header | ✅ Closed — `Idempotency-Key` header wins; body field kept |
 | API key prefix format (`appr_` vs `apk_live_`) | ✅ Closed — full key is now `apk_live_{token}` |
 | `artifact_uri` column name misleading | ✅ Closed — renamed to `artifact`, migration 006 |
-| No Clerk webhook handler | ❌ Open — human JWT auth returns 401 in production; seed workaround for dev |
+| No Clerk webhook handler | ✅ Closed — `api/routers/webhooks/clerk.py` exists; Svix HMAC verification + `ClerkWebhookService` |
 | API key scope system has no role abstraction | ❌ Open — no Admin/Operator/Readonly roles; callers must know internal scope strings |
 | Enrichment classification accuracy | ❌ Open — coarse keyword rules cause silent mis-classification; LLM fallback never fires for high-confidence wrong matches |
