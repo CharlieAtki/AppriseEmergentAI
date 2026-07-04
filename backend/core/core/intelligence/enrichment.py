@@ -6,6 +6,7 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from core.intelligence.llm_router import LLMRouter
 
+from core.intelligence import structured_call
 from core.intelligence.call_types import CallType
 from core.intelligence.prompts import enrich as _enrich_prompt
 
@@ -169,12 +170,12 @@ async def enrich(
 
     if result.confidence < _CONFIDENCE_THRESHOLD:
         try:
-            raw = await llm_router.complete(
-                _enrich_prompt.build_prompt(title, description or ""),
+            parsed = await structured_call.call_and_parse(
+                llm_router,
                 CallType.ENRICH,
-                json_mode=True,
+                _enrich_prompt.build_prompt(title, description or ""),
+                _enrich_prompt.parse,
             )
-            parsed = _enrich_prompt.parse(raw)
             result = EnrichmentResult(
                 required_skills=parsed.required_skills,
                 difficulty=parsed.difficulty,

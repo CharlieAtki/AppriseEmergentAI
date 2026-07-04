@@ -3,6 +3,7 @@ from __future__ import annotations
 import logging
 
 from core.coordination.skills import apply_skill_delta, compute_delta_magnitude
+from core.intelligence import structured_call
 from core.intelligence.call_types import CallType
 from core.intelligence.llm_router import LLMRouter
 from core.intelligence.prompts.reflection import reflect as reflect_prompt
@@ -88,7 +89,9 @@ async def _stage_reflect(
                         )
                     )
 
-    raw = await llm.complete(
+    output = await structured_call.call_and_parse(
+        llm,
+        CallType.REFLECT,
         reflect_prompt.build_prompt(
             task_ctx,
             result_ctx,
@@ -97,10 +100,8 @@ async def _stage_reflect(
             full_reflect=rctx.full_reflect,
             existing_rules=existing if existing else None,
         ),
-        CallType.REFLECT,
-        json_mode=True,
+        reflect_prompt.parse,
     )
-    output = reflect_prompt.parse(raw)
 
     result.skill_domains = output.skill_domains
     result.new_skill_suggestions = output.new_skill_suggestions

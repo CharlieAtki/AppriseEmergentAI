@@ -14,7 +14,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from core.intelligence.reflection.types import PipelineResult, ReflectContext
-from worker.reflection.stages import _primary_domain, _stage_rules, _stage_skills
+from pydantic import ValidationError
+from worker.reflection.stages import _primary_domain, _stage_reflect, _stage_rules, _stage_skills
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -77,6 +78,54 @@ def test_primary_domain_uses_task_type():
 def test_primary_domain_falls_back_to_general():
     rctx = _make_rctx(task_type=None)
     assert _primary_domain(rctx) == "general"
+
+
+# ── _stage_reflect: parse-failure retry ──────────────────────────────────────
+
+_VALID_REFLECT_JSON = (
+    '{"skill_domains":["python"],"new_skill_suggestions":[],'
+    '"generalised_rule":null,"verdict":null,"superseded_ids":[]}'
+)
+
+
+async def test_stage_reflect_retries_once_then_succeeds():
+    """A single malformed response is absorbed by structured_call's retry —
+    no need to fail the whole stage (and trigger a full job retry) for a one-off glitch.
+    """
+    rctx = _make_rctx(full_reflect=False)
+    result = _make_result()
+
+    llm = AsyncMock()
+    llm.complete.side_effect = ["not json", _VALID_REFLECT_JSON]
+    memory = AsyncMock()
+
+    span = _make_span()
+    with patch("worker.reflection.stages.current_span", return_value=span):
+        returned = await _stage_reflect(rctx, result, llm, memory)
+
+    assert returned.skill_domains == ["python"]
+    assert llm.complete.call_count == 2
+
+
+async def test_stage_reflect_propagates_after_two_failures():
+    """If the LLM never produces a parseable response, the failure still propagates —
+    manager.py's per-stage handler marks the stage failed and the job is retried by ARQ.
+    """
+    rctx = _make_rctx(full_reflect=False)
+    result = _make_result()
+
+    llm = AsyncMock()
+    llm.complete.return_value = "not json"
+    memory = AsyncMock()
+
+    span = _make_span()
+    with (
+        patch("worker.reflection.stages.current_span", return_value=span),
+        pytest.raises(ValidationError),
+    ):
+        await _stage_reflect(rctx, result, llm, memory)
+
+    assert llm.complete.call_count == 2
 
 
 # ── _stage_skills: empty domains → early return ───────────────────────────────

@@ -34,7 +34,7 @@ Every structural question resolves from this. If you are writing an LLM call ins
 - Serving, validating, or querying data for a customer → `api/`
 - Needed by multiple worker handlers but is worker-specific (calls `arq_queue`) → `worker/coordination/`
 
-### Intelligence layer — six files, six jobs
+### Intelligence layer — seven files, seven jobs
 
 | File | Single job |
 |---|---|
@@ -44,6 +44,7 @@ Every structural question resolves from this. If you are writing an LLM call ins
 | `llm_router.py` | Dispatches LLM calls. Resolves model, builds client, applies semaphore. |
 | `call_types.py` | Enum of call types. No logic. |
 | `prompts/` | One file per call type. Returns a prompt string. No dispatch, no response parsing. |
+| `structured_call.py` | Calls the LLM for a call type via `LLMRouter`, parses the response, falls back to a safe default on `ValidationError`. No dispatch logic of its own, no prompt text. |
 
 ---
 

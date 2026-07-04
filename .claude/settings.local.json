@@ -7,7 +7,8 @@
       "Bash(xargs grep -l \"WebhookDelivery\\\\|TaskExecution\")",
       "Bash(xargs cat)",
       "mcp__notion__notion-fetch",
-      "PowerShell(\\(Invoke-RestMethod -Uri \"http://localhost:8000/openapi.json\"\\).paths.\"/workspaces\".get.responses.\"200\" | ConvertTo-Json -Depth 10)"
+      "PowerShell(\\(Invoke-RestMethod -Uri \"http://localhost:8000/openapi.json\"\\).paths.\"/workspaces\".get.responses.\"200\" | ConvertTo-Json -Depth 10)",
+      "mcp__claude_ai_Linear__get_issue"
     ]
   }
 }
