@@ -14,6 +14,7 @@ class IntelligenceConfig(BaseSettings):
     force_heuristic_fallback: bool = False
     max_graph_steps: int = 10
     hub_influence_threshold: float = 0.7
+    low_influence_threshold: float = 0.2
     routing: dict[str, str] = Field(
         default_factory=lambda: {
             "evaluate": "anthropic/claude-haiku-4-5-20251001",

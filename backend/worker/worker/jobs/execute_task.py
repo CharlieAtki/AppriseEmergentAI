@@ -16,16 +16,19 @@ from core.coordination.task_state import TaskStateMachine
 from core.eventing.activity.task_logger import TaskActivityLogger
 from core.eventing.activity.task_stream_logger import TaskStreamLogger
 from core.eventing.events.task_events import TaskSnapshot
+from core.intelligence import structured_call
 from core.intelligence.call_types import CallType
 from core.intelligence.context import AgentContext, TaskEvaluationContext
 from core.intelligence.prompts import decompose as decompose_prompt
 from core.intelligence.prompts import evaluate
 from core.intelligence.prompts.evaluate import EvaluateResponse
+from core.intelligence.signals import classify_influence
 from core.repositories.agent_repository import AgentRepository
 from core.repositories.task_execution_repository import TaskExecutionRepository
 from core.repositories.task_repository import TaskRepository
 from core.repositories.tool_repository import ToolRepository
 from langchain_core.runnables import RunnableConfig
+from pydantic import ValidationError
 
 from worker.context import get_worker_context
 from worker.span import ArqJobMeta, JobSpan
@@ -146,10 +149,12 @@ async def execute_task(
 
             # ── Phase 3: LLM EVALUATE ────────────────────────────────────────────
             await span.emit("agent.evaluating", {})
+            agent_influence = agent.influence or 0.0
             agent_ctx = AgentContext(
                 name=agent.name,
                 skills=agent.skills or {},
-                influence=agent.influence or 0.0,
+                influence=agent_influence,
+                influence_tier=classify_influence(agent_influence),
             )
             task_ctx = TaskEvaluationContext(
                 title=task.title,
@@ -162,12 +167,13 @@ async def execute_task(
                 depth_exceeded=depth_exceeded,
             )
 
-            raw = await wctx.llm_router.complete(
-                evaluate.build_prompt(agent_ctx, task_ctx),
+            decision = await structured_call.run(
+                wctx.llm_router,
                 CallType.EVALUATE,
-                json_mode=True,
+                evaluate.build_prompt(agent_ctx, task_ctx),
+                evaluate.parse,
+                fallback=EvaluateResponse(decision="self_execute", reasoning="parse fallback"),
             )
-            decision = evaluate.parse(raw)
 
             if depth_exceeded and decision.decision != "self_execute":
                 logger.warning(
@@ -180,32 +186,43 @@ async def execute_task(
             # ── Phase 4: ACT ON DECISION ─────────────────────────────────────────
             if decision.decision == "decompose":
                 await span.emit("agent.decomposing", {"reasoning": decision.reasoning})
-                raw_decompose = await wctx.llm_router.complete(
-                    decompose_prompt.build_prompt(agent_ctx, task_ctx),
-                    CallType.DECOMPOSE,
-                    json_mode=True,
-                )
-                decompose_resp = decompose_prompt.parse(raw_decompose)
-                specs = [s.model_dump() for s in decompose_resp.subtasks]
-
-                async with span.session() as session:
-                    task_repo = TaskRepository(session)
-                    subtasks = await decompose_and_publish(
-                        agent,
-                        task,
-                        specs,
-                        task_repo,
-                        task_ctx=provenance,
-                        task_logger=task_logger,
+                try:
+                    decompose_resp = await structured_call.call_and_parse(
+                        wctx.llm_router,
+                        CallType.DECOMPOSE,
+                        decompose_prompt.build_prompt(agent_ctx, task_ctx),
+                        decompose_prompt.parse,
                     )
-                # Session committed — subtasks are now visible to all connections.
-                for subtask in subtasks:
-                    await stream_logger.task_created(subtask)
+                except ValidationError as exc:
+                    logger.warning(
+                        "execute_task: decompose parse failed for task=%s, forcing self_execute: %s",
+                        task.id,
+                        exc,
+                    )
+                    decision = EvaluateResponse(
+                        decision="self_execute", reasoning="decompose parse fallback"
+                    )
+                else:
+                    specs = [s.model_dump() for s in decompose_resp.subtasks]
 
-                await _finalise_execution(
-                    span, execution, task, "completed", task_logger, execution_path="decompose"
-                )
-                return
+                    async with span.session() as session:
+                        task_repo = TaskRepository(session)
+                        subtasks = await decompose_and_publish(
+                            agent,
+                            task,
+                            specs,
+                            task_repo,
+                            task_ctx=provenance,
+                            task_logger=task_logger,
+                        )
+                    # Session committed — subtasks are now visible to all connections.
+                    for subtask in subtasks:
+                        await stream_logger.task_created(subtask)
+
+                    await _finalise_execution(
+                        span, execution, task, "completed", task_logger, execution_path="decompose"
+                    )
+                    return
 
             if decision.decision == "cfp":
                 await span.emit("agent.issuing_cfp", {"reasoning": decision.reasoning})

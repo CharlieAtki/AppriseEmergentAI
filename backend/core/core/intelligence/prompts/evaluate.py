@@ -21,15 +21,20 @@ def build_prompt(agent: AgentContext, task: TaskEvaluationContext) -> list[dict]
         "  decompose    — the task is too complex for one agent; break it into subtasks.\n\n"
         "Guidelines:\n"
         "- Prefer self_execute when the agent's skills cover the required skills.\n"
-        "- Prefer cfp when required skills are missing or another agent is clearly better.\n"
+        "- Prefer cfp when required skills are missing or another agent is clearly better. "
+        "cfp is skill-driven — influence_tier does not affect this choice.\n"
         "- Prefer decompose when difficulty >= 4 or the task has distinct independent parts.\n"
+        '- If influence_tier is "high", lean further toward decompose for complex tasks — '
+        "the agent has enough of a track record to act as a coordinator.\n"
+        '- If influence_tier is "low", lean toward self_execute to build a track record, '
+        "even when cfp/decompose would otherwise be plausible.\n"
         "- If depth_exceeded is true, you MUST choose self_execute regardless of other factors.\n\n"
         'Respond with JSON: {"decision": "...", "reasoning": "one sentence"}'
     )
     user = (
         f"Agent: {agent.name}\n"
         f"Skills: {agent.skills}\n"
-        f"Influence: {agent.influence:.2f}\n\n"
+        f"Influence tier: {agent.influence_tier} (raw={agent.influence:.2f})\n\n"
         f"Task title: {task.title}\n"
         f"Task description: {task.description}\n"
         f"Required skills: {task.required_skills}\n"

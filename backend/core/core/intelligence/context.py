@@ -3,12 +3,15 @@ from __future__ import annotations
 from collections.abc import Mapping
 from dataclasses import dataclass
 
+from core.intelligence.signals import InfluenceTier
+
 
 @dataclass(frozen=True)
 class AgentContext:
     name: str
     skills: Mapping[str, float]
     influence: float
+    influence_tier: InfluenceTier
 
 
 @dataclass(frozen=True)

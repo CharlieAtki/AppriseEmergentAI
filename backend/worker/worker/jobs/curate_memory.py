@@ -4,8 +4,10 @@ import logging
 from typing import Any
 
 from core.database import get_session
+from core.intelligence import structured_call
 from core.intelligence.call_types import CallType
 from core.intelligence.prompts import curate as curate_prompt
+from core.intelligence.prompts.curate import CurateResponse
 from core.memory.types import ProceduralRule
 from core.models.agents import Agent
 from sqlalchemy import select
@@ -47,12 +49,17 @@ async def curate_memory(ctx: dict[str, Any]) -> None:
 
         rules = [ProceduralRule.from_item(item) for item in all_rules]
 
-        raw = await wctx.llm_router.complete(
-            curate_prompt.build_prompt(rules),
-            CallType.CURATE_MEMORY,
-            json_mode=True,
-        )
-        response = curate_prompt.parse(raw)
+        try:
+            response = await structured_call.run(
+                wctx.llm_router,
+                CallType.CURATE_MEMORY,
+                curate_prompt.build_prompt(rules),
+                curate_prompt.parse,
+                fallback=CurateResponse(flagged=[]),
+            )
+        except Exception:
+            logger.exception("curate_memory: LLM call failed for agent %s, skipping", agent_id)
+            continue
 
         if not response.flagged:
             continue

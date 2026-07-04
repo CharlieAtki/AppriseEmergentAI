@@ -12,8 +12,8 @@ import logging
 import math
 from typing import Any
 
-from core.config import settings
 from core.database import get_session
+from core.intelligence.signals import classify_influence
 from core.models.observability import EmergenceEvent, WorkspaceMetricsSnapshot
 from core.models.tenant import Workspace
 from core.repositories.agent_repository import AgentRepository
@@ -58,11 +58,7 @@ async def sample_metrics(ctx: dict[str, Any]) -> None:
             gini = _gini(influences)
             spec_index = _specialisation_index(skills_list)
             hub_agent = next(
-                (
-                    a
-                    for a in agents
-                    if (a.influence or 0.0) >= settings.intelligence.hub_influence_threshold
-                ),
+                (a for a in agents if classify_influence(a.influence or 0.0) == "high"),
                 None,
             )
 
