@@ -22,7 +22,9 @@ from core.intelligence.prompts.evaluate import EvaluateResponse
 # module. Pull the actual module out of sys.modules instead.
 execute_task_module = sys.modules["worker.jobs.execute_task"]
 
-CTX: dict[str, object] = {"job_id": "job-1", "job_try": 1}
+
+def _ctx() -> dict[str, object]:
+    return {"job_id": "job-1", "job_try": 1}
 
 
 def _wctx() -> MagicMock:
@@ -94,7 +96,7 @@ async def test_missing_agent_or_task_returns_early(make_task, make_agent, mocker
     decision_mock = _decision(mocker, "self_execute")
 
     await execute_task_module.execute_task(
-        CTX, str(uuid.uuid4()), str(task.id), str(task.workspace_id)
+        _ctx(), str(uuid.uuid4()), str(task.id), str(task.workspace_id)
     )
 
     decision_mock.assert_not_called()
@@ -106,7 +108,9 @@ async def test_terminal_task_status_skips_execution(make_task, make_agent, mocke
     _patch_infra(mocker, task, agent)
     decision_mock = _decision(mocker, "self_execute")
 
-    await execute_task_module.execute_task(CTX, str(agent.id), str(task.id), str(task.workspace_id))
+    await execute_task_module.execute_task(
+        _ctx(), str(agent.id), str(task.id), str(task.workspace_id)
+    )
 
     decision_mock.assert_not_called()
 
@@ -125,7 +129,9 @@ async def test_idempotent_retry_reuses_existing_execution(make_task, make_agent,
     _, _, _, execution_repo, _ = _patch_infra(mocker, task, agent)
     _decision(mocker, "cfp")  # short-circuits before self-execute machinery
 
-    await execute_task_module.execute_task(CTX, str(agent.id), str(task.id), str(task.workspace_id))
+    await execute_task_module.execute_task(
+        _ctx(), str(agent.id), str(task.id), str(task.workspace_id)
+    )
 
     execution_repo.create.assert_not_called()
 
@@ -154,7 +160,9 @@ async def test_depth_guard_forces_self_execute(make_task, make_agent, mocker, de
     }
     wctx.graphs["universal"].ainvoke = AsyncMock(return_value=final_state)
 
-    await execute_task_module.execute_task(CTX, str(agent.id), str(task.id), str(task.workspace_id))
+    await execute_task_module.execute_task(
+        _ctx(), str(agent.id), str(task.id), str(task.workspace_id)
+    )
 
     # Self-execute path was taken despite the LLM's decision — graph was invoked.
     wctx.graphs["universal"].ainvoke.assert_awaited_once()
@@ -170,7 +178,9 @@ async def test_cfp_decision_releases_task_to_pool(make_task, make_agent, mocker)
     wctx, *_, execution = _patch_infra(mocker, task, agent)
     _decision(mocker, "cfp")
 
-    await execute_task_module.execute_task(CTX, str(agent.id), str(task.id), str(task.workspace_id))
+    await execute_task_module.execute_task(
+        _ctx(), str(agent.id), str(task.id), str(task.workspace_id)
+    )
 
     assert task.status == "open"
     assert task.delegation_depth == 1
@@ -197,7 +207,9 @@ async def test_decompose_decision_creates_subtasks(make_task, make_agent, mocker
         execute_task_module, "decompose_and_publish", AsyncMock(return_value=[subtask])
     )
 
-    await execute_task_module.execute_task(CTX, str(agent.id), str(task.id), str(task.workspace_id))
+    await execute_task_module.execute_task(
+        _ctx(), str(agent.id), str(task.id), str(task.workspace_id)
+    )
 
     assert execution.status == "completed"
     assert execution.execution_path == "decompose"
@@ -234,7 +246,9 @@ async def test_decompose_parse_failure_falls_back_to_self_execute(make_task, mak
         }
     )
 
-    await execute_task_module.execute_task(CTX, str(agent.id), str(task.id), str(task.workspace_id))
+    await execute_task_module.execute_task(
+        _ctx(), str(agent.id), str(task.id), str(task.workspace_id)
+    )
 
     wctx.graphs["universal"].ainvoke.assert_awaited_once()
     assert task.status == "completed"
@@ -259,7 +273,9 @@ async def test_self_execute_happy_path_writes_results(make_task, make_agent, moc
     }
     wctx.graphs["universal"].ainvoke = AsyncMock(return_value=final_state)
 
-    await execute_task_module.execute_task(CTX, str(agent.id), str(task.id), str(task.workspace_id))
+    await execute_task_module.execute_task(
+        _ctx(), str(agent.id), str(task.id), str(task.workspace_id)
+    )
 
     assert execution.status == "completed"
     assert execution.execution_path == "self_execute"
@@ -287,7 +303,7 @@ async def test_self_execute_exception_marks_execution_and_task_failed(
 
     with pytest.raises(RuntimeError, match="graph blew up"):
         await execute_task_module.execute_task(
-            CTX, str(agent.id), str(task.id), str(task.workspace_id)
+            _ctx(), str(agent.id), str(task.id), str(task.workspace_id)
         )
 
     assert execution.status == "failed"
@@ -327,7 +343,7 @@ async def test_failure_after_terminal_commit_does_not_retransition_task(
 
     with pytest.raises(RuntimeError, match="scoring bug"):
         await execute_task_module.execute_task(
-            CTX, str(agent.id), str(task.id), str(task.workspace_id)
+            _ctx(), str(agent.id), str(task.id), str(task.workspace_id)
         )
 
     # committed_task_status was still "executing" at the time of failure (score_outcome
