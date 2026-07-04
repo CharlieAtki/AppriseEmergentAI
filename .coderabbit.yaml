@@ -64,8 +64,8 @@ reviews:
         - sync.py must only be called at startup — never at request time.
         - llm_router.py dispatches calls only — it must not register models or know about the global catalog.
         - Prompt files must return a prompt string only — no dispatch, no response parsing.
-        - LLM calls in enrichment.py are only valid from the API process — not from worker jobs.
-        - Flag any LLM call outside of worker/worker/jobs/ (the only permitted site for agent-reasoning LLM calls).
+        - LLM calls in enrichment.py are only valid from the API process — not from worker jobs. This is a separate, non-agent-reasoning category and is exempt from the worker/worker/jobs/-only rule below.
+        - Flag any agent-reasoning LLM call outside of worker/worker/jobs/ (the only permitted site for agent-reasoning LLM calls) — enrichment.py is excluded from this check.
 
     # ── API layer ─────────────────────────────────────────────────────────────
     - path: "backend/api/**"
