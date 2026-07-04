@@ -16,16 +16,22 @@ from core.repositories.api_key_repository import ApiKeyRepository
 from core.repositories.task_execution_repository import TaskExecutionRepository
 from core.repositories.task_repository import TaskRepository
 from core.repositories.tool_repository import ToolRepository
+from core.repositories.workspace_metrics_repository import WorkspaceMetricsRepository
 from core.repositories.workspace_repository import WorkspaceRepository
-from fastapi import Depends, HTTPException, Request, status
+from fastapi import Depends, HTTPException, Request, WebSocket, WebSocketDisconnect, status
 from redis.asyncio import Redis
 from sqlalchemy.ext.asyncio import AsyncSession
+from starlette.requests import HTTPConnection
 
 from api.services.agent_service import AgentService
 from api.services.api_key_service import ApiKeyService
+from api.services.auth_service import WsTicketPayload, ws_ticket_key
 from api.services.task_service import TaskService
+from api.services.workspace_observability_service import WorkspaceObservabilityService
 from api.services.workspace_service import WorkspaceService
+from api.services.workspace_stream_service import WorkspaceStreamService
 from api.services.workspace_tool_service import WorkspaceToolService
+from api.ws.registry import WorkspaceConnectionRegistry
 
 
 def get_bus(request: Request) -> EventBus:
@@ -48,8 +54,12 @@ def get_agent_activity_logger(
     return AgentActivityLogger(publish)
 
 
-def get_redis(request: Request) -> Redis:
-    return request.app.state.redis  # type: ignore[no-any-return]
+def get_redis(conn: HTTPConnection) -> Redis:
+    """HTTPConnection (not Request) — this dependency is reachable from both HTTP
+    routes and the WS route (via require_stream_ticket / get_workspace_stream_service).
+    Request can't be injected in a websocket scope; HTTPConnection is the common
+    base FastAPI resolves for both. See get_workspace_connections() below — same fix."""
+    return conn.app.state.redis  # type: ignore[no-any-return]
 
 
 def get_llm_router(request: Request) -> LLMRouter:
@@ -79,6 +89,55 @@ def get_workspace_service(
     return WorkspaceService(repo)
 
 
+def get_workspace_metrics_repo(
+    session: AsyncSession = Depends(get_db),
+) -> WorkspaceMetricsRepository:
+    return WorkspaceMetricsRepository(session)
+
+
+def get_workspace_observability_service(
+    repo: WorkspaceMetricsRepository = Depends(get_workspace_metrics_repo),
+) -> WorkspaceObservabilityService:
+    return WorkspaceObservabilityService(repo)
+
+
+def get_workspace_connections(conn: HTTPConnection) -> WorkspaceConnectionRegistry:
+    """HTTPConnection — only ever reached from the WS route, but typed the same way
+    as get_redis() for consistency (a plain WebSocket param would also work here)."""
+    return conn.app.state.workspace_connections  # type: ignore[no-any-return]
+
+
+async def require_stream_ticket(
+    websocket: WebSocket,
+    workspace_id: uuid.UUID,
+    redis: Redis = Depends(get_redis),
+) -> WsTicketPayload:
+    """WS-route auth dependency, mirrors require_workspace().
+
+    AuthMiddleware (BaseHTTPMiddleware) never runs for scope["type"] == "websocket",
+    so this is the only auth check for GET /workspaces/{id}/stream. Ticket is
+    single-use (GETDEL) and 30s-TTL, minted via POST /workspaces/{id}/stream-ticket
+    (an ordinary authenticated HTTP route covered by AuthMiddleware as normal).
+
+    The Redis key is scoped by workspace_id (ws_ticket_key()) using the path's
+    workspace_id — not the ticket payload's — so a ticket presented against the
+    wrong workspace can't even be found, let alone consumed. The payload check
+    below is defense-in-depth, not the primary guard: the key scoping is.
+    """
+    ticket = websocket.query_params.get("ticket")
+    raw = await redis.getdel(ws_ticket_key(workspace_id, ticket)) if ticket else None
+    if not raw:
+        await websocket.close(code=4401)
+        raise WebSocketDisconnect
+
+    payload = WsTicketPayload.model_validate_json(raw)
+    if payload.workspace_id != workspace_id:
+        await websocket.close(code=4401)
+        raise WebSocketDisconnect
+
+    return payload
+
+
 def get_task_service(repo: TaskRepository = Depends(get_task_repo)) -> TaskService:
     return TaskService(repo)
 
@@ -92,6 +151,14 @@ def get_agent_service(
     exec_repo: TaskExecutionRepository = Depends(get_task_execution_repo),
 ) -> AgentService:
     return AgentService(repo, exec_repo)
+
+
+def get_workspace_stream_service(
+    agent_service: AgentService = Depends(get_agent_service),
+    metrics_repo: WorkspaceMetricsRepository = Depends(get_workspace_metrics_repo),
+    redis: Redis = Depends(get_redis),
+) -> WorkspaceStreamService:
+    return WorkspaceStreamService(agent_service, metrics_repo, redis)
 
 
 def get_api_key_repo(session: AsyncSession = Depends(get_db)) -> ApiKeyRepository:

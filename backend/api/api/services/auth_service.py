@@ -29,6 +29,29 @@ class UserPayload(BaseModel):
     auth_type: Literal["user"] = "user"
 
 
+class WsTicketPayload(BaseModel):
+    """Single-use WebSocket connect ticket — cached in Redis with a short TTL.
+
+    AuthMiddleware (BaseHTTPMiddleware) never runs for WebSocket scope, so this is
+    the auth mechanism for GET /workspaces/{id}/stream: mint via an authenticated
+    HTTP call, redeem exactly once via GETDEL on connect.
+    """
+
+    org_id: uuid.UUID
+    workspace_id: uuid.UUID
+
+
+def ws_ticket_key(workspace_id: uuid.UUID, token: str) -> str:
+    """Single source of truth for the ws_ticket Redis key — used by both
+    WorkspaceStreamService.mint_stream_ticket() (write) and
+    require_stream_ticket() (GETDEL). Scoping by workspace_id means a ticket
+    presented against the wrong workspace path can't be found, so it's never
+    consumed by a mismatched request — validating workspace_id only after GETDEL
+    would burn a legitimate ticket without granting access.
+    """
+    return f"ws_ticket:{workspace_id}:{token}"
+
+
 def _sha256(raw_key: str) -> str:
     return hashlib.sha256(raw_key.encode()).hexdigest()
 

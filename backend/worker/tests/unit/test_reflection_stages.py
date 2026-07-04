@@ -13,6 +13,7 @@ from contextlib import asynccontextmanager
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+from core.coordination.skills import compute_delta_magnitude
 from core.intelligence.reflection.types import PipelineResult, ReflectContext
 from pydantic import ValidationError
 from worker.reflection.stages import _primary_domain, _stage_reflect, _stage_rules, _stage_skills
@@ -62,6 +63,8 @@ def _make_span(session_factory=None):
     """Return a mock span whose .session() is the given async context manager factory."""
     span = MagicMock()
     span.emit = AsyncMock()
+    span.stream = MagicMock()
+    span.stream.skill_updated = AsyncMock()
     if session_factory is not None:
         span.session = session_factory
     return span
@@ -205,6 +208,14 @@ async def test_stage_skills_filters_out_of_required_set(caplog):
     # Warning should be logged about the filtered skill
     assert "exotic_unlisted_skill" in caplog.text
 
+    # Dashboard event must carry only the delta for the accepted skill ("python"),
+    # never the dropped one — the same guard that filters agent.skills must also
+    # gate what gets published.
+    expected_delta = compute_delta_magnitude(rctx.heuristic_score, 0.5)
+    span.stream.skill_updated.assert_awaited_once_with(
+        rctx.workspace_id, agent.id, {"python": expected_delta}, agent.influence
+    )
+
 
 async def test_stage_skills_seeds_new_skill_at_point_one():
     """New skill suggestions that are absent from the agent profile are seeded at 0.1."""
@@ -233,6 +244,13 @@ async def test_stage_skills_seeds_new_skill_at_point_one():
         await _stage_skills(rctx, result, AsyncMock(), AsyncMock())
 
     assert agent.skills.get("rust") == pytest.approx(0.1)
+
+    # Seeded skills ("rust") never get a delta — only "python" (in skill_domains
+    # and required_skills) does; the dashboard event must reflect that.
+    expected_delta = compute_delta_magnitude(rctx.heuristic_score, 0.5)
+    span.stream.skill_updated.assert_awaited_once_with(
+        rctx.workspace_id, agent.id, {"python": expected_delta}, agent.influence
+    )
 
 
 async def test_stage_skills_does_not_overwrite_existing_skill_with_seed():
@@ -263,6 +281,13 @@ async def test_stage_skills_does_not_overwrite_existing_skill_with_seed():
 
     # rust must remain at 0.0 — not overwritten by seed
     assert agent.skills["rust"] == pytest.approx(0.0)
+
+    # Only "python" (in skill_domains and required_skills) produces a delta —
+    # "rust" is pre-existing, not in skill_domains, so it's untouched here too.
+    expected_delta = compute_delta_magnitude(rctx.heuristic_score, 0.5)
+    span.stream.skill_updated.assert_awaited_once_with(
+        rctx.workspace_id, agent.id, {"python": expected_delta}, agent.influence
+    )
 
 
 # ── _stage_rules: early returns ───────────────────────────────────────────────

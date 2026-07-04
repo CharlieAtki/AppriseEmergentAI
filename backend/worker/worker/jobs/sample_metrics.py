@@ -10,16 +10,35 @@ from __future__ import annotations
 
 import logging
 import math
+import uuid
+from dataclasses import dataclass
 from typing import Any
 
 from core.database import get_session
+from core.eventing.activity.workspace_stream_logger import WorkspaceStreamLogger
 from core.intelligence.signals import classify_influence
-from core.models.observability import EmergenceEvent, WorkspaceMetricsSnapshot
+from core.models.observability import (
+    EmergenceEvent,
+    WorkspaceMetricsPayload,
+    WorkspaceMetricsSnapshot,
+)
 from core.models.tenant import Workspace
 from core.repositories.agent_repository import AgentRepository
 from sqlalchemy import select
 
+from worker.context import get_worker_context
+
 logger = logging.getLogger(__name__)
+
+
+@dataclass(frozen=True)
+class DetectedEmergence:
+    """One hub-agent detection collected during the loop, published only after
+    the session block commits — see the comment at the call site below."""
+
+    workspace_id: uuid.UUID
+    gini: float
+    hub_agent_id: uuid.UUID
 
 
 async def sample_metrics(ctx: dict[str, Any]) -> None:
@@ -30,13 +49,15 @@ async def sample_metrics(ctx: dict[str, Any]) -> None:
     Writes WorkspaceMetricsSnapshot and EmergenceEvent rows to Postgres — those rows
     are the source of truth for any dashboard or reporting consumer.
 
-    No LLM, no JobSpan, no bus dependency — pure arithmetic and DB writes.
-
-    When a real-time dashboard consumer exists, add a WorkspaceMetricsUpdatedStreamEvent
-    to core/eventing/events/stream_events.py and a WorkspaceStreamLogger that receives
-    StreamPublishFn — following the same pattern as TaskStreamLogger. Do not call
-    wctx.bus.publish() directly from this function.
+    No LLM, no JobSpan — pure arithmetic and DB writes, plus a dashboard event fan-out.
     """
+    wctx = get_worker_context()
+    workspace_stream_logger = WorkspaceStreamLogger(wctx.redis.publish)
+    # Collected during the loop, published only after the session block below commits —
+    # no subscriber ever sees emergence.detected before the backing row is durable
+    # (mirrors the create_task router's own commit-before-enqueue precedent).
+    detected: list[DetectedEmergence] = []
+
     async with get_session() as session:
         workspaces = (
             (await session.execute(select(Workspace).where(Workspace.status == "active")))
@@ -62,15 +83,11 @@ async def sample_metrics(ctx: dict[str, Any]) -> None:
                 None,
             )
 
+            payload = WorkspaceMetricsPayload(
+                gini=gini, specialisation_index=spec_index, agent_count=len(agents)
+            )
             session.add(
-                WorkspaceMetricsSnapshot(
-                    workspace_id=workspace.id,
-                    metrics={
-                        "gini": gini,
-                        "specialisation_index": spec_index,
-                        "agent_count": len(agents),
-                    },
-                )
+                WorkspaceMetricsSnapshot(workspace_id=workspace.id, metrics=payload.to_dict())
             )
             snapshots_written += 1
 
@@ -83,6 +100,11 @@ async def sample_metrics(ctx: dict[str, Any]) -> None:
                         hub_agent_id=hub_agent.id,
                     )
                 )
+                detected.append(
+                    DetectedEmergence(
+                        workspace_id=workspace.id, gini=gini, hub_agent_id=hub_agent.id
+                    )
+                )
                 logger.info(
                     "emergence: hub agent %s detected in workspace %s (gini=%.3f)",
                     hub_agent.id,
@@ -90,6 +112,13 @@ async def sample_metrics(ctx: dict[str, Any]) -> None:
                     gini,
                 )
         # Single commit for all workspaces on context manager exit
+
+    # WorkspaceStreamLogger._emit() is itself best-effort (logs and swallows a
+    # publish failure) — no try/except needed here.
+    for detection in detected:
+        await workspace_stream_logger.emergence_detected(
+            detection.workspace_id, detection.gini, detection.hub_agent_id
+        )
 
     if snapshots_written:
         logger.debug("sample_metrics: %d workspace snapshots written", snapshots_written)

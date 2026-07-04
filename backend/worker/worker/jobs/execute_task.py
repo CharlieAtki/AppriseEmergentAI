@@ -235,7 +235,7 @@ async def execute_task(
             # ── Phase 5: SELF-EXECUTE via LangGraph ──────────────────────────────
             # Resolve workspace-scoped tools before graph invocation. Session closes
             # before ainvoke — no open DB connection during graph execution.
-            await span.emit("agent.executing", {})
+            await span.stream.task_executing(task.workspace_id, task.id, agent.id)
             async with span.session() as session:
                 tools, entries = await tool_registry.build_for_task_type(
                     task_type=task.task_type or "general",
@@ -303,7 +303,7 @@ async def execute_task(
 
             await stream_logger.task_completed(task, agent_id, quality)
 
-            await span.emit("job.completed", {"quality_score": quality})
+            await span.stream.task_completed(task.workspace_id, task.id, agent.id, quality)
 
             logger.info(
                 "execute_task: agent=%s task=%s quality=%.3f",

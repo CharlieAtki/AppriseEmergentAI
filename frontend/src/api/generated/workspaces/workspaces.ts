@@ -27,7 +27,11 @@ import type {
   HTTPValidationError,
   UpdateWorkspaceRequest,
 } from "../model";
-import { WorkspaceResponse } from "../model";
+import {
+  StreamTicketResponse,
+  WorkspaceMetricsResponse,
+  WorkspaceResponse,
+} from "../model";
 
 import { customInstance } from "../../client";
 
@@ -773,6 +777,444 @@ export const useDeleteWorkspaceWorkspacesWorkspaceIdDelete = <
 > => {
   return useMutation(
     getDeleteWorkspaceWorkspacesWorkspaceIdDeleteMutationOptions(options),
+    queryClient,
+  );
+};
+/**
+ * The latest Workspace Metrics Snapshot — the routine periodic sample (Gini,
+ * specialisation index, agent count), distinct from an Emergence Event. See
+ * docs/backend/CONTEXT.md. 404 if sample_metrics hasn't run for this workspace yet
+ * (fewer than 2 active agents, or simply not enough time has passed).
+ * @summary Get Workspace Metrics
+ */
+export const getWorkspaceMetricsWorkspacesWorkspaceIdMetricsGet = (
+  workspaceId: string,
+  options?: SecondParameter<typeof customInstance>,
+  signal?: AbortSignal,
+) => {
+  return customInstance<WorkspaceMetricsResponse>(
+    {
+      url: `/workspaces/${workspaceId}/metrics`,
+      method: "GET",
+      ...(signal ? { signal } : {}),
+    },
+    options,
+    WorkspaceMetricsResponse,
+  );
+};
+
+export const getGetWorkspaceMetricsWorkspacesWorkspaceIdMetricsGetQueryKey = (
+  workspaceId: string,
+) => {
+  return [`/workspaces/${workspaceId}/metrics`] as const;
+};
+
+export const getGetWorkspaceMetricsWorkspacesWorkspaceIdMetricsGetQueryOptions =
+  <
+    TData = Awaited<
+      ReturnType<typeof getWorkspaceMetricsWorkspacesWorkspaceIdMetricsGet>
+    >,
+    TError = HTTPValidationError,
+  >(
+    workspaceId: string,
+    options?: {
+      query?: Partial<
+        UseQueryOptions<
+          Awaited<
+            ReturnType<
+              typeof getWorkspaceMetricsWorkspacesWorkspaceIdMetricsGet
+            >
+          >,
+          TError,
+          TData
+        >
+      >;
+      request?: SecondParameter<typeof customInstance>;
+    },
+  ) => {
+    const { query: queryOptions, request: requestOptions } = options ?? {};
+
+    const queryKey =
+      queryOptions?.queryKey ??
+      getGetWorkspaceMetricsWorkspacesWorkspaceIdMetricsGetQueryKey(
+        workspaceId,
+      );
+
+    const queryFn: QueryFunction<
+      Awaited<
+        ReturnType<typeof getWorkspaceMetricsWorkspacesWorkspaceIdMetricsGet>
+      >
+    > = ({ signal }) =>
+      getWorkspaceMetricsWorkspacesWorkspaceIdMetricsGet(
+        workspaceId,
+        requestOptions,
+        signal,
+      );
+
+    return {
+      queryKey,
+      queryFn,
+      enabled: workspaceId !== null && workspaceId !== undefined,
+      ...queryOptions,
+    } as UseQueryOptions<
+      Awaited<
+        ReturnType<typeof getWorkspaceMetricsWorkspacesWorkspaceIdMetricsGet>
+      >,
+      TError,
+      TData
+    > & { queryKey: DataTag<QueryKey, TData, TError> };
+  };
+
+export type GetWorkspaceMetricsWorkspacesWorkspaceIdMetricsGetQueryResult =
+  NonNullable<
+    Awaited<
+      ReturnType<typeof getWorkspaceMetricsWorkspacesWorkspaceIdMetricsGet>
+    >
+  >;
+export type GetWorkspaceMetricsWorkspacesWorkspaceIdMetricsGetQueryError =
+  HTTPValidationError;
+
+export function useGetWorkspaceMetricsWorkspacesWorkspaceIdMetricsGet<
+  TData = Awaited<
+    ReturnType<typeof getWorkspaceMetricsWorkspacesWorkspaceIdMetricsGet>
+  >,
+  TError = HTTPValidationError,
+>(
+  workspaceId: string,
+  options: {
+    query: Partial<
+      UseQueryOptions<
+        Awaited<
+          ReturnType<typeof getWorkspaceMetricsWorkspacesWorkspaceIdMetricsGet>
+        >,
+        TError,
+        TData
+      >
+    > &
+      Pick<
+        DefinedInitialDataOptions<
+          Awaited<
+            ReturnType<
+              typeof getWorkspaceMetricsWorkspacesWorkspaceIdMetricsGet
+            >
+          >,
+          TError,
+          Awaited<
+            ReturnType<
+              typeof getWorkspaceMetricsWorkspacesWorkspaceIdMetricsGet
+            >
+          >
+        >,
+        "initialData"
+      >;
+    request?: SecondParameter<typeof customInstance>;
+  },
+  queryClient?: QueryClient,
+): DefinedUseQueryResult<TData, TError> & {
+  queryKey: DataTag<QueryKey, TData, TError>;
+};
+export function useGetWorkspaceMetricsWorkspacesWorkspaceIdMetricsGet<
+  TData = Awaited<
+    ReturnType<typeof getWorkspaceMetricsWorkspacesWorkspaceIdMetricsGet>
+  >,
+  TError = HTTPValidationError,
+>(
+  workspaceId: string,
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<
+          ReturnType<typeof getWorkspaceMetricsWorkspacesWorkspaceIdMetricsGet>
+        >,
+        TError,
+        TData
+      >
+    > &
+      Pick<
+        UndefinedInitialDataOptions<
+          Awaited<
+            ReturnType<
+              typeof getWorkspaceMetricsWorkspacesWorkspaceIdMetricsGet
+            >
+          >,
+          TError,
+          Awaited<
+            ReturnType<
+              typeof getWorkspaceMetricsWorkspacesWorkspaceIdMetricsGet
+            >
+          >
+        >,
+        "initialData"
+      >;
+    request?: SecondParameter<typeof customInstance>;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & {
+  queryKey: DataTag<QueryKey, TData, TError>;
+};
+export function useGetWorkspaceMetricsWorkspacesWorkspaceIdMetricsGet<
+  TData = Awaited<
+    ReturnType<typeof getWorkspaceMetricsWorkspacesWorkspaceIdMetricsGet>
+  >,
+  TError = HTTPValidationError,
+>(
+  workspaceId: string,
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<
+          ReturnType<typeof getWorkspaceMetricsWorkspacesWorkspaceIdMetricsGet>
+        >,
+        TError,
+        TData
+      >
+    >;
+    request?: SecondParameter<typeof customInstance>;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & {
+  queryKey: DataTag<QueryKey, TData, TError>;
+};
+/**
+ * @summary Get Workspace Metrics
+ */
+
+export function useGetWorkspaceMetricsWorkspacesWorkspaceIdMetricsGet<
+  TData = Awaited<
+    ReturnType<typeof getWorkspaceMetricsWorkspacesWorkspaceIdMetricsGet>
+  >,
+  TError = HTTPValidationError,
+>(
+  workspaceId: string,
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<
+          ReturnType<typeof getWorkspaceMetricsWorkspacesWorkspaceIdMetricsGet>
+        >,
+        TError,
+        TData
+      >
+    >;
+    request?: SecondParameter<typeof customInstance>;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & {
+  queryKey: DataTag<QueryKey, TData, TError>;
+} {
+  const queryOptions =
+    getGetWorkspaceMetricsWorkspacesWorkspaceIdMetricsGetQueryOptions(
+      workspaceId,
+      options,
+    );
+
+  const query = useQuery(queryOptions, queryClient) as UseQueryResult<
+    TData,
+    TError
+  > & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+/**
+ * @summary Get Workspace Metrics
+ */
+export const invalidateGetWorkspaceMetricsWorkspacesWorkspaceIdMetricsGet =
+  async (
+    queryClient: QueryClient,
+    workspaceId: string,
+    options?: InvalidateOptions,
+  ): Promise<QueryClient> => {
+    await queryClient.invalidateQueries(
+      {
+        queryKey:
+          getGetWorkspaceMetricsWorkspacesWorkspaceIdMetricsGetQueryKey(
+            workspaceId,
+          ),
+      },
+      options,
+    );
+
+    return queryClient;
+  };
+
+/**
+ * @summary Get Workspace Metrics
+ */
+export const useSetGetWorkspaceMetricsWorkspacesWorkspaceIdMetricsGetQueryData =
+  () => {
+    const queryClient = useQueryClient();
+    return (
+      workspaceId: string,
+      updater:
+        | Awaited<
+            ReturnType<
+              typeof getWorkspaceMetricsWorkspacesWorkspaceIdMetricsGet
+            >
+          >
+        | undefined
+        | ((
+            old:
+              | Awaited<
+                  ReturnType<
+                    typeof getWorkspaceMetricsWorkspacesWorkspaceIdMetricsGet
+                  >
+                >
+              | undefined,
+          ) =>
+            | Awaited<
+                ReturnType<
+                  typeof getWorkspaceMetricsWorkspacesWorkspaceIdMetricsGet
+                >
+              >
+            | undefined),
+    ) => {
+      queryClient.setQueriesData<
+        Awaited<
+          ReturnType<typeof getWorkspaceMetricsWorkspacesWorkspaceIdMetricsGet>
+        >
+      >(
+        {
+          queryKey:
+            getGetWorkspaceMetricsWorkspacesWorkspaceIdMetricsGetQueryKey(
+              workspaceId,
+            ),
+        },
+        updater,
+      );
+    };
+  };
+
+/**
+ * @summary Get Workspace Metrics
+ */
+export const useGetGetWorkspaceMetricsWorkspacesWorkspaceIdMetricsGetQueryData =
+  () => {
+    const queryClient = useQueryClient();
+    return (workspaceId: string) =>
+      queryClient.getQueryData<
+        Awaited<
+          ReturnType<typeof getWorkspaceMetricsWorkspacesWorkspaceIdMetricsGet>
+        >
+      >(
+        getGetWorkspaceMetricsWorkspacesWorkspaceIdMetricsGetQueryKey(
+          workspaceId,
+        ),
+      );
+  };
+
+/**
+ * Single-use, 30s-TTL ticket for GET /{workspace_id}/stream.
+ *
+ * AuthMiddleware never runs for WebSocket scope, so the WS route can't verify a
+ * Clerk bearer token itself — this ordinary HTTP route mints a short-lived ticket
+ * under normal auth instead. See require_stream_ticket() in api/deps.py.
+ * @summary Mint Stream Ticket
+ */
+export const mintStreamTicketWorkspacesWorkspaceIdStreamTicketPost = (
+  workspaceId: string,
+  options?: SecondParameter<typeof customInstance>,
+  signal?: AbortSignal,
+) => {
+  return customInstance<StreamTicketResponse>(
+    {
+      url: `/workspaces/${workspaceId}/stream-ticket`,
+      method: "POST",
+      ...(signal ? { signal } : {}),
+    },
+    options,
+    StreamTicketResponse,
+  );
+};
+
+export const getMintStreamTicketWorkspacesWorkspaceIdStreamTicketPostMutationOptions =
+  <TError = HTTPValidationError, TContext = unknown>(options?: {
+    mutation?: UseMutationOptions<
+      Awaited<
+        ReturnType<typeof mintStreamTicketWorkspacesWorkspaceIdStreamTicketPost>
+      >,
+      TError,
+      { workspaceId: string },
+      TContext
+    >;
+    request?: SecondParameter<typeof customInstance>;
+  }): UseMutationOptions<
+    Awaited<
+      ReturnType<typeof mintStreamTicketWorkspacesWorkspaceIdStreamTicketPost>
+    >,
+    TError,
+    { workspaceId: string },
+    TContext
+  > => {
+    const mutationKey = [
+      "mintStreamTicketWorkspacesWorkspaceIdStreamTicketPost",
+    ];
+    const { mutation: mutationOptions, request: requestOptions } = options
+      ? options.mutation &&
+        "mutationKey" in options.mutation &&
+        options.mutation.mutationKey
+        ? options
+        : { ...options, mutation: { ...options.mutation, mutationKey } }
+      : { mutation: { mutationKey }, request: undefined };
+
+    const mutationFn: MutationFunction<
+      Awaited<
+        ReturnType<typeof mintStreamTicketWorkspacesWorkspaceIdStreamTicketPost>
+      >,
+      { workspaceId: string }
+    > = (props) => {
+      const { workspaceId } = props ?? {};
+
+      return mintStreamTicketWorkspacesWorkspaceIdStreamTicketPost(
+        workspaceId,
+        requestOptions,
+      );
+    };
+
+    return { mutationFn, ...mutationOptions };
+  };
+
+export type MintStreamTicketWorkspacesWorkspaceIdStreamTicketPostMutationResult =
+  NonNullable<
+    Awaited<
+      ReturnType<typeof mintStreamTicketWorkspacesWorkspaceIdStreamTicketPost>
+    >
+  >;
+
+export type MintStreamTicketWorkspacesWorkspaceIdStreamTicketPostMutationError =
+  HTTPValidationError;
+
+/**
+ * @summary Mint Stream Ticket
+ */
+export const useMintStreamTicketWorkspacesWorkspaceIdStreamTicketPost = <
+  TError = HTTPValidationError,
+  TContext = unknown,
+>(
+  options?: {
+    mutation?: UseMutationOptions<
+      Awaited<
+        ReturnType<typeof mintStreamTicketWorkspacesWorkspaceIdStreamTicketPost>
+      >,
+      TError,
+      { workspaceId: string },
+      TContext
+    >;
+    request?: SecondParameter<typeof customInstance>;
+  },
+  queryClient?: QueryClient,
+): UseMutationResult<
+  Awaited<
+    ReturnType<typeof mintStreamTicketWorkspacesWorkspaceIdStreamTicketPost>
+  >,
+  TError,
+  { workspaceId: string },
+  TContext
+> => {
+  return useMutation(
+    getMintStreamTicketWorkspacesWorkspaceIdStreamTicketPostMutationOptions(
+      options,
+    ),
     queryClient,
   );
 };

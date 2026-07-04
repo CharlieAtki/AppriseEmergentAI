@@ -149,6 +149,22 @@ async def test_current_span_after_exit_raises():
         current_span()
 
 
+# ── span.stream (dashboard events) ───────────────────────────────────────────
+
+
+async def test_stream_uses_same_publish_callable_and_channel_as_emit():
+    """span.stream must be wired from the same redis_publish callable as emit() —
+    both reach the same workspace:{id}:events channel via a single Redis connection."""
+    ws_id = uuid.uuid4()
+    span, publish = _make_span(workspace_id=ws_id)
+
+    await span.stream.task_executing(ws_id, uuid.uuid4(), uuid.uuid4())
+
+    publish.assert_called_once()
+    channel = publish.call_args.args[0]
+    assert channel == f"workspace:{ws_id}:events"
+
+
 async def test_nested_spans_restore_outer():
     """Inner span shadows outer; after inner exits, outer is accessible again."""
     outer, _ = _make_span()

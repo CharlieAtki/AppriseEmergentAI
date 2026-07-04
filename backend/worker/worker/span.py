@@ -10,6 +10,7 @@ from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
 from core.database import get_session
+from core.eventing.activity.workspace_stream_logger import WorkspaceStreamLogger
 
 if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession
@@ -59,10 +60,16 @@ class JobSpan:
 
     Does NOT create or finalise the TaskExecution row — that is the job's responsibility.
 
-    ``redis_publish`` is the narrow callable used by ``emit()`` to push events to
+    ``redis_publish`` is the narrow callable used by ``emit()`` to push tracing events to
     Redis Pub/Sub. Pass ``wctx.redis.publish`` at the call site — injected rather
     than resolved via ``get_worker_context()`` so the span has no hidden global
     dependency and can be constructed in tests with a mock callable.
+
+    ``self.stream`` (a ``WorkspaceStreamLogger`` built from the same ``redis_publish``
+    callable) is the separate, stable vocabulary for dashboard events — reached via
+    ``current_span().stream`` from anywhere in the job call stack, same ContextVar
+    pattern as ``emit()``. Never repurpose ``emit()``'s tracing event types for the
+    dashboard contract — they serve different consumers and must be free to diverge.
 
     ``meta`` carries the ARQ job identity parsed from ``ctx`` at the job boundary
     via ``ArqJobMeta.from_ctx(ctx)``. Its fields appear in every emitted event for
@@ -83,6 +90,7 @@ class JobSpan:
         self.agent_id = agent_id
         self.task_id = task_id
         self.workspace_id = workspace_id
+        self.stream = WorkspaceStreamLogger(redis_publish)
         self._events: list[dict[str, object]] = []
         self._token: Token[JobSpan] | None = None
 
