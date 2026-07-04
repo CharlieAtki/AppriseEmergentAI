@@ -30,6 +30,7 @@ from api.routers import tasks as tasks_router
 from api.routers import workspace_tools as workspace_tools_router
 from api.routers import workspaces as workspaces_router
 from api.routers.webhooks import router as webhooks_router
+from api.ws.registry import WorkspaceConnectionRegistry
 
 
 @asynccontextmanager
@@ -66,6 +67,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
     app.state.redis = redis
     app.state.llm_router = llm_router
     app.state.arq_queue = arq_queue
+    app.state.workspace_connections = WorkspaceConnectionRegistry(redis)
     # Clerk SDK instance — used by AuthMiddleware to verify human user JWTs.
     # bearer_auth is the Clerk secret key; the SDK fetches Clerk's public JWKS
     # on first verify call and caches them, so subsequent verifications are local
