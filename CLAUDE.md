@@ -499,7 +499,7 @@ Use only for animations that are genuinely stateful or physics-based. Do not rea
 
 ### Issue tracker
 
-Issues live in GitHub Issues. See `docs/agents/issue-tracker.md`.
+Issues live in **Linear** (https://linear.app/apprise-labs). See `docs/agents/issue-tracker.md` for projects, labels, priority conventions, and MCP tool usage.
 
 ### Triage labels
 
