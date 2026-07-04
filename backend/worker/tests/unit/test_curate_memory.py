@@ -99,3 +99,35 @@ async def test_transient_parse_failure_recovers_via_retry():
 
     wctx.memory.archive_procedures.assert_called_once_with(["rule-a"])
     assert wctx.llm_router.complete.call_count == 2
+
+
+async def test_non_parse_exception_does_not_abort_remaining_agents():
+    """structured_call.run() only catches ValidationError — retry_async re-raises any
+    other exception immediately since is_retryable only matches ValidationError. A
+    non-parse failure (network error, vendor SDK exception, etc.) from
+    llm_router.complete is therefore caught by curate_memory's per-agent try/except,
+    logged, and skipped — the loop still processes the remaining agents.
+    """
+    agent_a, agent_b = _make_agent(), _make_agent()
+
+    wctx = MagicMock()
+    wctx.memory.scroll_all_procedures = AsyncMock(
+        side_effect=[[_make_item("rule-a")], [_make_item("rule-b")]]
+    )
+    wctx.memory.archive_procedures = AsyncMock()
+    # Agent A's call raises outright; agent B's call parses fine.
+    wctx.llm_router.complete = AsyncMock(
+        side_effect=[
+            RuntimeError("vendor call failed"),
+            '{"flagged": [{"id": "rule-b", "verdict": "stale", "reason": "old"}]}',
+        ]
+    )
+
+    with (
+        patch("worker.jobs.curate_memory.get_session", _patch_session([agent_a, agent_b])),
+        patch("worker.jobs.curate_memory.get_worker_context", return_value=wctx),
+    ):
+        await curate_memory({})
+
+    # Agent A's exception was caught and skipped; agent B was still processed and archived.
+    wctx.memory.archive_procedures.assert_called_once_with(["rule-b"])

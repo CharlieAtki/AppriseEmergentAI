@@ -49,13 +49,17 @@ async def curate_memory(ctx: dict[str, Any]) -> None:
 
         rules = [ProceduralRule.from_item(item) for item in all_rules]
 
-        response = await structured_call.run(
-            wctx.llm_router,
-            CallType.CURATE_MEMORY,
-            curate_prompt.build_prompt(rules),
-            curate_prompt.parse,
-            fallback=CurateResponse(flagged=[]),
-        )
+        try:
+            response = await structured_call.run(
+                wctx.llm_router,
+                CallType.CURATE_MEMORY,
+                curate_prompt.build_prompt(rules),
+                curate_prompt.parse,
+                fallback=CurateResponse(flagged=[]),
+            )
+        except Exception:
+            logger.exception("curate_memory: LLM call failed for agent %s, skipping", agent_id)
+            continue
 
         if not response.flagged:
             continue
