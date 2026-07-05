@@ -8,6 +8,7 @@ terminal state rather than dangling at "executing".
 
 from __future__ import annotations
 
+import json
 import sys
 import uuid
 from contextlib import asynccontextmanager
@@ -22,6 +23,17 @@ from core.intelligence.prompts.evaluate import EvaluateResponse
 # module. Pull the actual module out of sys.modules instead.
 execute_task_module = sys.modules["worker.jobs.execute_task"]
 
+# Matches the old hardcoded MAX_DELEGATION_DEPTH=5 / soft "difficulty >= 4"
+# guideline, so existing depth/difficulty-sensitive tests below don't need to
+# change their fixture values — only the resolution mechanism changed.
+_DEFAULT_COORDINATION_CONFIG = {
+    "max_delegation_depth": 5,
+    "decompose_difficulty_threshold": 4.0,
+    "max_delegation_depth_source": "platform",
+    "decompose_difficulty_threshold_source": "platform",
+    "max_delegation_depth_clamped": False,
+}
+
 
 def _ctx() -> dict[str, object]:
     return {"job_id": "job-1", "job_try": 1}
@@ -30,6 +42,10 @@ def _ctx() -> dict[str, object]:
 def _wctx() -> MagicMock:
     wctx = MagicMock()
     wctx.redis = AsyncMock()
+    # Cache hit by default — _resolve_coordination_config() never touches the DB
+    # repos in these tests. Coverage for the cache-miss/DB-fallback path and the
+    # merge/clamp logic itself lives in test_resolve_coordination_config.py.
+    wctx.redis.get = AsyncMock(return_value=json.dumps(_DEFAULT_COORDINATION_CONFIG))
     wctx.centrifugo_publish = AsyncMock()
     wctx.event_bus.apublish = AsyncMock()
     wctx.bus.apublish = AsyncMock()
@@ -142,8 +158,8 @@ async def test_idempotent_retry_reuses_existing_execution(make_task, make_agent,
 
 @pytest.mark.parametrize("decision", ["decompose", "cfp"])
 async def test_depth_guard_forces_self_execute(make_task, make_agent, mocker, decision):
-    """delegation_depth >= MAX_DELEGATION_DEPTH overrides any non-self_execute decision."""
-    task = make_task(status="reserved", delegation_depth=5)  # MAX_DELEGATION_DEPTH
+    """delegation_depth >= the resolved max_delegation_depth overrides any non-self_execute decision."""
+    task = make_task(status="reserved", delegation_depth=5)  # matches _DEFAULT_COORDINATION_CONFIG
     agent = make_agent()
     wctx, *_ = _patch_infra(mocker, task, agent)
     _decision(mocker, decision)
@@ -170,6 +186,40 @@ async def test_depth_guard_forces_self_execute(make_task, make_agent, mocker, de
     assert task.status == "completed"
 
 
+# ── Difficulty guard ──────────────────────────────────────────────────────────
+
+
+async def test_difficulty_guard_forces_self_execute_below_threshold(make_task, make_agent, mocker):
+    """A decompose decision on a task below decompose_difficulty_threshold is
+    overridden to self_execute — this is the APP-8 fix: the LLM's soft
+    guideline is no longer the only thing enforcing this."""
+    task = make_task(status="reserved", delegation_depth=0, difficulty=3.0)  # < threshold (4.0)
+    agent = make_agent()
+    wctx, *_ = _patch_infra(mocker, task, agent)
+    _decision(mocker, "decompose")
+    mocker.patch.object(
+        execute_task_module.tool_registry, "build_for_task_type", AsyncMock(return_value=([], []))
+    )
+    mocker.patch.object(execute_task_module.tool_registry, "get_skill_tag_map", return_value={})
+
+    final_state = {
+        "artifact": "done",
+        "artifact_id": None,
+        "step_count": 1,
+        "tool_trace": [],
+        "skill_tags_used": [],
+    }
+    wctx.graphs["universal"].ainvoke = AsyncMock(return_value=final_state)
+
+    await execute_task_module.execute_task(
+        _ctx(), str(agent.id), str(task.id), str(task.workspace_id)
+    )
+
+    # Self-execute path was taken despite the LLM's decompose decision.
+    wctx.graphs["universal"].ainvoke.assert_awaited_once()
+    assert task.status == "completed"
+
+
 # ── Decision branches ─────────────────────────────────────────────────────────
 
 
@@ -191,7 +241,7 @@ async def test_cfp_decision_releases_task_to_pool(make_task, make_agent, mocker)
 
 
 async def test_decompose_decision_creates_subtasks(make_task, make_agent, mocker):
-    task = make_task(status="reserved", delegation_depth=0)
+    task = make_task(status="reserved", delegation_depth=0, difficulty=4.5)  # above threshold
     agent = make_agent()
     *_, execution = _patch_infra(mocker, task, agent)
     _decision(mocker, "decompose")
@@ -222,7 +272,7 @@ async def test_decompose_parse_failure_falls_back_to_self_execute(make_task, mak
     it forces self_execute instead."""
     from pydantic import ValidationError
 
-    task = make_task(status="reserved", delegation_depth=0)
+    task = make_task(status="reserved", delegation_depth=0, difficulty=4.5)  # above threshold
     agent = make_agent()
     wctx, *_ = _patch_infra(mocker, task, agent)
     _decision(mocker, "decompose")

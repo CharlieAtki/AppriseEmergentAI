@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from core.utils import merge_tiers
+
 
 @dataclass(frozen=True)
 class RoutingConfig:
@@ -12,5 +14,4 @@ def resolve_routing(
     platform_defaults: dict[str, str],
     workspace_overrides: dict | None,
 ) -> RoutingConfig:
-    merged = {**platform_defaults, **(workspace_overrides or {})}
-    return RoutingConfig(routing=merged)
+    return RoutingConfig(routing=merge_tiers(platform_defaults, workspace_overrides))

@@ -7,8 +7,6 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from core.models.tasks import Task
 
-MAX_DELEGATION_DEPTH = 5
-
 
 @dataclass(frozen=True)
 class TaskContext:

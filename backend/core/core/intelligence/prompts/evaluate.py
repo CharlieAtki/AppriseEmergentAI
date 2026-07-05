@@ -12,7 +12,9 @@ class EvaluateResponse(BaseModel):
     reasoning: str
 
 
-def build_prompt(agent: AgentContext, task: TaskEvaluationContext) -> list[dict]:
+def build_prompt(
+    agent: AgentContext, task: TaskEvaluationContext, decompose_difficulty_threshold: float
+) -> list[dict]:
     system = (
         "You are deciding how an agent should handle an incoming task. "
         "Choose exactly one of three strategies:\n\n"
@@ -23,7 +25,9 @@ def build_prompt(agent: AgentContext, task: TaskEvaluationContext) -> list[dict]
         "- Prefer self_execute when the agent's skills cover the required skills.\n"
         "- Prefer cfp when required skills are missing or another agent is clearly better. "
         "cfp is skill-driven — influence_tier does not affect this choice.\n"
-        "- Prefer decompose when difficulty >= 4 or the task has distinct independent parts.\n"
+        f"- decompose is only valid when difficulty >= {decompose_difficulty_threshold}. "
+        "Below that, do not decompose regardless of how many independent parts the task "
+        "appears to have — choose self_execute or cfp instead.\n"
         '- If influence_tier is "high", lean further toward decompose for complex tasks — '
         "the agent has enough of a track record to act as a coordinator.\n"
         '- If influence_tier is "low", lean toward self_execute to build a track record, '

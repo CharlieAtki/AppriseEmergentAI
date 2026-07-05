@@ -11,7 +11,7 @@ from core.eventing.activity.base import PublishFn
 from core.eventing.activity.task_logger import TaskActivityLogger
 from core.eventing.bus.in_process_bus import EventBus
 from core.intelligence.llm_router import LLMRouter
-from core.models.tenant import Workspace
+from core.models.tenant import Organisation, Workspace
 from core.repositories.agent_repository import AgentRepository
 from core.repositories.api_key_repository import ApiKeyRepository
 from core.repositories.org_repository import OrganisationRepository
@@ -28,6 +28,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from api.services.agent_service import AgentService
 from api.services.api_key_service import ApiKeyService
 from api.services.centrifugo_proxy_service import CentrifugoProxyService
+from api.services.coordination_config_service import CoordinationConfigService
 from api.services.task_service import TaskService
 from api.services.workspace_observability_service import WorkspaceObservabilityService
 from api.services.workspace_service import WorkspaceService
@@ -122,6 +123,58 @@ def get_workspace_stream_service(
 
 def get_org_repo(session: AsyncSession = Depends(get_db)) -> OrganisationRepository:
     return OrganisationRepository(session)
+
+
+def get_coordination_config_service(
+    org_repo: OrganisationRepository = Depends(get_org_repo),
+    workspace_repo: WorkspaceRepository = Depends(get_workspace_repo),
+) -> CoordinationConfigService:
+    return CoordinationConfigService(org_repo, workspace_repo)
+
+
+def require_organisation(permission: str = "write") -> Callable[..., Awaitable[Organisation]]:
+    """Dep factory: loads Organisation from DB, verifies the caller belongs to it.
+
+    Mirrors require_workspace()'s shape exactly so the route signature never has
+    to change when real role checks land — only this function's body does.
+    """
+
+    async def dep(
+        org_id: uuid.UUID,
+        request: Request,
+        org_repo: OrganisationRepository = Depends(get_org_repo),
+    ) -> Organisation:
+        auth = request.state.auth
+        auth_org_id = getattr(auth, "org_id", None)
+        if auth_org_id is None or auth_org_id != org_id:
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Unauthorised")
+
+        # ApiKeyPayload carries org_id alongside workspace_id, but API keys are
+        # workspace-scoped credentials by design (see ApiKeyService) — a key
+        # issued for one workspace must not be able to write org-wide config
+        # that silently affects every other workspace in that org. This is a
+        # hard boundary, not a roles nuance: block it outright rather than
+        # deferring it to the same TODO as member-vs-admin permission checks.
+        if getattr(auth, "auth_type", None) == "api_key":
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="API keys are workspace-scoped; organisation-level configuration requires a user session",
+            )
+
+        org = await org_repo.get_by_id(org_id)
+        if org is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND, detail="Organisation not found"
+            )
+
+        # TODO(roles): OrganisationMember.role exists on the model but is never
+        # read into request.state.auth today. Once role-based permissions land,
+        # gate `permission` against the caller's role here. Until then this only
+        # checks membership — identical in strength to require_workspace() before
+        # workspace roles existed.
+        return org
+
+    return dep
 
 
 def get_user_repo(session: AsyncSession = Depends(get_db)) -> UserRepository:
