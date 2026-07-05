@@ -11,6 +11,7 @@ api/middleware/auth.py.
 from __future__ import annotations
 
 import uuid
+from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Any
 
@@ -39,7 +40,7 @@ class CentrifugoConnectRequest:
     clerk_token: str | None
 
     @classmethod
-    def from_body(cls, body: dict[str, Any]) -> CentrifugoConnectRequest:
+    def from_body(cls, body: Mapping[str, Any]) -> CentrifugoConnectRequest:
         # Frontend's getData() sends {"clerkToken": ...} (useWorkspaceStream.ts) —
         # camelCase because it's a JS-side payload, not one of this app's own
         # snake_case Pydantic schemas; match what's actually sent, not convention.
@@ -57,7 +58,7 @@ class CentrifugoSubscribeRequest:
     org_id: uuid.UUID | None
 
     @classmethod
-    def from_body(cls, body: dict[str, Any]) -> CentrifugoSubscribeRequest:
+    def from_body(cls, body: Mapping[str, Any]) -> CentrifugoSubscribeRequest:
         meta = body.get("meta") or {}
         raw_org_id = meta.get("org_id")
         org_id: uuid.UUID | None

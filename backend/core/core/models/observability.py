@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import uuid
+from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Any
@@ -157,7 +158,7 @@ class WorkspaceMetricsPayload:
         }
 
     @classmethod
-    def from_dict(cls, raw: dict[str, Any]) -> WorkspaceMetricsPayload:
+    def from_dict(cls, raw: Mapping[str, Any]) -> WorkspaceMetricsPayload:
         return cls(
             gini=raw["gini"],
             specialisation_index=raw["specialisation_index"],
