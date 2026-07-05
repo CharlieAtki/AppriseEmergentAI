@@ -119,12 +119,13 @@ async def shutdown(ctx: dict[str, Any]) -> None:
        :class:`~worker.handlers.rollup.RollupSubtaskHandler` mid-DB-write). Must run
        before Redis connections close because in-flight handlers may be querying the DB
        or enqueuing ARQ jobs.
-    3. ``bus.close`` / ``redis.aclose`` — release Redis connections only after all
-       in-flight work is done.
+    3. ``bus.close`` / ``redis.aclose`` / ``centrifugo_http_client.aclose`` — release
+       connections only after all in-flight work is done.
     """
     wctx = get_worker_context()
     await wctx.event_bus.stop_subscribers()
     await wctx.event_bus.drain_pending()
     await wctx.bus.close()
     await wctx.redis.aclose()
+    await wctx.centrifugo_http_client.aclose()
     logger.info("worker shutdown complete")

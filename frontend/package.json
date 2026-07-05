@@ -25,6 +25,7 @@
     "@tanstack/react-query-devtools": "^5.101.1",
     "@xyflow/react": "^12.11.1",
     "axios": "^1.18.1",
+    "centrifuge": "^5.7.0",
     "date-fns": "^4.4.0",
     "framer-motion": "^12.42.0",
     "lucide-react": "^1.21.0",

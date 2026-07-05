@@ -66,7 +66,7 @@ async def execute_task(
         uuid.UUID(agent_id),
         uuid.UUID(task_id),
         uuid.UUID(workspace_id),
-        redis_publish=wctx.redis.publish,
+        redis_publish=wctx.centrifugo_publish,
         meta=meta,
     ) as span:
         # ── Phase 1: READ ──────────────────────────────────────────────────────

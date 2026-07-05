@@ -1,0 +1,31 @@
+{
+  "engine": {
+    "type": "redis",
+    "redis": {
+      "address": "redis://redis:6379",
+      "prefix": "centrifugo"
+    }
+  },
+  "client": {
+    "proxy": {
+      "connect": {
+        "enabled": true,
+        "endpoint": "http://api:8000/centrifugo/connect"
+      }
+    }
+  },
+  "channel": {
+    "proxy": {
+      "subscribe": {
+        "endpoint": "http://api:8000/centrifugo/subscribe",
+        "include_connection_meta": true
+      }
+    },
+    "namespaces": [
+      {
+        "name": "workspace",
+        "subscribe_proxy_enabled": true
+      }
+    ]
+  }
+}

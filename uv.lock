@@ -100,6 +100,10 @@ dev = [
     { name = "mypy" },
     { name = "ruff" },
 ]
+test = [
+    { name = "pytest" },
+    { name = "pytest-asyncio" },
+]
 
 [package.metadata]
 requires-dist = [
@@ -108,11 +112,13 @@ requires-dist = [
     { name = "fastapi", specifier = ">=0.110.0" },
     { name = "mypy", marker = "extra == 'dev'", specifier = ">=2.1" },
     { name = "passlib", extras = ["bcrypt"], specifier = ">=1.7.4" },
+    { name = "pytest", marker = "extra == 'test'", specifier = ">=9.1" },
+    { name = "pytest-asyncio", marker = "extra == 'test'", specifier = ">=1.1" },
     { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.15" },
     { name = "svix", specifier = ">=1.96.1" },
     { name = "uvicorn", extras = ["standard"], specifier = ">=0.29.0" },
 ]
-provides-extras = ["dev"]
+provides-extras = ["dev", "test"]
 
 [[package]]
 name = "apprise-core"
@@ -122,6 +128,7 @@ dependencies = [
     { name = "alembic" },
     { name = "arq" },
     { name = "asyncpg" },
+    { name = "httpx" },
     { name = "langchain-anthropic" },
     { name = "langchain-aws" },
     { name = "langchain-core" },
@@ -151,6 +158,7 @@ requires-dist = [
     { name = "alembic", specifier = ">=1.18.4" },
     { name = "arq", specifier = ">=0.26" },
     { name = "asyncpg", specifier = ">=0.31" },
+    { name = "httpx", specifier = ">=0.28" },
     { name = "langchain-anthropic", specifier = ">=1.4.3" },
     { name = "langchain-aws", specifier = ">=1.4.7" },
     { name = "langchain-core", specifier = ">=1.4.0" },

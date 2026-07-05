@@ -51,7 +51,7 @@ async def reflect(
         uuid.UUID(agent_id),
         uuid.UUID(task_id),
         uuid.UUID(workspace_id),
-        redis_publish=wctx.redis.publish,
+        redis_publish=wctx.centrifugo_publish,
         meta=meta,
     ) as span:
         # Load execution, task, and agent in one round-trip via ORM graph traversal.

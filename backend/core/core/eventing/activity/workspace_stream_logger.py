@@ -12,9 +12,13 @@ object. Wire shaping is owned by the typed event classes in
 core/eventing/events/workspace_stream_events.py, not built inline here as ad hoc
 dict literals — this file only constructs the right event and publishes it.
 
-channel_for() is the single source of truth for the workspace:{id}:events channel
-name — imported by both the publish side (this file, JobSpan.stream) and the
-subscribe side (api/ws/registry.py).
+channel_for() (re-exported here from workspace_channels.py, the actual single
+source of truth for workspace-scoped channel naming) is imported by both the
+publish side (this file) and the subscribe side (api/'s Centrifugo subscribe
+proxy). It is deliberately not defined in this file — this file's vocabulary
+is the frontend contract; trace_channel_for(), the sibling channel for
+internal tracing events, is explicitly not part of that contract, so the two
+names live together in workspace_channels.py instead of here.
 """
 
 from __future__ import annotations
@@ -25,6 +29,7 @@ import uuid
 from collections.abc import Mapping
 from typing import TYPE_CHECKING
 
+from core.eventing.activity.workspace_channels import channel_for
 from core.eventing.events.workspace_stream_events import (
     AgentSkillUpdatedEvent,
     EmergenceDetectedEvent,
@@ -38,9 +43,7 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
-
-def channel_for(workspace_id: uuid.UUID) -> str:
-    return f"workspace:{workspace_id}:events"
+__all__ = ["WorkspaceStreamLogger", "channel_for"]
 
 
 class WorkspaceStreamLogger:
@@ -61,13 +64,13 @@ class WorkspaceStreamLogger:
         and future publish is covered by one guarantee, not three-plus duplicated
         try/excepts that could drift or be forgotten at a new call site.
         """
-        payload = event.to_payload()
         try:
+            payload = event.to_payload()
             await self._publish(channel_for(workspace_id), json.dumps(payload))
         except Exception:
             logger.exception(
                 "WorkspaceStreamLogger: failed to publish %s for workspace=%s",
-                payload.get("type"),
+                type(event).__name__,
                 workspace_id,
             )
 

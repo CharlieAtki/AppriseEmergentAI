@@ -59,6 +59,8 @@ def _make_span(agent_id=None, task_id=None, workspace_id=None):
 
 
 async def test_emit_calls_publish_on_correct_channel():
+    """emit() (tracing events) publishes to the trace channel, not the dashboard
+    contract's channel — the two vocabularies must never share a channel."""
     ws_id = uuid.uuid4()
     span, publish = _make_span(workspace_id=ws_id)
 
@@ -67,7 +69,7 @@ async def test_emit_calls_publish_on_correct_channel():
 
     publish.assert_called_once()
     channel = publish.call_args.args[0]
-    assert channel == f"workspace:{ws_id}:events"
+    assert channel == f"workspace:{ws_id}:trace"
 
 
 async def test_emit_json_payload_contains_event_type():
@@ -152,17 +154,25 @@ async def test_current_span_after_exit_raises():
 # ── span.stream (dashboard events) ───────────────────────────────────────────
 
 
-async def test_stream_uses_same_publish_callable_and_channel_as_emit():
-    """span.stream must be wired from the same redis_publish callable as emit() —
-    both reach the same workspace:{id}:events channel via a single Redis connection."""
+async def test_stream_uses_same_publish_callable_as_emit_but_a_different_channel():
+    """span.stream (dashboard contract) and emit() (tracing) are wired from the
+    same underlying publish callable — one shared transport — but must land on
+    two distinct channels. Dashboard events must never collide with tracing
+    events on the wire; only the frontend's Zod union used to be the thing
+    keeping them apart, which is the bug this split fixes."""
     ws_id = uuid.uuid4()
     span, publish = _make_span(workspace_id=ws_id)
 
     await span.stream.task_executing(ws_id, uuid.uuid4(), uuid.uuid4())
+    dashboard_channel = publish.call_args.args[0]
 
-    publish.assert_called_once()
-    channel = publish.call_args.args[0]
-    assert channel == f"workspace:{ws_id}:events"
+    async with span:
+        await span.emit("test_event")
+    trace_channel = publish.call_args.args[0]
+
+    assert dashboard_channel == f"workspace:{ws_id}:events"
+    assert trace_channel == f"workspace:{ws_id}:trace"
+    assert dashboard_channel != trace_channel
 
 
 async def test_nested_spans_restore_outer():

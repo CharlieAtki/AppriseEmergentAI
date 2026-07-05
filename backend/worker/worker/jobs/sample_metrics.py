@@ -52,7 +52,7 @@ async def sample_metrics(ctx: dict[str, Any]) -> None:
     No LLM, no JobSpan — pure arithmetic and DB writes, plus a dashboard event fan-out.
     """
     wctx = get_worker_context()
-    workspace_stream_logger = WorkspaceStreamLogger(wctx.redis.publish)
+    workspace_stream_logger = WorkspaceStreamLogger(wctx.centrifugo_publish)
     # Collected during the loop, published only after the session block below commits —
     # no subscriber ever sees emergence.detected before the backing row is durable
     # (mirrors the create_task router's own commit-before-enqueue precedent).

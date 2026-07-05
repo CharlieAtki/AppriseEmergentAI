@@ -4,6 +4,7 @@ import uuid
 from collections.abc import AsyncGenerator, Awaitable, Callable
 
 from arq import ArqRedis
+from core.config import settings as core_settings
 from core.database import get_session
 from core.eventing.activity.agent_logger import AgentActivityLogger
 from core.eventing.activity.base import PublishFn
@@ -13,25 +14,25 @@ from core.intelligence.llm_router import LLMRouter
 from core.models.tenant import Workspace
 from core.repositories.agent_repository import AgentRepository
 from core.repositories.api_key_repository import ApiKeyRepository
+from core.repositories.org_repository import OrganisationRepository
 from core.repositories.task_execution_repository import TaskExecutionRepository
 from core.repositories.task_repository import TaskRepository
 from core.repositories.tool_repository import ToolRepository
+from core.repositories.user_repository import UserRepository
 from core.repositories.workspace_metrics_repository import WorkspaceMetricsRepository
 from core.repositories.workspace_repository import WorkspaceRepository
-from fastapi import Depends, HTTPException, Request, WebSocket, WebSocketDisconnect, status
+from fastapi import Depends, HTTPException, Request, status
 from redis.asyncio import Redis
 from sqlalchemy.ext.asyncio import AsyncSession
-from starlette.requests import HTTPConnection
 
 from api.services.agent_service import AgentService
 from api.services.api_key_service import ApiKeyService
-from api.services.auth_service import WsTicketPayload, ws_ticket_key
+from api.services.centrifugo_proxy_service import CentrifugoProxyService
 from api.services.task_service import TaskService
 from api.services.workspace_observability_service import WorkspaceObservabilityService
 from api.services.workspace_service import WorkspaceService
 from api.services.workspace_stream_service import WorkspaceStreamService
 from api.services.workspace_tool_service import WorkspaceToolService
-from api.ws.registry import WorkspaceConnectionRegistry
 
 
 def get_bus(request: Request) -> EventBus:
@@ -54,12 +55,8 @@ def get_agent_activity_logger(
     return AgentActivityLogger(publish)
 
 
-def get_redis(conn: HTTPConnection) -> Redis:
-    """HTTPConnection (not Request) — this dependency is reachable from both HTTP
-    routes and the WS route (via require_stream_ticket / get_workspace_stream_service).
-    Request can't be injected in a websocket scope; HTTPConnection is the common
-    base FastAPI resolves for both. See get_workspace_connections() below — same fix."""
-    return conn.app.state.redis  # type: ignore[no-any-return]
+def get_redis(request: Request) -> Redis:
+    return request.app.state.redis  # type: ignore[no-any-return]
 
 
 def get_llm_router(request: Request) -> LLMRouter:
@@ -101,43 +98,6 @@ def get_workspace_observability_service(
     return WorkspaceObservabilityService(repo)
 
 
-def get_workspace_connections(conn: HTTPConnection) -> WorkspaceConnectionRegistry:
-    """HTTPConnection — only ever reached from the WS route, but typed the same way
-    as get_redis() for consistency (a plain WebSocket param would also work here)."""
-    return conn.app.state.workspace_connections  # type: ignore[no-any-return]
-
-
-async def require_stream_ticket(
-    websocket: WebSocket,
-    workspace_id: uuid.UUID,
-    redis: Redis = Depends(get_redis),
-) -> WsTicketPayload:
-    """WS-route auth dependency, mirrors require_workspace().
-
-    AuthMiddleware (BaseHTTPMiddleware) never runs for scope["type"] == "websocket",
-    so this is the only auth check for GET /workspaces/{id}/stream. Ticket is
-    single-use (GETDEL) and 30s-TTL, minted via POST /workspaces/{id}/stream-ticket
-    (an ordinary authenticated HTTP route covered by AuthMiddleware as normal).
-
-    The Redis key is scoped by workspace_id (ws_ticket_key()) using the path's
-    workspace_id — not the ticket payload's — so a ticket presented against the
-    wrong workspace can't even be found, let alone consumed. The payload check
-    below is defense-in-depth, not the primary guard: the key scoping is.
-    """
-    ticket = websocket.query_params.get("ticket")
-    raw = await redis.getdel(ws_ticket_key(workspace_id, ticket)) if ticket else None
-    if not raw:
-        await websocket.close(code=4401)
-        raise WebSocketDisconnect
-
-    payload = WsTicketPayload.model_validate_json(raw)
-    if payload.workspace_id != workspace_id:
-        await websocket.close(code=4401)
-        raise WebSocketDisconnect
-
-    return payload
-
-
 def get_task_service(repo: TaskRepository = Depends(get_task_repo)) -> TaskService:
     return TaskService(repo)
 
@@ -156,9 +116,35 @@ def get_agent_service(
 def get_workspace_stream_service(
     agent_service: AgentService = Depends(get_agent_service),
     metrics_repo: WorkspaceMetricsRepository = Depends(get_workspace_metrics_repo),
-    redis: Redis = Depends(get_redis),
 ) -> WorkspaceStreamService:
-    return WorkspaceStreamService(agent_service, metrics_repo, redis)
+    return WorkspaceStreamService(agent_service, metrics_repo)
+
+
+def get_org_repo(session: AsyncSession = Depends(get_db)) -> OrganisationRepository:
+    return OrganisationRepository(session)
+
+
+def get_user_repo(session: AsyncSession = Depends(get_db)) -> UserRepository:
+    return UserRepository(session)
+
+
+def get_centrifugo_proxy_service(
+    org_repo: OrganisationRepository = Depends(get_org_repo),
+    user_repo: UserRepository = Depends(get_user_repo),
+    workspace_service: WorkspaceService = Depends(get_workspace_service),
+    stream_service: WorkspaceStreamService = Depends(get_workspace_stream_service),
+) -> CentrifugoProxyService:
+    return CentrifugoProxyService(org_repo, user_repo, workspace_service, stream_service)
+
+
+def require_centrifugo_proxy_secret(request: Request) -> None:
+    """Auth guard for Centrifugo's connect/subscribe proxy callbacks — a shared
+    secret header, not Clerk/API-key (those routes are exempt from AuthMiddleware;
+    see EXEMPT_PREFIXES in api/middleware/auth.py). Centrifugo's proxy calls carry
+    this header on every callback per its own proxy configuration."""
+    secret = core_settings.centrifugo.proxy_secret.get_secret_value()
+    if not secret or request.headers.get("X-Centrifugo-Proxy-Secret") != secret:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Unauthorised")
 
 
 def get_api_key_repo(session: AsyncSession = Depends(get_db)) -> ApiKeyRepository:
@@ -204,7 +190,7 @@ def require_workspace(permission: str = "write") -> Callable[..., Awaitable[Work
         if ws is None:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Workspace not found")
 
-        if ws.status != "active":
+        if not Workspace.is_active_status(ws.status):
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT, detail="Workspace is not active"
             )

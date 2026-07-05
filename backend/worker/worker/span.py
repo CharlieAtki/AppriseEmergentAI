@@ -10,6 +10,7 @@ from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
 from core.database import get_session
+from core.eventing.activity.workspace_channels import trace_channel_for
 from core.eventing.activity.workspace_stream_logger import WorkspaceStreamLogger
 
 if TYPE_CHECKING:
@@ -60,16 +61,20 @@ class JobSpan:
 
     Does NOT create or finalise the TaskExecution row — that is the job's responsibility.
 
-    ``redis_publish`` is the narrow callable used by ``emit()`` to push tracing events to
-    Redis Pub/Sub. Pass ``wctx.redis.publish`` at the call site — injected rather
-    than resolved via ``get_worker_context()`` so the span has no hidden global
-    dependency and can be constructed in tests with a mock callable.
+    ``redis_publish`` is the narrow callable used by ``emit()`` to push tracing events
+    to their own channel (``trace_channel_for()``). Pass ``wctx.centrifugo_publish`` at
+    the call site — injected rather than resolved via ``get_worker_context()`` so the
+    span has no hidden global dependency and can be constructed in tests with a mock
+    callable. (The parameter name predates the Centrifugo migration and still refers
+    to the callable's original transport — the type, ``Callable[[str, str], Awaitable[None]]``,
+    is what matters, not the name.)
 
-    ``self.stream`` (a ``WorkspaceStreamLogger`` built from the same ``redis_publish``
-    callable) is the separate, stable vocabulary for dashboard events — reached via
-    ``current_span().stream`` from anywhere in the job call stack, same ContextVar
-    pattern as ``emit()``. Never repurpose ``emit()``'s tracing event types for the
-    dashboard contract — they serve different consumers and must be free to diverge.
+    ``self.stream`` (a ``WorkspaceStreamLogger`` built from the same callable) is the
+    separate, stable vocabulary for dashboard events, published to ``channel_for()`` —
+    reached via ``current_span().stream`` from anywhere in the job call stack, same
+    ContextVar pattern as ``emit()``. Never repurpose ``emit()``'s tracing event types
+    for the dashboard contract — they serve different consumers, are published to
+    different channels, and must be free to diverge.
 
     ``meta`` carries the ARQ job identity parsed from ``ctx`` at the job boundary
     via ``ArqJobMeta.from_ctx(ctx)``. Its fields appear in every emitted event for
@@ -114,11 +119,13 @@ class JobSpan:
             yield s
 
     async def emit(self, event_type: str, data: Mapping[str, object] | None = None) -> None:
-        """Publish a structured event immediately to Redis Pub/Sub.
+        """Publish a structured tracing event immediately to its own channel.
 
-        The API WebSocket endpoint subscribes to workspace:{id}:events and forwards
-        events to connected browsers in real time. Events also accumulate in self._events
-        for storage in TaskExecution.tool_trace after the job completes.
+        Published to trace_channel_for(workspace_id) — deliberately not the same
+        channel as self.stream's dashboard contract (channel_for()). No frontend
+        Zod schema will ever exist for these; they exist for audit/debug replay.
+        Events also accumulate in self._events for storage in TaskExecution.tool_trace
+        after the job completes.
 
         ``default=str`` in json.dumps guards against non-serialisable values that
         callers may pass in ``data`` (e.g. UUID, datetime, Decimal).
@@ -143,7 +150,7 @@ class JobSpan:
         }
         self._events.append(event)
         await self._publish(
-            f"workspace:{self.workspace_id}:events",
+            trace_channel_for(self.workspace_id),
             json.dumps(event, default=str),
         )
 

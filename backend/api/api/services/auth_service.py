@@ -6,6 +6,8 @@ from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any, Literal
 
 import bcrypt as _bcrypt
+from clerk_backend_api.security import VerifyTokenOptions, verify_token_async
+from clerk_backend_api.security.types import TokenVerificationError
 from fastapi import HTTPException, status
 from pydantic import BaseModel
 
@@ -27,29 +29,6 @@ class UserPayload(BaseModel):
     org_id: uuid.UUID
     user_id: uuid.UUID
     auth_type: Literal["user"] = "user"
-
-
-class WsTicketPayload(BaseModel):
-    """Single-use WebSocket connect ticket — cached in Redis with a short TTL.
-
-    AuthMiddleware (BaseHTTPMiddleware) never runs for WebSocket scope, so this is
-    the auth mechanism for GET /workspaces/{id}/stream: mint via an authenticated
-    HTTP call, redeem exactly once via GETDEL on connect.
-    """
-
-    org_id: uuid.UUID
-    workspace_id: uuid.UUID
-
-
-def ws_ticket_key(workspace_id: uuid.UUID, token: str) -> str:
-    """Single source of truth for the ws_ticket Redis key — used by both
-    WorkspaceStreamService.mint_stream_ticket() (write) and
-    require_stream_ticket() (GETDEL). Scoping by workspace_id means a ticket
-    presented against the wrong workspace path can't be found, so it's never
-    consumed by a mismatched request — validating workspace_id only after GETDEL
-    would burn a legitimate ticket without granting access.
-    """
-    return f"ws_ticket:{workspace_id}:{token}"
 
 
 def _sha256(raw_key: str) -> str:
@@ -98,6 +77,31 @@ async def validate_api_key(
     record.last_used_at = datetime.now(UTC)
 
     return payload
+
+
+async def verify_clerk_session_token(token: str, secret_key: str) -> dict[str, Any]:
+    """Verifies a bare Clerk session token string (no Request object available —
+    used by the Centrifugo connect proxy, which only receives a JSON token, not
+    an HTTP request/cookie). AuthMiddleware's bearer-token path goes through
+    clerk.authenticate_request_async() instead, which flattens Clerk's v2-token
+    org claim (nested at claims["o"]["id"]) into a top-level "org_id" key before
+    validate_clerk_token() ever sees it. verify_token_async() skips that
+    normalization, so it's replicated here — this is the only place a bare
+    token string is verified, so this is the only place that needs to do it."""
+    try:
+        claims: dict[str, Any] = await verify_token_async(
+            token, VerifyTokenOptions(secret_key=secret_key)
+        )
+    except TokenVerificationError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED, detail="Unauthorised"
+        ) from exc
+
+    if claims.get("v") == 2 and "org_id" not in claims:
+        org_claims = claims.get("o") or {}
+        claims["org_id"] = org_claims.get("id")
+
+    return claims
 
 
 async def validate_clerk_token(

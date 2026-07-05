@@ -44,6 +44,33 @@ services:
       retries: 12
       start_period: 45s
 
+  centrifugo:
+    image: centrifugo/centrifugo:v6
+    command: centrifugo --config=/centrifugo/config.json
+    ports:
+      - "8001:8000"
+    volumes:
+      - ./centrifugo/config.json:/centrifugo/config.json:ro
+    environment:
+      CENTRIFUGO_HTTP_API_KEY: ${CENTRIFUGO__HTTP_API_KEY}
+      CENTRIFUGO_CLIENT_ALLOWED_ORIGINS: ${CENTRIFUGO_ALLOWED_ORIGIN:-http://localhost:3000}
+      # Static secret header attached to every connect/subscribe proxy call, so
+      # require_centrifugo_proxy_secret() (backend/api/api/deps.py) can verify
+      # the call actually came from Centrifugo, not an arbitrary caller.
+      CENTRIFUGO_CLIENT_PROXY_CONNECT_HTTP_STATIC_HEADERS: '{"X-Centrifugo-Proxy-Secret": "${CENTRIFUGO__PROXY_SECRET}"}'
+      CENTRIFUGO_CHANNEL_PROXY_SUBSCRIBE_HTTP_STATIC_HEADERS: '{"X-Centrifugo-Proxy-Secret": "${CENTRIFUGO__PROXY_SECRET}"}'
+    healthcheck:
+      test: ["CMD-SHELL", "python3 -c 'import urllib.request; urllib.request.urlopen(\"http://localhost:8000/health\")' || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 15s
+    depends_on:
+      redis:
+        condition: service_healthy
+      api:
+        condition: service_healthy
+
   # ── Application ─────────────────────────────────────────────────────────── #
 
   api:
@@ -59,6 +86,7 @@ services:
       ANTHROPIC__API_KEY: ${ANTHROPIC__API_KEY}
       CLERK__SECRET_KEY: ${CLERK__SECRET_KEY}
       CLERK__WEBHOOK_SECRET: ${CLERK__WEBHOOK_SECRET}
+      CENTRIFUGO__PROXY_SECRET: ${CENTRIFUGO__PROXY_SECRET}
       CORS_ORIGINS: ${CORS_ORIGINS:-}
     command: >
       sh -c "cd /app/core && alembic upgrade head &&
@@ -86,6 +114,8 @@ services:
       REDIS__URL: redis://redis:6379
       MEMORY__QDRANT_URL: http://qdrant:6333
       ANTHROPIC__API_KEY: ${ANTHROPIC__API_KEY}
+      CENTRIFUGO__HTTP_API_URL: http://centrifugo:8000/api
+      CENTRIFUGO__HTTP_API_KEY: ${CENTRIFUGO__HTTP_API_KEY}
     depends_on:
       postgres:
         condition: service_healthy
@@ -93,6 +123,8 @@ services:
         condition: service_healthy
       qdrant:
         condition: service_started
+      centrifugo:
+        condition: service_healthy
 
   frontend:
     build:
@@ -103,7 +135,9 @@ services:
     environment:
       # NEXT_PUBLIC_ vars are browser-accessible — must use localhost, not service names
       NEXT_PUBLIC_API_URL: http://localhost:8000
-      NEXT_PUBLIC_WS_URL: ws://localhost:8000
+      # Browser connects to Centrifugo directly (not to the API process) —
+      # NEXT_PUBLIC_WS_URL is retired along with the ticket-exchange WS route.
+      NEXT_PUBLIC_CENTRIFUGO_URL: ws://localhost:8001/connection/websocket
       # API_URL is server-side only (RSC prefetch) — uses internal Docker service name
       API_URL: http://api:8000
       # Clerk — CLERK__SECRET_KEY (stored once in Doppler / .env) is renamed here to
