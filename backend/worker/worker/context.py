@@ -18,6 +18,7 @@ from core.intelligence.routing_config import resolve_routing
 from core.intelligence.sync import sync_models, sync_tools
 from core.memory.agent_memory import AgentMemory
 from core.memory.collections import ensure_collections
+from core.memory.embeddings import get_encoder
 from core.memory.resilient_client import ResilientQdrantClient
 from core.vendors.anthropic.provider import AnthropicProvider
 from core.vendors.aws.provider import AWSProvider
@@ -93,6 +94,10 @@ class WorkerContext:
         await ensure_collections(_raw_qdrant)
         qdrant = ResilientQdrantClient(_raw_qdrant)
         memory = AgentMemory(qdrant)
+
+        # 4b. Pre-warm the fastembed encoder — first-call lazy init races when
+        # concurrent jobs hit search_episodic_memory on a cold worker.
+        get_encoder()
 
         # 5. Compile one universal graph — expensive, done ONCE per process.
         # Model and tools are injected per-task via RunnableConfig.configurable in execute_task.
