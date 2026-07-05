@@ -21,7 +21,7 @@ class ConnectCommand:
     """Router-constructed from the connect-proxy request's `data` field (the
     Clerk session token the browser attached via centrifuge-js's `getData`)."""
 
-    clerk_token: str
+    clerk_token: str  # ToDo: Does this need to be external_auth? Lije a ref rather than clerk - leaky abstraction?
     clerk_secret_key: str
 
 

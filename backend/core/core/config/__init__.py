@@ -3,6 +3,7 @@ from __future__ import annotations
 from pydantic import Field
 from pydantic_settings import BaseSettings
 
+from core.config.coordination import CoordinationPlatformDefaults
 from core.config.database import DatabaseConfig
 from core.config.intelligence import IntelligenceConfig
 from core.config.memory import MemoryConfig
@@ -18,8 +19,11 @@ from core.config.worker import WorkerConfig
 
 class Settings(BaseSettings):
     # ------------------------------------------------------------------ #
-    # Coordination — kept flat + uppercase for backward compatibility with #
-    # existing coordination/ and memory/ imports.                          #
+    # ContractNet bidding & scheduling constants — kept flat + uppercase   #
+    # for backward compatibility with existing coordination/ and memory/  #
+    # imports. Not to be confused with `coordination` below (the          #
+    # workspace-configurable depth/difficulty guards) — this block is     #
+    # unrelated bid-scoring math, the naming collision is historical.      #
     # ------------------------------------------------------------------ #
     RESERVATION_TTL_SECONDS: int = 30
     BID_W_SKILL: float = 0.60
@@ -48,6 +52,7 @@ class Settings(BaseSettings):
     redis: RedisConfig = Field(default_factory=RedisConfig)
     memory: MemoryConfig = Field(default_factory=MemoryConfig)
     intelligence: IntelligenceConfig = Field(default_factory=IntelligenceConfig)
+    coordination: CoordinationPlatformDefaults = Field(default_factory=CoordinationPlatformDefaults)
     anthropic: AnthropicConfig = Field(default_factory=AnthropicConfig)
     azure: AzureConfig = Field(default_factory=AzureConfig)
     aws: AWSConfig = Field(default_factory=AWSConfig)

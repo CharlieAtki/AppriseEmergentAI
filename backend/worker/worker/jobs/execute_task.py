@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import json
 import logging
 import uuid
+from dataclasses import asdict
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
@@ -10,8 +12,9 @@ from core.agents.graphs.state import GraphState
 from core.agents.scoring import score_outcome
 from core.agents.tooling.registry import tool_registry
 from core.config import settings
+from core.coordination.config import CoordinationConfig, resolve_coordination_config
 from core.coordination.decompose import decompose_and_publish
-from core.coordination.task_context import MAX_DELEGATION_DEPTH, TaskContext
+from core.coordination.task_context import TaskContext
 from core.coordination.task_state import TaskStateMachine
 from core.eventing.activity.task_logger import TaskActivityLogger
 from core.eventing.activity.task_stream_logger import TaskStreamLogger
@@ -24,9 +27,11 @@ from core.intelligence.prompts import evaluate
 from core.intelligence.prompts.evaluate import EvaluateResponse
 from core.intelligence.signals import classify_influence
 from core.repositories.agent_repository import AgentRepository
+from core.repositories.org_repository import OrganisationRepository
 from core.repositories.task_execution_repository import TaskExecutionRepository
 from core.repositories.task_repository import TaskRepository
 from core.repositories.tool_repository import ToolRepository
+from core.repositories.workspace_repository import WorkspaceRepository
 from langchain_core.runnables import RunnableConfig
 from pydantic import ValidationError
 
@@ -37,8 +42,54 @@ if TYPE_CHECKING:
     from core.models.tasks import Task, TaskExecution
     from redis.asyncio import Redis
 
+    from worker.context import WorkerContext
+
 
 logger = logging.getLogger(__name__)
+
+# Belt-and-braces fallback only — the API's PATCH route invalidates this key on
+# every write (see api/routers/coordination_config.py). The TTL guards against
+# any future write path that forgets to invalidate, not normal operation.
+_COORDINATION_CONFIG_CACHE_TTL_SECONDS = 300
+
+
+async def _resolve_coordination_config(
+    wctx: WorkerContext, span: JobSpan, task: Task
+) -> CoordinationConfig:
+    """Cache-then-DB resolution of this task's effective coordination guards.
+
+    Never imports api/ — reads Organisation/Workspace directly via core/ repositories,
+    since the worker must not depend on the HTTP layer.
+    """
+    cache_key = f"coordination_config:{task.workspace_id}"
+    cached = await wctx.redis.get(cache_key)
+    if cached is not None:
+        return CoordinationConfig(**json.loads(cached))
+
+    async with span.session() as session:
+        organisation = await OrganisationRepository(session).get_by_id(task.organisation_id)
+        workspace = await WorkspaceRepository(session).get_by_id(task.workspace_id)
+
+    org_override = (organisation.config or {}).get("coordination") if organisation else None
+    workspace_override = (workspace.config or {}).get("coordination") if workspace else None
+    coord_cfg = resolve_coordination_config(settings.coordination, org_override, workspace_override)
+
+    await wctx.redis.set(
+        cache_key, json.dumps(asdict(coord_cfg)), ex=_COORDINATION_CONFIG_CACHE_TTL_SECONDS
+    )
+    return coord_cfg
+
+
+def _force_self_execute(
+    task_id: uuid.UUID, reason: str, log_template: str, *log_args: object
+) -> EvaluateResponse:
+    """Shared shape for every coordination guard below: log why the LLM's
+    decision is being overridden, then return the forced self_execute. Both
+    the depth guard and the difficulty guard are "log + override" — only the
+    triggering condition differs, so that's the only thing that should vary
+    at each call site."""
+    logger.warning(log_template, task_id, *log_args)
+    return EvaluateResponse(decision="self_execute", reasoning=reason)
 
 
 async def execute_task(
@@ -96,7 +147,8 @@ async def execute_task(
         # Build provenance context while task attributes are in-memory.
         # expire_on_commit=False on SessionLocal keeps scalar attrs after session close.
         provenance = TaskContext.from_task(task)
-        depth_exceeded = provenance.delegation_depth >= MAX_DELEGATION_DEPTH
+        coord_cfg = await _resolve_coordination_config(wctx, span, task)
+        depth_exceeded = provenance.delegation_depth >= coord_cfg.max_delegation_depth
 
         # task_logger   — in-process EventBus; fires typed DomainEvents to same-process
         #                 handlers (RollupSubtaskHandler, etc.). Does not cross process boundary.
@@ -170,18 +222,42 @@ async def execute_task(
             decision = await structured_call.run(
                 wctx.llm_router,
                 CallType.EVALUATE,
-                evaluate.build_prompt(agent_ctx, task_ctx),
+                evaluate.build_prompt(
+                    agent_ctx, task_ctx, coord_cfg.decompose_difficulty_threshold
+                ),
                 evaluate.parse,
                 fallback=EvaluateResponse(decision="self_execute", reasoning="parse fallback"),
             )
 
+            # Depth guard: blocks ANY non-self_execute decision (decompose or cfp) once
+            # the delegation chain is too deep — it's a ceiling on the whole ContractNet
+            # chain, not specific to one strategy.
             if depth_exceeded and decision.decision != "self_execute":
-                logger.warning(
-                    "execute_task: depth guard forcing self_execute for task=%s (depth=%d)",
+                decision = _force_self_execute(
                     task.id,
+                    "depth guard",
+                    "execute_task: depth guard forcing self_execute for task=%s (depth=%d)",
                     provenance.delegation_depth,
                 )
-                decision = EvaluateResponse(decision="self_execute", reasoning="depth guard")
+
+            # Difficulty guard: unlike the depth guard, this targets decompose only — a
+            # cfp handoff to a better-skilled agent isn't decomposition, so a low
+            # difficulty score doesn't block it. This is the APP-8 fix: the LLM's soft
+            # "prefer decompose when difficulty >= threshold" guideline is no longer the
+            # only thing enforcing this.
+            decompose_below_threshold = (
+                decision.decision == "decompose"
+                and (task.difficulty or 0) < coord_cfg.decompose_difficulty_threshold
+            )
+            if decompose_below_threshold:
+                decision = _force_self_execute(
+                    task.id,
+                    "difficulty guard",
+                    "execute_task: difficulty guard forcing self_execute for task=%s "
+                    "(difficulty=%s < threshold=%s)",
+                    task.difficulty,
+                    coord_cfg.decompose_difficulty_threshold,
+                )
 
             # ── Phase 4: ACT ON DECISION ─────────────────────────────────────────
             if decision.decision == "decompose":

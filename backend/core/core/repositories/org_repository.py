@@ -12,8 +12,10 @@ from core.models.tenant import Organisation, OrganisationMember
 class OrganisationRepository:
     """Identity lookup and lifecycle writes for Organisation and OrganisationMember.
 
-    Write methods are called exclusively by the Clerk webhook handler to keep
-    Apprise's DB in sync with Clerk's identity data.
+    upsert()/upsert_member()/delete_by_external_id()/delete_member() are called
+    exclusively by the Clerk webhook handler to keep Apprise's DB in sync with
+    Clerk's identity data. get_by_id()/save() are general-purpose, used by any
+    caller that already owns an org_id (e.g. the coordination-config service).
 
     Transaction contract: never calls commit() or flush() — callers own the transaction.
     """
@@ -29,6 +31,14 @@ class OrganisationRepository:
             )
         )
         return result.scalar_one_or_none()
+
+    async def get_by_id(self, org_id: uuid.UUID) -> Organisation | None:
+        """Unscoped PK lookup — caller already owns the ID (auth dep, worker path)."""
+        return await self._session.get(Organisation, org_id)
+
+    async def save(self, org: Organisation) -> None:
+        """Re-stage after field mutations. No flush — session commits on exit."""
+        self._session.add(org)
 
     async def upsert(self, provider: str, external_id: str, name: str | None) -> Organisation:
         stmt = (
