@@ -42,19 +42,6 @@ def is_retryable_http(exc: BaseException) -> bool:
         return False
 
 
-def is_retryable_redis(exc: BaseException) -> bool:
-    """True for transient Redis connection failures — safe to reconnect and retry.
-
-    redis.exceptions.RedisError covers redis-py's ConnectionError/TimeoutError;
-    ConnectionResetError/OSError cover a dropped TCP connection surfacing before
-    redis-py wraps it. Used by WorkspaceConnectionRegistry to reconnect its
-    Pub/Sub listener rather than dying permanently on a transient Redis blip.
-    """
-    from redis.exceptions import RedisError
-
-    return isinstance(exc, RedisError | ConnectionResetError | OSError)
-
-
 async def retry_async[T](
     fn: Callable[[], Awaitable[T]],
     *,
