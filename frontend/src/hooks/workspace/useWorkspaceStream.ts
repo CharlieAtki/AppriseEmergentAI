@@ -86,7 +86,7 @@ export function useWorkspaceStream(workspaceId: string): { connected: boolean } 
 
   useEffect(() => {
     const configuredUrl = process.env.NEXT_PUBLIC_CENTRIFUGO_URL
-    if (!configuredUrl && process.env.NODE_ENV !== 'development') {
+    if (!configuredUrl && process.env.NODE_ENV === 'production') {
       // NEXT_PUBLIC_ vars are inlined at build time — a missing value here means
       // this build was never configured with a real Centrifugo URL. Silently
       // falling back to localhost would have every browser in a deployed
@@ -102,6 +102,12 @@ export function useWorkspaceStream(workspaceId: string): { connected: boolean } 
 
     centrifuge.on('connected', () => setConnected(true))
     centrifuge.on('disconnected', () => setConnected(false))
+    centrifuge.on('error', (ctx) => {
+      // Surfaces auth/subscribe failures (e.g. bad token, connectData rejection)
+      // that would otherwise fail silently — see _handleGetDataError in the
+      // centrifuge client, which emits this event rather than throwing.
+      console.error('useWorkspaceStream: centrifuge error', ctx)
+    })
 
     const sub = centrifuge.newSubscription(`workspace:${workspaceId}:events`)
 

@@ -690,7 +690,7 @@ export function useWorkspaceStream(workspaceId: string) {
 
 All cache invalidation uses Orval-generated key factories. `invalidateQueries` is preferred over `setQueryData` for agent skill updates — the event carries deltas, not the full new state, so the authoritative source is the server.
 
-The hook is currently mounted in `AppHeader.tsx` (a known drift from the original design intent of mounting it in `app/workspaces/[id]/layout.tsx` so it'd survive navigation without remounting — tracked separately, not fixed by the Centrifugo migration).
+The hook is currently mounted in `AppHeader.tsx` (a known drift from the original design intent of mounting it in `app/orgs/[orgId]/workspaces/[workspaceId]/layout.tsx` — the project's single client-boundary component — so it'd survive navigation without remounting — tracked separately, not fixed by the Centrifugo migration).
 
 ---
 

@@ -47,9 +47,9 @@ __all__ = ["WorkspaceStreamLogger", "channel_for"]
 
 
 class WorkspaceStreamLogger:
-    """Facade that publishes typed dashboard events. Never touch redis.publish directly.
+    """Facade that publishes typed dashboard events. Never touch the publish transport directly.
 
-    Construct with ``WorkspaceStreamLogger(wctx.redis.publish)`` — either inline in a
+    Construct with ``WorkspaceStreamLogger(wctx.centrifugo_publish)`` — either inline in a
     job function with no JobSpan (e.g. sample_metrics.py), or via ``JobSpan.stream``
     for jobs that already have a span.
     """

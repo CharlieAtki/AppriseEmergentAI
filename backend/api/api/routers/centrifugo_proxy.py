@@ -44,7 +44,9 @@ class CentrifugoConnectRequest:
         # Frontend's getData() sends {"clerkToken": ...} (useWorkspaceStream.ts) —
         # camelCase because it's a JS-side payload, not one of this app's own
         # snake_case Pydantic schemas; match what's actually sent, not convention.
-        data = body.get("data") or {}
+        data = body.get("data")
+        if not isinstance(data, Mapping):
+            data = {}
         return cls(clerk_token=data.get("clerkToken"))
 
 
@@ -59,12 +61,14 @@ class CentrifugoSubscribeRequest:
 
     @classmethod
     def from_body(cls, body: Mapping[str, Any]) -> CentrifugoSubscribeRequest:
-        meta = body.get("meta") or {}
+        meta = body.get("meta")
+        if not isinstance(meta, Mapping):
+            meta = {}
         raw_org_id = meta.get("org_id")
         org_id: uuid.UUID | None
         try:
             org_id = uuid.UUID(raw_org_id) if raw_org_id else None
-        except ValueError:
+        except ValueError, TypeError, AttributeError:
             org_id = None
         return cls(channel=body.get("channel", ""), org_id=org_id)
 

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import secrets
 import uuid
 from collections.abc import AsyncGenerator, Awaitable, Callable
 
@@ -143,7 +144,8 @@ def require_centrifugo_proxy_secret(request: Request) -> None:
     see EXEMPT_PREFIXES in api/middleware/auth.py). Centrifugo's proxy calls carry
     this header on every callback per its own proxy configuration."""
     secret = core_settings.centrifugo.proxy_secret.get_secret_value()
-    if not secret or request.headers.get("X-Centrifugo-Proxy-Secret") != secret:
+    provided = request.headers.get("X-Centrifugo-Proxy-Secret")
+    if not secret or not provided or not secrets.compare_digest(provided, secret):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Unauthorised")
 
 

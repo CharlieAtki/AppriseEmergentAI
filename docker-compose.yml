@@ -60,7 +60,7 @@ services:
       CENTRIFUGO_CLIENT_PROXY_CONNECT_HTTP_STATIC_HEADERS: '{"X-Centrifugo-Proxy-Secret": "${CENTRIFUGO__PROXY_SECRET}"}'
       CENTRIFUGO_CHANNEL_PROXY_SUBSCRIBE_HTTP_STATIC_HEADERS: '{"X-Centrifugo-Proxy-Secret": "${CENTRIFUGO__PROXY_SECRET}"}'
     healthcheck:
-      test: ["CMD-SHELL", "python3 -c 'import urllib.request; urllib.request.urlopen(\"http://localhost:8000/health\")' || exit 1"]
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:8000/health || exit 1"]
       interval: 10s
       timeout: 5s
       retries: 10

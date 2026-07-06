@@ -6,6 +6,7 @@ from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any, Literal
 
 import bcrypt as _bcrypt
+import httpx
 from clerk_backend_api.security import VerifyTokenOptions, verify_token_async
 from clerk_backend_api.security.types import TokenVerificationError
 from fastapi import HTTPException, status
@@ -92,7 +93,7 @@ async def verify_clerk_session_token(token: str, secret_key: str) -> dict[str, A
         claims: dict[str, Any] = await verify_token_async(
             token, VerifyTokenOptions(secret_key=secret_key)
         )
-    except TokenVerificationError as exc:
+    except (TokenVerificationError, httpx.HTTPError) as exc:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED, detail="Unauthorised"
         ) from exc
