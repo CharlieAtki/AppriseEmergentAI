@@ -3,6 +3,7 @@ from __future__ import annotations
 from pydantic import Field
 from pydantic_settings import BaseSettings
 
+from core.config.bidding import BiddingPlatformDefaults
 from core.config.coordination import CoordinationPlatformDefaults
 from core.config.database import DatabaseConfig
 from core.config.intelligence import IntelligenceConfig
@@ -37,7 +38,6 @@ class Settings(BaseSettings):
         0.02  # per task completion in execute_task Phase 6 — recalibrate for target throughput
     )
     INFLUENCE_EMA_ALPHA: float = 0.15
-    BID_SCORE_THRESHOLD: float = 0.3
     # Fraction of the executing agent's quality score credited to the CFP initiator.
     # Lower than 1.0 because the initiator routed the task but did not structure or execute it.
     CFP_COORDINATOR_CREDIT: float = 0.5
@@ -53,6 +53,7 @@ class Settings(BaseSettings):
     memory: MemoryConfig = Field(default_factory=MemoryConfig)
     intelligence: IntelligenceConfig = Field(default_factory=IntelligenceConfig)
     coordination: CoordinationPlatformDefaults = Field(default_factory=CoordinationPlatformDefaults)
+    bidding: BiddingPlatformDefaults = Field(default_factory=BiddingPlatformDefaults)
     anthropic: AnthropicConfig = Field(default_factory=AnthropicConfig)
     azure: AzureConfig = Field(default_factory=AzureConfig)
     aws: AWSConfig = Field(default_factory=AWSConfig)

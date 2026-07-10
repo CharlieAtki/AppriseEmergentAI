@@ -25,6 +25,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.services.agent_service import AgentService
 from api.services.api_key_service import ApiKeyService
+from api.services.bidding_config_service import BiddingConfigService
 from api.services.centrifugo_proxy_service import CentrifugoProxyService
 from api.services.coordination_config_service import CoordinationConfigService
 from api.services.task_service import TaskService
@@ -116,6 +117,13 @@ def get_coordination_config_service(
     workspace_repo: WorkspaceRepository = Depends(get_workspace_repo),
 ) -> CoordinationConfigService:
     return CoordinationConfigService(org_repo, workspace_repo)
+
+
+def get_bidding_config_service(
+    org_repo: OrganisationRepository = Depends(get_org_repo),
+    workspace_repo: WorkspaceRepository = Depends(get_workspace_repo),
+) -> BiddingConfigService:
+    return BiddingConfigService(org_repo, workspace_repo)
 
 
 def require_organisation(permission: str = "write") -> Callable[..., Awaitable[Organisation]]:
