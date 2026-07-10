@@ -9,7 +9,7 @@ import { useParams, useSelectedLayoutSegments } from 'next/navigation'
 import { useState } from 'react'
 import { useOrganization } from '@clerk/nextjs'
 import { useGetWorkspaceWorkspacesWorkspaceIdGet } from '@/api/generated/workspaces/workspaces'
-import { useWorkspaceStream } from '@/hooks/workspace/useWorkspaceStream'
+import { useWorkspaceStore } from '@/stores/workspace'
 import { WorkspaceSettingsModal } from '@/components/workspaces/WorkspaceSettingsModal'
 
 interface AppHeaderProps {
@@ -50,8 +50,12 @@ function HeaderIconButton({
   )
 }
 
-function WorkspaceLiveStatus({ workspaceId }: { workspaceId: string }) {
-  const { connected } = useWorkspaceStream(workspaceId)
+function WorkspaceLiveStatus() {
+  // useWorkspaceStream is mounted in workspaces/[workspaceId]/layout.tsx, a
+  // sibling subtree of AppHeader (both under orgs/[orgId]/layout.tsx) — read
+  // its connection status back out via the shared store instead of calling
+  // the hook (and opening a second Centrifuge connection) here.
+  const connected = useWorkspaceStore((s) => s.streamConnected)
   return (
     <div className="flex items-center gap-1.5">
       <span className={`h-2 w-2 rounded-full ${connected ? 'bg-success' : 'bg-muted'}`} />
@@ -122,7 +126,7 @@ export function AppHeader({ orgId }: AppHeaderProps) {
 
         {/* Right cluster */}
         <div className="flex items-center gap-3 shrink-0">
-          {workspaceId && <WorkspaceLiveStatus workspaceId={workspaceId} />}
+          {workspaceId && <WorkspaceLiveStatus />}
           <div className="flex items-center gap-0.5">
             <HeaderIconButton label="Help">
               <CircleHelp size={16} />

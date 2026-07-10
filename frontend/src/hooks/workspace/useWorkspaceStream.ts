@@ -12,6 +12,7 @@ import { AgentResponse, WorkspaceMetricsResponse } from '@/api/generated/model'
 import { getListTasksWorkspacesWorkspaceIdTasksGetQueryKey } from '@/api/generated/tasks/tasks'
 import { getGetWorkspaceMetricsWorkspacesWorkspaceIdMetricsGetQueryKey } from '@/api/generated/workspaces/workspaces'
 import { useToastStore } from '@/stores/toast'
+import { useWorkspaceStore } from '@/stores/workspace'
 
 const TaskCompletedEvent = z.object({
   type: z.literal('task.completed'),
@@ -66,6 +67,13 @@ export type WorkspaceEvent = z.infer<typeof WorkspaceEvent>
  * Connects to the workspace event stream (via Centrifugo) and keeps the
  * TanStack Query cache in sync via invalidation on each event.
  *
+ * Mounted once in app/orgs/[orgId]/workspaces/[workspaceId]/layout.tsx so the
+ * connection survives sub-route navigation within a workspace with no
+ * reconnect overhead (per the Frontend Stack ADR). AppHeader is a sibling of
+ * that layout, not a descendant, so it can't read this hook's return value
+ * directly — it reads connection status from useWorkspaceStore.streamConnected
+ * instead, which this hook keeps in sync.
+ *
  * Auth is a connect/subscribe proxy round trip into the API process
  * (backend/api/api/routers/centrifugo_proxy.py), not a bearer token on the
  * socket — the Clerk session token rides in `getData`, forwarded into the
@@ -76,6 +84,7 @@ export function useWorkspaceStream(workspaceId: string): { connected: boolean } 
   const queryClient = useQueryClient()
   const { getToken } = useAuth()
   const [connected, setConnected] = useState(false)
+  const setStreamConnected = useWorkspaceStore((s) => s.setStreamConnected)
 
   // Clerk's getToken identity is not stable across renders — read it via a ref
   // inside getData rather than the effect's dependency array, so a render that
@@ -100,8 +109,14 @@ export function useWorkspaceStream(workspaceId: string): { connected: boolean } 
       getData: async () => ({ clerkToken: await getTokenRef.current() }),
     })
 
-    centrifuge.on('connected', () => setConnected(true))
-    centrifuge.on('disconnected', () => setConnected(false))
+    centrifuge.on('connected', () => {
+      setConnected(true)
+      setStreamConnected(true)
+    })
+    centrifuge.on('disconnected', () => {
+      setConnected(false)
+      setStreamConnected(false)
+    })
     centrifuge.on('error', (ctx) => {
       // Surfaces auth/subscribe failures (e.g. bad token, connectData rejection)
       // that would otherwise fail silently — see _handleGetDataError in the
@@ -168,8 +183,13 @@ export function useWorkspaceStream(workspaceId: string): { connected: boolean } 
 
     return () => {
       centrifuge.disconnect()
+      // Reset explicitly rather than relying on the 'disconnected' event,
+      // which isn't guaranteed to fire synchronously — leaving a stale
+      // `true` in the store would show AppHeader's live pill as connected
+      // for a beat after navigating away from this workspace.
+      setStreamConnected(false)
     }
-  }, [workspaceId, queryClient])
+  }, [workspaceId, queryClient, setStreamConnected])
 
   return { connected }
 }
