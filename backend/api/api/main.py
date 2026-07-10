@@ -25,6 +25,7 @@ from api.handlers.task_bridge import TaskCreatedRedisPublisher
 from api.middleware.auth import AuthMiddleware
 from api.routers import agents as agents_router
 from api.routers import api_keys as api_keys_router
+from api.routers import bidding_config as bidding_config_router
 from api.routers import centrifugo_proxy as centrifugo_proxy_router
 from api.routers import coordination_config as coordination_config_router
 from api.routers import tasks as tasks_router
@@ -166,4 +167,8 @@ app.include_router(
 app.include_router(
     coordination_config_router.router,
     tags=["coordination-config"],
+)
+app.include_router(
+    bidding_config_router.router,
+    tags=["bidding-config"],
 )

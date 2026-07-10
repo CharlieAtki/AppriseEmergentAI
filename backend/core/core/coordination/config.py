@@ -1,3 +1,21 @@
+"""Tiered (platform -> org -> workspace) config resolvers for the ContractNet
+coordination package — not "coordination-guards-only" despite the filename
+matching CoordinationConfig below. This file is organized by mechanism (pure
+tiered-merge resolution via merge_tiers()), not by knob, the same way
+contract_net.py already mixes compute_bid_score() (bid-scoring math) and
+attempt_reservation() (a reservation primitive) in one file because they're
+both "ContractNet coordination logic," not because they're the same concern.
+resolve_bidding_config() lives here for that reason: it shares this file's
+ConfigSource/_source_of() machinery, and splitting it into its own file would
+just force a private cross-file import for zero benefit.
+
+Contrast this with core/config/coordination.py vs core/config/bidding.py,
+which ARE kept in separate files — those are BaseSettings subclasses, where
+the file boundary maps 1:1 onto an operator-facing env_prefix namespace (a
+real external contract), so merging them would leak a naming collision into
+env var names. Same package, two different axes, two different answers.
+"""
+
 from __future__ import annotations
 
 from collections.abc import Mapping
@@ -72,4 +90,38 @@ def resolve_coordination_config(
             "decompose_difficulty_threshold", org_override, workspace_override
         ),
         max_delegation_depth_clamped=effective_depth != requested_depth,
+    )
+
+
+@dataclass(frozen=True)
+class BiddingConfig:
+    """Resolved ContractNet bid-scoring guards, with provenance for display."""
+
+    bid_score_threshold: float
+    bid_score_threshold_source: ConfigSource
+
+
+def resolve_bidding_config(
+    platform: Any,
+    org_override: Mapping[str, Any] | None,
+    workspace_override: Mapping[str, Any] | None,
+) -> BiddingConfig:
+    """Resolve platform -> org -> workspace bid-scoring overrides (workspace wins).
+
+    Unlike `max_delegation_depth`, `bid_score_threshold` has no ceiling/clamp —
+    it's a plain tuning knob (how selective bidding is), not a safety net against
+    runaway behaviour, so org/workspace may set it to any value the API schema's
+    0..1 range validation allows.
+    """
+    org_override = {k: v for k, v in (org_override or {}).items() if v is not None}
+    workspace_override = {k: v for k, v in (workspace_override or {}).items() if v is not None}
+
+    platform_defaults = {"bid_score_threshold": platform.bid_score_threshold_default}
+    merged = merge_tiers(platform_defaults, org_override, workspace_override)
+
+    return BiddingConfig(
+        bid_score_threshold=merged["bid_score_threshold"],
+        bid_score_threshold_source=_source_of(
+            "bid_score_threshold", org_override, workspace_override
+        ),
     )

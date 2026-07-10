@@ -11,8 +11,14 @@ import {
   useUpdateOrgCoordinationConfigOrganisationsOrgIdCoordinationConfigPatch,
   getGetOrgCoordinationConfigOrganisationsOrgIdCoordinationConfigGetQueryKey,
 } from '@/api/generated/coordination-config/coordination-config'
+import {
+  useGetOrgBiddingConfigOrganisationsOrgIdBiddingConfigGet,
+  useUpdateOrgBiddingConfigOrganisationsOrgIdBiddingConfigPatch,
+  getGetOrgBiddingConfigOrganisationsOrgIdBiddingConfigGetQueryKey,
+} from '@/api/generated/bidding-config/bidding-config'
 import type { CoordinationConfigResponse } from '@/api/generated/model'
 import { COORDINATION_CONFIG_FIELDS, type ConfigFieldMeta } from '@/config/coordinationConfigFields'
+import { BIDDING_CONFIG_FIELDS, type BiddingFieldMeta } from '@/config/biddingConfigFields'
 import { Badge } from '@/components/ui/Badge'
 import { useToastStore } from '@/stores/toast'
 
@@ -49,7 +55,7 @@ function maxOf(data: CoordinationConfigResponse, key: string): number | undefine
   return key === 'max_delegation_depth' ? data.platform_max_delegation_depth_ceiling : undefined
 }
 
-function fieldError(state: FieldState, field: ConfigFieldMeta, max: number | undefined): string | null {
+function fieldError(state: FieldState, field: { min?: number }, max: number | undefined): string | null {
   if (!state.overrideEnabled) return null
   if (state.value.trim() === '') return 'This field is required.'
   const num = Number(state.value)
@@ -62,6 +68,8 @@ function fieldError(state: FieldState, field: ConfigFieldMeta, max: number | und
 export function OrgSettingsModal({ orgId, open, onOpenChange }: OrgSettingsModalProps) {
   const [fields, setFields] = useState<Record<string, FieldState>>({})
   const [initialFields, setInitialFields] = useState<Record<string, FieldState>>({})
+  const [biddingFields, setBiddingFields] = useState<Record<string, FieldState>>({})
+  const [biddingInitialFields, setBiddingInitialFields] = useState<Record<string, FieldState>>({})
   const [confirmDiscardOpen, setConfirmDiscardOpen] = useState(false)
   const queryClient = useQueryClient()
   const { toast } = useToastStore()
@@ -70,6 +78,12 @@ export function OrgSettingsModal({ orgId, open, onOpenChange }: OrgSettingsModal
     orgId,
     { query: { enabled: open } },
   )
+  const {
+    data: biddingData,
+    isLoading: biddingIsLoading,
+    isError: biddingIsError,
+    refetch: refetchBidding,
+  } = useGetOrgBiddingConfigOrganisationsOrgIdBiddingConfigGet(orgId, { query: { enabled: open } })
 
   useEffect(() => {
     if (!open || !data) return
@@ -85,10 +99,23 @@ export function OrgSettingsModal({ orgId, open, onOpenChange }: OrgSettingsModal
     setInitialFields(next)
   }, [open, data])
 
+  useEffect(() => {
+    if (!open || !biddingData) return
+    const next: Record<string, FieldState> = {
+      bid_score_threshold: {
+        overrideEnabled: biddingData.org_bid_score_threshold_override !== null,
+        value: String(biddingData.org_bid_score_threshold_override ?? biddingData.effective_bid_score_threshold),
+      },
+    }
+    setBiddingFields(next)
+    setBiddingInitialFields(next)
+  }, [open, biddingData])
+
   const isDirty = JSON.stringify(fields) !== JSON.stringify(initialFields)
+  const biddingIsDirty = JSON.stringify(biddingFields) !== JSON.stringify(biddingInitialFields)
 
   function handleOpenChange(next: boolean) {
-    if (!next && isDirty) {
+    if (!next && (isDirty || biddingIsDirty)) {
       setConfirmDiscardOpen(true)
       return
     }
@@ -102,13 +129,27 @@ export function OrgSettingsModal({ orgId, open, onOpenChange }: OrgSettingsModal
           queryKey: getGetOrgCoordinationConfigOrganisationsOrgIdCoordinationConfigGetQueryKey(orgId),
         })
         toast({ title: 'Organisation settings saved', variant: 'default' })
-        onOpenChange(false)
       },
       onError: () => {
         toast({ title: 'Failed to update organisation settings', variant: 'error' })
       },
     },
   })
+
+  const { mutate: mutateBidding, isPending: biddingIsPending } =
+    useUpdateOrgBiddingConfigOrganisationsOrgIdBiddingConfigPatch({
+      mutation: {
+        onSuccess: () => {
+          void queryClient.invalidateQueries({
+            queryKey: getGetOrgBiddingConfigOrganisationsOrgIdBiddingConfigGetQueryKey(orgId),
+          })
+          toast({ title: 'Bid scoring settings saved', variant: 'default' })
+        },
+        onError: () => {
+          toast({ title: 'Failed to update bid scoring settings', variant: 'error' })
+        },
+      },
+    })
 
   function toggleOverride(field: ConfigFieldMeta, checked: boolean) {
     setFields((prev) => ({
@@ -119,10 +160,26 @@ export function OrgSettingsModal({ orgId, open, onOpenChange }: OrgSettingsModal
     }))
   }
 
+  function toggleBiddingOverride(checked: boolean) {
+    setBiddingFields((prev) => ({
+      ...prev,
+      bid_score_threshold: checked
+        ? {
+            overrideEnabled: true,
+            value: prev.bid_score_threshold?.value ?? String(biddingData!.effective_bid_score_threshold),
+          }
+        : { overrideEnabled: false, value: prev.bid_score_threshold?.value ?? '' },
+    }))
+  }
+
   const hasErrors = COORDINATION_CONFIG_FIELDS.some((field) => {
     const state = fields[field.key]
     return state && data && fieldError(state, field, maxOf(data, field.key)) !== null
   })
+
+  const biddingState = biddingFields.bid_score_threshold
+  const biddingField = BIDDING_CONFIG_FIELDS[0] as BiddingFieldMeta
+  const biddingError = biddingState ? fieldError(biddingState, biddingField, biddingField.max) : null
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -135,6 +192,16 @@ export function OrgSettingsModal({ orgId, open, onOpenChange }: OrgSettingsModal
         decompose_difficulty_threshold: fields.decompose_difficulty_threshold?.overrideEnabled
           ? Number(fields.decompose_difficulty_threshold.value)
           : null,
+      },
+    })
+  }
+
+  function handleBiddingSubmit(e: React.FormEvent) {
+    e.preventDefault()
+    mutateBidding({
+      orgId,
+      data: {
+        bid_score_threshold: biddingState?.overrideEnabled ? Number(biddingState.value) : null,
       },
     })
   }
@@ -239,21 +306,100 @@ export function OrgSettingsModal({ orgId, open, onOpenChange }: OrgSettingsModal
                 )
               })}
 
-            <div className="flex justify-end gap-2 pt-1">
-              <Dialog.Close asChild>
-                <button
-                  type="button"
-                  className="rounded-lg px-4 py-2 text-body text-muted transition-colors hover:text-foreground"
-                >
-                  Cancel
-                </button>
-              </Dialog.Close>
+            <div className="flex justify-end pt-1">
               <button
                 type="submit"
                 disabled={isPending || !data || hasErrors}
                 className="rounded-lg bg-brand-primary px-4 py-2 text-body font-medium text-background transition-colors hover:bg-brand-hover disabled:opacity-50"
               >
                 {isPending ? 'Saving…' : 'Save'}
+              </button>
+            </div>
+          </form>
+
+          <div className="my-5 border-t border-border" />
+
+          <form onSubmit={handleBiddingSubmit} className="space-y-4">
+            <p className="text-label font-semibold uppercase tracking-architectural text-muted">
+              Bid scoring
+            </p>
+
+            {biddingIsLoading && (
+              <div className="space-y-1.5 animate-pulse">
+                <div className="h-4 w-32 rounded bg-elevated" />
+                <div className="h-3 w-full rounded bg-elevated" />
+                <div className="h-9 w-full rounded-lg bg-elevated" />
+              </div>
+            )}
+
+            {biddingIsError && (
+              <div className="space-y-2 rounded-lg border border-error/30 bg-error/10 px-3 py-2.5">
+                <p className="text-caption text-error">Couldn't load bid scoring settings.</p>
+                <button
+                  type="button"
+                  onClick={() => refetchBidding()}
+                  className="text-caption font-medium text-error underline underline-offset-2"
+                >
+                  Try again
+                </button>
+              </div>
+            )}
+
+            {biddingData && biddingState && (
+              <div className="space-y-1.5">
+                <div className="flex items-center justify-between gap-2">
+                  <label className="text-label font-medium text-secondary">{biddingField.label}</label>
+                  <div className="flex items-center gap-2">
+                    <Badge status={biddingData.bid_score_threshold_source} />
+                    <div className="flex items-center gap-1.5 text-caption text-muted">
+                      <Checkbox.Root
+                        id="org-override-bid_score_threshold"
+                        checked={biddingState.overrideEnabled}
+                        onCheckedChange={(checked) => toggleBiddingOverride(checked === true)}
+                        className="flex h-4 w-4 items-center justify-center rounded border border-border bg-elevated data-[state=checked]:border-brand-primary data-[state=checked]:bg-brand-primary focus:outline-none focus:ring-1 focus:ring-brand-primary"
+                      >
+                        <Checkbox.Indicator className="text-background">
+                          <Check size={12} strokeWidth={3} />
+                        </Checkbox.Indicator>
+                      </Checkbox.Root>
+                      <label htmlFor="org-override-bid_score_threshold">Override</label>
+                    </div>
+                  </div>
+                </div>
+                <p className="text-caption text-muted">{biddingField.description}</p>
+                <input
+                  type="number"
+                  inputMode={biddingField.type === 'integer' ? 'numeric' : 'decimal'}
+                  min={biddingField.min}
+                  max={biddingField.max}
+                  step={biddingField.step}
+                  disabled={!biddingState.overrideEnabled || biddingIsPending}
+                  value={
+                    biddingState.overrideEnabled ? biddingState.value : String(biddingData.effective_bid_score_threshold)
+                  }
+                  onChange={(e) =>
+                    setBiddingFields((prev) => ({
+                      ...prev,
+                      bid_score_threshold: { overrideEnabled: true, value: e.target.value },
+                    }))
+                  }
+                  className={`w-full rounded-lg border bg-elevated px-3 py-2 text-body text-foreground disabled:opacity-50 focus:outline-none focus:ring-1 ${
+                    biddingError
+                      ? 'border-error focus:border-error focus:ring-error'
+                      : 'border-border focus:border-brand-primary focus:ring-brand-primary'
+                  }`}
+                />
+                {biddingError && <p className="text-caption text-error">{biddingError}</p>}
+              </div>
+            )}
+
+            <div className="flex justify-end pt-1">
+              <button
+                type="submit"
+                disabled={biddingIsPending || !biddingData || biddingError !== null}
+                className="rounded-lg bg-brand-primary px-4 py-2 text-body font-medium text-background transition-colors hover:bg-brand-hover disabled:opacity-50"
+              >
+                {biddingIsPending ? 'Saving…' : 'Save'}
               </button>
             </div>
           </form>
@@ -277,7 +423,7 @@ export function OrgSettingsModal({ orgId, open, onOpenChange }: OrgSettingsModal
               Discard changes?
             </AlertDialog.Title>
             <AlertDialog.Description className="mt-1 text-body text-muted">
-              You have unsaved changes to this organisation's coordination settings. Closing now will discard them.
+              You have unsaved changes to this organisation's settings. Closing now will discard them.
             </AlertDialog.Description>
             <div className="mt-6 flex justify-end gap-2">
               <AlertDialog.Cancel asChild>

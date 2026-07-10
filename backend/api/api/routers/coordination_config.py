@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from core.models.tenant import Organisation, Workspace
+from core.repositories.workspace_repository import WorkspaceRepository
 from fastapi import APIRouter, Depends
 from redis.asyncio import Redis
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -9,6 +10,7 @@ from api.deps import (
     get_coordination_config_service,
     get_db,
     get_redis,
+    get_workspace_repo,
     require_organisation,
     require_workspace,
 )
@@ -46,6 +48,8 @@ async def update_org_coordination_config(
     # Committed explicitly here (not left to get_db()'s auto-commit-on-teardown)
     # so the org-level write is durable before this handler returns.
     session: AsyncSession = Depends(get_db),
+    workspace_repo: WorkspaceRepository = Depends(get_workspace_repo),
+    redis: Redis = Depends(get_redis),
 ) -> CoordinationConfigResponse:
     fields_set = body.model_fields_set
     cmd = SetCoordinationOverrideCommand(
@@ -56,6 +60,15 @@ async def update_org_coordination_config(
     )
     data = await service.set_org_override(org, cmd)
     await session.commit()
+    # An org override affects every workspace under it — the worker's cache key
+    # is keyed per-workspace only (see execute_task.py's _resolve_coordination_config),
+    # so a single redis.delete(f"coordination_config:{org.id}") would invalidate
+    # nothing real. Invalidate after commit, same ordering rationale as the
+    # workspace-level PATCH below: invalidating before commit risks the worker
+    # re-populating the cache from a session that hasn't actually persisted yet.
+    workspaces = await workspace_repo.list_all(org.id)
+    if workspaces:
+        await redis.delete(*(f"coordination_config:{ws.id}" for ws in workspaces))
     return CoordinationConfigResponse.model_validate(data)
 
 

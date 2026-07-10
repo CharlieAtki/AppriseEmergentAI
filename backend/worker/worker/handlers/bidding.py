@@ -10,7 +10,7 @@ from core.eventing.events.stream_events import TaskCreatedStreamEvent
 from core.repositories.agent_repository import AgentRepository
 from core.repositories.task_repository import TaskRepository
 
-from worker.coordination.bidding import score_and_reserve
+from worker.coordination.bidding import _resolve_bidding_config, score_and_reserve
 
 if TYPE_CHECKING:
     from arq import ArqRedis
@@ -32,8 +32,9 @@ class TaskBiddingHandler(EventHandler[TaskCreatedStreamEvent]):
     ``execute_task``. Each call opens a fresh DB session — the handler is stateless
     beyond its constructor arguments.
 
-    Falls through silently if no agent meets ``settings.BID_SCORE_THRESHOLD`` or if
-    another worker wins the reservation race first.
+    Falls through silently if no agent meets the workspace's resolved bid score
+    threshold (see ``_resolve_bidding_config`` in ``worker.coordination.bidding``)
+    or if another worker wins the reservation race first.
     """
 
     redis: Redis
@@ -48,6 +49,9 @@ class TaskBiddingHandler(EventHandler[TaskCreatedStreamEvent]):
             if not agents:
                 return
 
+            bidding_cfg = await _resolve_bidding_config(
+                self.redis, session, event.organisation_id, event.workspace_id
+            )
             await score_and_reserve(
                 task_repo,
                 agents,
@@ -57,4 +61,5 @@ class TaskBiddingHandler(EventHandler[TaskCreatedStreamEvent]):
                 event.domain_tags,
                 self.redis,
                 self.arq_queue,
+                bidding_cfg.bid_score_threshold,
             )

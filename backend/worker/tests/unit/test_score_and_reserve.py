@@ -55,13 +55,16 @@ async def test_no_agents_returns_silently():
         domain_tags=None,
         redis=redis,
         arq_queue=arq_queue,
+        bid_score_threshold=0.3,
     )
     arq_queue.enqueue_job.assert_not_called()
     redis.set.assert_not_called()
 
 
 async def test_all_below_threshold_no_enqueue():
-    """Agent with zero matching skills scores below BID_SCORE_THRESHOLD (0.3)."""
+    """Agent with zero matching skills scores below the platform-default
+    bid_score_threshold (0.3, resolved via resolve_bidding_config elsewhere —
+    passed in explicitly here since score_and_reserve takes it as a plain param)."""
     task_repo, _session, redis, arq_queue = _make_deps()
     # No skills, no influence, full queue → score ~ 0.025 (personality only)
     agent = _agent(skills={}, active_tasks=3, influence=0.0)
@@ -75,9 +78,40 @@ async def test_all_below_threshold_no_enqueue():
         domain_tags=None,
         redis=redis,
         arq_queue=arq_queue,
+        bid_score_threshold=0.3,
     )
     arq_queue.enqueue_job.assert_not_called()
     redis.set.assert_not_called()
+
+
+async def test_resolved_non_default_threshold_is_honoured_not_hardcoded(make_task):
+    """Regression guard: the same agent/score that's rejected above (~0.025)
+    must be accepted when the caller resolves and passes a lower workspace-
+    overridden threshold — proves bid_score_threshold is a real parameter this
+    function honours, not a hardcoded settings.BID_SCORE_THRESHOLD read."""
+    task_repo, session, redis, arq_queue = _make_deps()
+
+    task_id = uuid.uuid4()
+    ws_id = uuid.uuid4()
+    task = make_task(status="open", id=task_id, workspace_id=ws_id)
+
+    redis.set = AsyncMock(return_value=b"OK")
+    session.get = AsyncMock(return_value=task)
+
+    agent = _agent(skills={}, active_tasks=3, influence=0.0)  # scores ~0.025
+
+    await score_and_reserve(
+        task_repo=task_repo,
+        agents=[agent],
+        task_id=task_id,
+        workspace_id=ws_id,
+        required_skills={"exotic_ml_skill": 1.0},
+        domain_tags=None,
+        redis=redis,
+        arq_queue=arq_queue,
+        bid_score_threshold=0.0,  # a workspace override far below platform default
+    )
+    arq_queue.enqueue_job.assert_called_once()
 
 
 # ── SETNX win — task still open ───────────────────────────────────────────────
@@ -105,6 +139,7 @@ async def test_setnx_win_task_open_enqueues_job(make_task):
         domain_tags=None,
         redis=redis,
         arq_queue=arq_queue,
+        bid_score_threshold=0.3,
     )
 
     arq_queue.enqueue_job.assert_called_once_with(
@@ -145,6 +180,7 @@ async def test_setnx_win_task_not_open_releases_reservation(make_task):
         domain_tags=None,
         redis=redis,
         arq_queue=arq_queue,
+        bid_score_threshold=0.3,
     )
 
     arq_queue.enqueue_job.assert_not_called()
@@ -172,6 +208,7 @@ async def test_setnx_win_task_missing_releases_reservation():
         domain_tags=None,
         redis=redis,
         arq_queue=arq_queue,
+        bid_score_threshold=0.3,
     )
 
     arq_queue.enqueue_job.assert_not_called()
@@ -198,6 +235,7 @@ async def test_setnx_loss_all_agents_no_enqueue():
         domain_tags=None,
         redis=redis,
         arq_queue=arq_queue,
+        bid_score_threshold=0.3,
     )
 
     arq_queue.enqueue_job.assert_not_called()
@@ -228,6 +266,7 @@ async def test_setnx_loss_on_first_win_on_second(make_task):
         domain_tags=None,
         redis=redis,
         arq_queue=arq_queue,
+        bid_score_threshold=0.3,
     )
 
     arq_queue.enqueue_job.assert_called_once_with(
@@ -269,6 +308,7 @@ async def test_flush_failure_after_setnx_win_releases_reservation(make_task):
             domain_tags=None,
             redis=redis,
             arq_queue=arq_queue,
+            bid_score_threshold=0.3,
         )
 
     redis.delete.assert_called_once_with(f"reservation:{ws_id}:{task_id}")
@@ -298,6 +338,7 @@ async def test_enqueue_success_is_never_undone_by_a_later_step(make_task):
         domain_tags=None,
         redis=redis,
         arq_queue=arq_queue,
+        bid_score_threshold=0.3,
     )
 
     arq_queue.enqueue_job.assert_called_once()
@@ -331,6 +372,7 @@ async def test_enqueue_failure_releases_reservation(make_task):
             domain_tags=None,
             redis=redis,
             arq_queue=arq_queue,
+            bid_score_threshold=0.3,
         )
 
     redis.delete.assert_called_once_with(f"reservation:{ws_id}:{task_id}")

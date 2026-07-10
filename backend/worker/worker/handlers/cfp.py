@@ -10,7 +10,7 @@ from core.eventing.events.stream_events import CfpIssuedStreamEvent
 from core.repositories.agent_repository import AgentRepository
 from core.repositories.task_repository import TaskRepository
 
-from worker.coordination.bidding import score_and_reserve
+from worker.coordination.bidding import _resolve_bidding_config, score_and_reserve
 
 if TYPE_CHECKING:
     from arq import ArqRedis
@@ -48,6 +48,9 @@ class CfpHandler(EventHandler[CfpIssuedStreamEvent]):
             if not agents:
                 return
 
+            bidding_cfg = await _resolve_bidding_config(
+                self.redis, session, event.organisation_id, event.workspace_id
+            )
             await score_and_reserve(
                 task_repo,
                 agents,
@@ -57,4 +60,5 @@ class CfpHandler(EventHandler[CfpIssuedStreamEvent]):
                 event.domain_tags,
                 self.redis,
                 self.arq_queue,
+                bidding_cfg.bid_score_threshold,
             )
