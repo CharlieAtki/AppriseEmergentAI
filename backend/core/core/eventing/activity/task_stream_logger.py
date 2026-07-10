@@ -69,7 +69,7 @@ class TaskStreamLogger:
         """Publish a ``task.created`` event to trigger bidding for *task*.
 
         Called from two paths:
-        - ``decompose_and_publish()`` — once per generated subtask after flush.
+        - ``decompose_subtasks()`` — once per generated subtask after flush.
         - ``_release_to_pool()``      — when a CFP agent returns a task to "open".
 
         The task ORM object must be flushed (UUID assigned) before calling this.

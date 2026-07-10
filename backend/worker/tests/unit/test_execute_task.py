@@ -243,7 +243,7 @@ async def test_cfp_decision_releases_task_to_pool(make_task, make_agent, mocker)
 async def test_decompose_decision_creates_subtasks(make_task, make_agent, mocker):
     task = make_task(status="reserved", delegation_depth=0, difficulty=4.5)  # above threshold
     agent = make_agent()
-    *_, execution = _patch_infra(mocker, task, agent)
+    wctx, *_, execution = _patch_infra(mocker, task, agent)
     _decision(mocker, "decompose")
 
     subtask = make_task(status="open")
@@ -255,7 +255,7 @@ async def test_decompose_decision_creates_subtasks(make_task, make_agent, mocker
         AsyncMock(return_value=decompose_resp),
     )
     mocker.patch.object(
-        execute_task_module, "decompose_and_publish", AsyncMock(return_value=[subtask])
+        execute_task_module, "decompose_subtasks", AsyncMock(return_value=[subtask])
     )
 
     await execute_task_module.execute_task(
@@ -265,6 +265,16 @@ async def test_decompose_decision_creates_subtasks(make_task, make_agent, mocker
     assert execution.status == "completed"
     assert execution.execution_path == "decompose"
     assert task.status == "completed"
+
+    # Regression guard: task_logger.created(subtask) must fire from execute_task's
+    # post-commit loop (via TaskActivityLogger -> wctx.event_bus.apublish), not from
+    # inside decompose_subtasks — decompose_subtasks is mocked above and returns the
+    # subtask without ever touching a publish callable, so this call can only have
+    # come from the post-commit loop in execute_task.py.
+    from core.eventing.events.task_events import TaskCreatedEvent
+
+    published_types = [call.args[0].__class__ for call in wctx.event_bus.apublish.call_args_list]
+    assert TaskCreatedEvent in published_types
 
 
 async def test_decompose_parse_failure_falls_back_to_self_execute(make_task, make_agent, mocker):

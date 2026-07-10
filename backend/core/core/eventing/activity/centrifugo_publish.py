@@ -3,11 +3,21 @@
 Exports a factory, not a bare module-level function or client — constructed
 once at worker startup (worker/context.py) and injected at the same call
 sites that used to receive wctx.redis.publish, matching JobSpan's own stated
-principle that redis_publish is injected rather than resolved from a global
-"so the span has no hidden global dependency and can be constructed in tests
-with a mock callable." No other file (WorkspaceStreamLogger, JobSpan, the
-event dataclasses) changes — PubSubPublishFn is the seam, and this is just a
-new implementation of it.
+principle that publish is injected rather than resolved from a global "so the
+span has no hidden global dependency and can be constructed in tests with a
+mock callable." No other file (WorkspaceStreamLogger, JobSpan, the event
+dataclasses) changes — PubSubPublishFn is the seam, and this is just a new
+implementation of it.
+
+This is the single place that turns a payload dict into wire JSON. Callers
+(WorkspaceStreamLogger._emit(), JobSpan.emit()) hand over a plain dict and
+never serialize it themselves — mirrors RedisBus.apublish(event), where the
+transport owns serialization, not the producer. httpx's `json=` kwarg has no
+hook for a custom `default=` encoder, so this builds the JSON body manually
+via `json.dumps(..., default=str)` and posts it as raw `content=` — this is
+what lets JobSpan.emit()'s deliberately open-ended tracing payloads carry a
+stray UUID/datetime/Decimal without crashing, a responsibility this function
+took over from JobSpan.emit() itself.
 
 Only ever constructed in worker/ — api/ never publishes dashboard or trace
 events (its Centrifugo integration is read-only: connect/subscribe proxy auth
@@ -19,6 +29,7 @@ from __future__ import annotations
 
 import json
 import logging
+from collections.abc import Mapping
 from typing import TYPE_CHECKING
 
 import httpx
@@ -38,16 +49,15 @@ def make_centrifugo_publish(config: CentrifugoConfig, client: httpx.AsyncClient)
     exactly where it is today, not move into this transport implementation.
     """
 
-    async def publish(channel: str, payload: str) -> None:
-        # payload arrives as an already-json.dumps()'d string (WorkspaceStreamLogger's
-        # own contract with PubSubPublishFn) — Centrifugo's publish API wants
-        # structured JSON in `data`, not a pre-serialized string, so it must be
-        # loaded back into a dict here rather than passed through directly.
-        data = json.loads(payload)
+    async def publish(channel: str, data: Mapping[str, object]) -> None:
+        body = json.dumps({"channel": channel, "data": data}, default=str).encode("utf-8")
         response = await client.post(
             f"{config.http_api_url}/publish",
-            json={"channel": channel, "data": data},
-            headers={"X-API-Key": config.http_api_key.get_secret_value()},
+            content=body,
+            headers={
+                "X-API-Key": config.http_api_key.get_secret_value(),
+                "Content-Type": "application/json",
+            },
         )
         response.raise_for_status()
 

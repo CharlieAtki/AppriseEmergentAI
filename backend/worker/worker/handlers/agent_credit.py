@@ -85,7 +85,7 @@ class AgentCreditHandler(EventHandler[TaskUpdatedEvent]):
       Handles pure decompose and CFP→Decompose chains.
 
     ── Why timing matters for decompose ───────────────────────────────────────────
-    The parent task goes to "completed" immediately after decompose_and_publish()
+    The parent task goes to "completed" immediately after decompose_subtasks()
     (via _finalise_execution), before any subtask executes. No quality signal
     exists at that moment. Coordinator credit therefore fires from the LAST subtask
     completion, not from the parent's completion event. This handler detects

@@ -7,7 +7,6 @@ the guard against that.
 
 from __future__ import annotations
 
-import json
 import uuid
 from unittest.mock import AsyncMock
 
@@ -30,9 +29,8 @@ async def test_task_executing_payload_shape():
 
     await logger.task_executing(ws_id, task_id, agent_id)
 
-    channel, raw = publish.call_args.args
+    channel, payload = publish.call_args.args
     assert channel == channel_for(ws_id)
-    payload = json.loads(raw)
     assert payload == {
         "type": "task.executing",
         "task_id": str(task_id),
@@ -46,7 +44,7 @@ async def test_task_completed_payload_shape():
 
     await logger.task_completed(ws_id, task_id, agent_id, 0.87)
 
-    payload = json.loads(publish.call_args.args[1])
+    payload = publish.call_args.args[1]
     assert payload == {
         "type": "task.completed",
         "task_id": str(task_id),
@@ -61,7 +59,7 @@ async def test_skill_updated_payload_shape():
 
     await logger.skill_updated(ws_id, agent_id, {"python": 0.05}, 0.62)
 
-    payload = json.loads(publish.call_args.args[1])
+    payload = publish.call_args.args[1]
     assert payload == {
         "type": "agent.skill_updated",
         "agent_id": str(agent_id),
@@ -76,7 +74,7 @@ async def test_emergence_detected_payload_shape():
 
     await logger.emergence_detected(ws_id, 0.42, hub_agent_id)
 
-    payload = json.loads(publish.call_args.args[1])
+    payload = publish.call_args.args[1]
     assert payload == {
         "type": "emergence.detected",
         "gini_coefficient": 0.42,

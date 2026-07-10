@@ -1,8 +1,7 @@
 from __future__ import annotations
 
-import json
 import uuid
-from collections.abc import AsyncGenerator, Awaitable, Callable, Mapping
+from collections.abc import AsyncGenerator, Mapping
 from contextlib import asynccontextmanager
 from contextvars import ContextVar, Token
 from dataclasses import dataclass
@@ -14,6 +13,7 @@ from core.eventing.activity.workspace_channels import trace_channel_for
 from core.eventing.activity.workspace_stream_logger import WorkspaceStreamLogger
 
 if TYPE_CHECKING:
+    from core.eventing.activity.base import PubSubPublishFn
     from sqlalchemy.ext.asyncio import AsyncSession
 
 
@@ -61,13 +61,14 @@ class JobSpan:
 
     Does NOT create or finalise the TaskExecution row — that is the job's responsibility.
 
-    ``redis_publish`` is the narrow callable used by ``emit()`` to push tracing events
-    to their own channel (``trace_channel_for()``). Pass ``wctx.centrifugo_publish`` at
-    the call site — injected rather than resolved via ``get_worker_context()`` so the
-    span has no hidden global dependency and can be constructed in tests with a mock
-    callable. (The parameter name predates the Centrifugo migration and still refers
-    to the callable's original transport — the type, ``Callable[[str, str], Awaitable[None]]``,
-    is what matters, not the name.)
+    ``publish`` is the narrow ``PubSubPublishFn`` callable used by ``emit()`` to push
+    tracing events to their own channel (``trace_channel_for()``). Pass
+    ``wctx.centrifugo_publish`` at the call site — injected rather than resolved via
+    ``get_worker_context()`` so the span has no hidden global dependency and can be
+    constructed in tests with a mock callable. Named for the abstract contract, not
+    the concrete transport — ``JobSpan`` doesn't know or care that it's Centrifugo
+    underneath (interfaces over concrete types); the concrete name is only used at
+    the composition root (``wctx.centrifugo_publish`` in ``worker/context.py``).
 
     ``self.stream`` (a ``WorkspaceStreamLogger`` built from the same callable) is the
     separate, stable vocabulary for dashboard events, published to ``channel_for()`` —
@@ -87,15 +88,15 @@ class JobSpan:
         task_id: uuid.UUID,
         workspace_id: uuid.UUID,
         *,
-        redis_publish: Callable[[str, str], Awaitable[None]],
+        publish: PubSubPublishFn,
         meta: ArqJobMeta,
     ) -> None:
-        self._publish = redis_publish
+        self._publish = publish
         self.meta = meta
         self.agent_id = agent_id
         self.task_id = task_id
         self.workspace_id = workspace_id
-        self.stream = WorkspaceStreamLogger(redis_publish)
+        self.stream = WorkspaceStreamLogger(publish)
         self._events: list[dict[str, object]] = []
         self._token: Token[JobSpan] | None = None
 
@@ -127,8 +128,10 @@ class JobSpan:
         Events also accumulate in self._events for storage in TaskExecution.tool_trace
         after the job completes.
 
-        ``default=str`` in json.dumps guards against non-serialisable values that
-        callers may pass in ``data`` (e.g. UUID, datetime, Decimal).
+        Non-JSON-native values in ``data`` (e.g. UUID, datetime, Decimal) are handled
+        by the publish transport's serialization (``default=str``, see
+        core/eventing/activity/centrifugo_publish.py), not here — this method hands
+        over a plain dict and never serializes it itself.
         """
         reserved = {"type", "agent_id", "task_id", "workspace_id", "job_id", "job_try", "ts"}
         extra: dict[str, object] = {}
@@ -149,10 +152,7 @@ class JobSpan:
             **extra,
         }
         self._events.append(event)
-        await self._publish(
-            trace_channel_for(self.workspace_id),
-            json.dumps(event, default=str),
-        )
+        await self._publish(trace_channel_for(self.workspace_id), event)
 
     @property
     def events(self) -> list[dict[str, object]]:
