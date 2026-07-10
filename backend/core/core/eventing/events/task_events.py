@@ -4,7 +4,7 @@ import dataclasses
 import uuid
 from typing import Any, Literal
 
-from core.eventing.bus import Snapshot, StateActionEvent, StateChangeEvent
+from core.eventing.bus.common import Snapshot, StateActionEvent, StateChangeEvent
 
 _SYNTHETIC = frozenset({"executing_agent_id", "quality_score", "execution_id", "execution_path"})
 

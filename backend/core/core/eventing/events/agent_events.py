@@ -4,7 +4,7 @@ import dataclasses
 import uuid
 from typing import Any
 
-from core.eventing.bus import Snapshot, StateActionEvent, StateChangeEvent
+from core.eventing.bus.common import Snapshot, StateActionEvent, StateChangeEvent
 
 
 @dataclasses.dataclass(frozen=True, kw_only=True)
