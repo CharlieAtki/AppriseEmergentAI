@@ -79,7 +79,9 @@ async def get_workspace_metrics(
 async def update_workspace(
     body: UpdateWorkspaceRequest,
     # workspace ORM provided by require_workspace() auth dep — passed directly to avoid a second DB read.
-    workspace: Workspace = Depends(require_workspace("write")),
+    # require_active=False: this route's own job includes reactivating a paused
+    # workspace, so it must not be gated on the status it exists to change.
+    workspace: Workspace = Depends(require_workspace("write", require_active=False)),
     service: WorkspaceService = Depends(get_workspace_service),
 ) -> WorkspaceResponse:
     cmd = UpdateWorkspaceCommand(
@@ -95,7 +97,8 @@ async def update_workspace(
 
 @router.delete("/{workspace_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_workspace(
-    workspace: Workspace = Depends(require_workspace("write")),
+    # require_active=False: a paused/archived workspace must still be deletable.
+    workspace: Workspace = Depends(require_workspace("write", require_active=False)),
     service: WorkspaceService = Depends(get_workspace_service),
 ) -> None:
     await service.delete(workspace)

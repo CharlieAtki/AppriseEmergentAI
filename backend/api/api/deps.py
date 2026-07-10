@@ -210,11 +210,20 @@ def get_arq_queue(request: Request) -> ArqRedis:
     return request.app.state.arq_queue  # type: ignore[no-any-return]
 
 
-def require_workspace(permission: str = "write") -> Callable[..., Awaitable[Workspace]]:
-    """Dep factory: loads Workspace from DB, verifies org ownership and active status.
+def require_workspace(
+    permission: str = "write", *, require_active: bool = True
+) -> Callable[..., Awaitable[Workspace]]:
+    """Dep factory: loads Workspace from DB, verifies org ownership and (by default) active status.
 
     Returns the Workspace ORM model. Routes receive it as a typed object and read
     workspace.organisation_id / workspace.id directly — no hardcoded stubs.
+
+    require_active=True is right for routes that operate *inside* an active
+    workspace (create task, create agent, etc.) — those must be blocked while
+    paused. It's wrong for the workspace's own lifecycle routes (PATCH to
+    reactivate a paused workspace, DELETE a paused/archived one) — those need
+    ownership+scope checks but must not be gated on the very status they exist
+    to change. Pass require_active=False for those.
     """
 
     async def dep(
@@ -231,7 +240,7 @@ def require_workspace(permission: str = "write") -> Callable[..., Awaitable[Work
         if ws is None:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Workspace not found")
 
-        if not Workspace.is_active_status(ws.status):
+        if require_active and not Workspace.is_active_status(ws.status):
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT, detail="Workspace is not active"
             )
