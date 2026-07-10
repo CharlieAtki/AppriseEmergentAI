@@ -261,6 +261,27 @@ await bus.apublish(TaskCreatedEvent(...))
 
 Loggers receive `PublishFn = Callable[[DomainEvent], Awaitable[None]]` at construction — never the bus directly. Method names describe the domain action (`logger.created`, `logger.updated`, `logger.deleted`).
 
+### API routers never publish directly
+
+The session dependency (`Depends(get_db)`) commits *after* the router function returns — there is no point in a router's own body that runs after commit, so a router cannot safely sequence "publish only if the write actually persisted" by simple code placement the way a worker job can (see below). If an endpoint needs to trigger an event-driven side effect tied to its own write, commit first, then enqueue an ARQ job — mirroring `create_task`'s existing `session.commit()`-then-`enqueue_job()` pattern — and let that job do the publishing from its own worker-owned session scope. Never wire an activity logger into a router.
+
+### Publish only after the session closes
+
+```python
+# correct — worker job owns its session scope; publish is sequential code after it
+async with get_session() as session:
+    task_repo.save(task)
+await logger.updated(before, task)   # after the `async with` block, after commit
+
+# wrong — still inside the open transaction; a commit failure after this
+# leaves a notification for a write that never persisted
+async with get_session() as session:
+    task_repo.save(task)
+    await logger.updated(before, task)
+```
+
+A function that participates in a caller's transaction (e.g. `decompose_subtasks()`) should never accept a publish-shaped dependency at all — that keeps the "publish after commit" invariant enforced by the function's own signature, not by remembering to place the call correctly.
+
 ### Snapshots must be taken before the session closes
 
 ```python
@@ -295,7 +316,7 @@ All handlers run fire-and-forget, registered once at startup via `bus.bind()`. U
 | `resolve_routing()` | Merges platform defaults + workspace overrides | Dispatches anything |
 | `LLMRouter` | Resolves model, builds client, invokes it | Registers models, knows global catalog |
 | `TaskStateMachine` | Validates and applies status transitions | Loads from DB, publishes events |
-| `decompose_and_publish()` | Writes subtasks + publishes events | Calls the LLM, commits the session |
+| `decompose_subtasks()` | Writes subtasks | Calls the LLM, commits the session, publishes events |
 | `XActivityLogger` | Constructs and publishes events | DB access, handler logic |
 | API routers | Validate input, call service, translate to HTTP | Business logic, LLM calls |
 | Service classes | Accept Commands, return DTOs | Commit sessions, import HTTP schemas |

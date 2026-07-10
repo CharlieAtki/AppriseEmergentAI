@@ -13,7 +13,7 @@ from core.agents.scoring import score_outcome
 from core.agents.tooling.registry import tool_registry
 from core.config import settings
 from core.coordination.config import CoordinationConfig, resolve_coordination_config
-from core.coordination.decompose import decompose_and_publish
+from core.coordination.decompose import decompose_subtasks
 from core.coordination.task_context import TaskContext
 from core.coordination.task_state import TaskStateMachine
 from core.eventing.activity.task_logger import TaskActivityLogger
@@ -117,7 +117,7 @@ async def execute_task(
         uuid.UUID(agent_id),
         uuid.UUID(task_id),
         uuid.UUID(workspace_id),
-        redis_publish=wctx.centrifugo_publish,
+        publish=wctx.centrifugo_publish,
         meta=meta,
     ) as span:
         # ── Phase 1: READ ──────────────────────────────────────────────────────
@@ -283,16 +283,18 @@ async def execute_task(
 
                     async with span.session() as session:
                         task_repo = TaskRepository(session)
-                        subtasks = await decompose_and_publish(
+                        subtasks = await decompose_subtasks(
                             agent,
                             task,
                             specs,
                             task_repo,
                             task_ctx=provenance,
-                            task_logger=task_logger,
                         )
                     # Session committed — subtasks are now visible to all connections.
+                    # Both publishes happen here, not inside decompose_subtasks, so
+                    # neither can fire for a subtask that failed to commit.
                     for subtask in subtasks:
+                        await task_logger.created(subtask)
                         await stream_logger.task_created(subtask)
 
                     await _finalise_execution(

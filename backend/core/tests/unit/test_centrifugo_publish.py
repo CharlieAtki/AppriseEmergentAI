@@ -4,11 +4,18 @@ WorkspaceStreamLogger._emit() is the thing that makes publishing best-effort
 (it swallows exceptions and logs) — these tests confirm make_centrifugo_publish()
 itself does NOT swallow errors, so that guarantee stays exactly where it lives
 today rather than silently duplicating (or losing) it in the transport layer.
+
+This is also the one place in the seam that turns a payload dict into wire
+JSON (see the module docstring on centrifugo_publish.py) — callers hand over
+plain dicts, never pre-serialized strings, so these tests exercise that
+dict-in, JSON-body-out contract directly.
 """
 
 from __future__ import annotations
 
+import datetime
 import json
+import uuid
 from unittest.mock import AsyncMock, MagicMock
 
 import httpx
@@ -34,31 +41,49 @@ async def test_publish_posts_to_configured_url_with_api_key():
     client = _make_client(_ok_response())
     publish = make_centrifugo_publish(config, client)
 
-    await publish("workspace:abc:events", json.dumps({"type": "task.completed"}))
+    await publish("workspace:abc:events", {"type": "task.completed"})
 
     client.post.assert_awaited_once()
     call = client.post.call_args
     assert call.args[0] == "http://centrifugo:8000/api/publish"
     assert call.kwargs["headers"]["X-API-Key"] == "secret-key"
+    assert call.kwargs["headers"]["Content-Type"] == "application/json"
 
 
-async def test_publish_round_trips_json_string_back_into_a_dict():
-    """WorkspaceStreamLogger hands publish() an already-json.dumps()'d string —
-    Centrifugo's API wants structured JSON in `data`, so it must be loaded back
-    into a dict, not passed through as a double-encoded string."""
+async def test_publish_serializes_dict_as_json_body():
+    """publish() now owns dict -> wire-JSON serialization entirely — the caller
+    hands over a plain dict, and the posted body must be the {channel, data}
+    envelope, serialized exactly once, here."""
     config = CentrifugoConfig(http_api_url="http://centrifugo:8000/api", http_api_key="k")
     client = _make_client(_ok_response())
     publish = make_centrifugo_publish(config, client)
 
-    await publish(
-        "workspace:abc:events", json.dumps({"type": "task.completed", "quality_score": 0.9})
-    )
+    await publish("workspace:abc:events", {"type": "task.completed", "quality_score": 0.9})
 
-    body = client.post.call_args.kwargs["json"]
+    body = json.loads(client.post.call_args.kwargs["content"])
     assert body == {
         "channel": "workspace:abc:events",
         "data": {"type": "task.completed", "quality_score": 0.9},
     }
+
+
+async def test_publish_serializes_non_json_native_values_via_default_str():
+    """JobSpan.emit()'s tracing payloads are deliberately open-ended and can
+    carry a raw UUID/datetime — httpx's json= kwarg has no default= hook, so
+    this function must build the body itself with default=str to avoid
+    crashing on values that worked fine before this responsibility moved here."""
+    config = CentrifugoConfig(http_api_url="http://centrifugo:8000/api", http_api_key="k")
+    client = _make_client(_ok_response())
+    publish = make_centrifugo_publish(config, client)
+
+    agent_id = uuid.uuid4()
+    ts = datetime.datetime(2026, 1, 1, tzinfo=datetime.UTC)
+
+    await publish("trace:abc:events", {"agent_id": agent_id, "ts": ts})  # must not raise
+
+    body = json.loads(client.post.call_args.kwargs["content"])
+    assert body["data"]["agent_id"] == str(agent_id)
+    assert body["data"]["ts"] == str(ts)
 
 
 async def test_publish_raises_on_non_2xx_response():
@@ -74,4 +99,4 @@ async def test_publish_raises_on_non_2xx_response():
     publish = make_centrifugo_publish(config, client)
 
     with pytest.raises(httpx.HTTPStatusError):
-        await publish("workspace:abc:events", json.dumps({"type": "task.completed"}))
+        await publish("workspace:abc:events", {"type": "task.completed"})

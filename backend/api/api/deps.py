@@ -6,9 +6,7 @@ from collections.abc import AsyncGenerator, Awaitable, Callable
 from arq import ArqRedis
 from core.config import settings as core_settings
 from core.database import get_session
-from core.eventing.activity.agent_logger import AgentActivityLogger
 from core.eventing.activity.base import PublishFn
-from core.eventing.activity.task_logger import TaskActivityLogger
 from core.eventing.bus.in_process_bus import EventBus
 from core.intelligence.llm_router import LLMRouter
 from core.models.tenant import Organisation, Workspace
@@ -42,18 +40,6 @@ def get_bus(request: Request) -> EventBus:
 
 def get_event_publisher(bus: EventBus = Depends(get_bus)) -> PublishFn:
     return bus.apublish
-
-
-def get_task_activity_logger(
-    publish: PublishFn = Depends(get_event_publisher),
-) -> TaskActivityLogger:
-    return TaskActivityLogger(publish)
-
-
-def get_agent_activity_logger(
-    publish: PublishFn = Depends(get_event_publisher),
-) -> AgentActivityLogger:
-    return AgentActivityLogger(publish)
 
 
 def get_redis(request: Request) -> Redis:

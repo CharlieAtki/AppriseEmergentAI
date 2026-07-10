@@ -36,7 +36,7 @@ class TaskCreatedStreamEvent(StreamEvent):
     """Fired when a task becomes available for bidding.
 
     Published by TaskStreamLogger.task_created() from two paths:
-    - decompose_and_publish() — once per subtask after flush
+    - decompose_subtasks() — once per subtask after flush
     - _release_to_pool()      — when a CFP agent returns a task to "open"
 
     Consumer: TaskBiddingHandler scores agents against required_skills and

@@ -23,7 +23,6 @@ names live together in workspace_channels.py instead of here.
 
 from __future__ import annotations
 
-import json
 import logging
 import uuid
 from collections.abc import Mapping
@@ -66,7 +65,7 @@ class WorkspaceStreamLogger:
         """
         try:
             payload = event.to_payload()
-            await self._publish(channel_for(workspace_id), json.dumps(payload))
+            await self._publish(channel_for(workspace_id), payload)
         except Exception:
             logger.exception(
                 "WorkspaceStreamLogger: failed to publish %s for workspace=%s",

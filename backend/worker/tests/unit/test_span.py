@@ -8,7 +8,6 @@ without thread-unsafe parameter passing.
 
 from __future__ import annotations
 
-import json
 import uuid
 from unittest.mock import AsyncMock
 
@@ -46,16 +45,16 @@ def test_from_ctx_extra_keys_ignored():
 
 
 def _make_span(agent_id=None, task_id=None, workspace_id=None):
-    redis_publish = AsyncMock()
+    publish = AsyncMock()
     meta = ArqJobMeta(job_id="test-job", job_try=1)
     span = JobSpan(
         agent_id=agent_id or uuid.uuid4(),
         task_id=task_id or uuid.uuid4(),
         workspace_id=workspace_id or uuid.uuid4(),
-        redis_publish=redis_publish,
+        publish=publish,
         meta=meta,
     )
-    return span, redis_publish
+    return span, publish
 
 
 async def test_emit_calls_publish_on_correct_channel():
@@ -78,8 +77,7 @@ async def test_emit_json_payload_contains_event_type():
     async with span:
         await span.emit("task.started", {"step": 1})
 
-    payload_str = publish.call_args.args[1]
-    payload = json.loads(payload_str)
+    payload = publish.call_args.args[1]
     assert payload["type"] == "task.started"
     assert payload["step"] == 1
 
@@ -123,7 +121,7 @@ async def test_emit_includes_job_meta_fields():
     async with span:
         await span.emit("checked")
 
-    payload = json.loads(publish.call_args.args[1])
+    payload = publish.call_args.args[1]
     assert payload["job_id"] == "trace-id-999"
     assert payload["job_try"] == 2
 
