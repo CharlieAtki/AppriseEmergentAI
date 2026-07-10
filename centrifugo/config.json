@@ -1,4 +1,7 @@
 {
+  "health": {
+    "enabled": true
+  },
   "engine": {
     "type": "redis",
     "redis": {

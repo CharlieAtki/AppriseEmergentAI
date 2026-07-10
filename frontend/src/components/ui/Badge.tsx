@@ -3,6 +3,12 @@ import type { WorkspaceStatus } from '@/api/generated/model'
 const statusStyles: Record<string, string> = {
   active:   'bg-success/10 text-success',
   inactive: 'bg-muted/10 text-muted',
+  // Config provenance tiers — increasing color intensity as the value moves
+  // further from the platform default, so an operator can tell at a glance
+  // whether they're looking at an inherited value or an explicit override.
+  platform:  'bg-muted/10 text-muted',
+  org:       'bg-info/10 text-info',
+  workspace: 'bg-brand-primary/10 text-brand-primary',
 }
 
 const fallback = 'bg-info/10 text-info'

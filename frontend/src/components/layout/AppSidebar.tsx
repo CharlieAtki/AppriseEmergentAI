@@ -14,6 +14,8 @@ import {
 } from 'lucide-react'
 import Link from 'next/link'
 import { useParams, usePathname } from 'next/navigation'
+import { useState } from 'react'
+import { OrgSettingsModal } from '@/components/organisations/OrgSettingsModal'
 import { WorkspaceSidebarSection } from './WorkspaceSidebarSection'
 
 interface NavItem {
@@ -30,7 +32,6 @@ const PLATFORM_NAV: NavItem[] = [
   { label: 'Skills',   Icon: BookOpen,        segment: 'skills',   disabled: true },
   { label: 'Runs',     Icon: BarChart2,       segment: 'runs',     disabled: true },
   { label: 'Logs',     Icon: ScrollText,      segment: 'logs',     disabled: true },
-  { label: 'Settings', Icon: Settings,        segment: 'settings', disabled: true },
 ]
 
 function UserStrip() {
@@ -73,6 +74,7 @@ export function AppSidebar({ orgId }: AppSidebarProps) {
   const pathname = usePathname()
   const params = useParams<{ workspaceId?: string }>()
   const { workspaceId } = params
+  const [orgSettingsOpen, setOrgSettingsOpen] = useState(false)
 
   const base = workspaceId ? `/orgs/${orgId}/workspaces/${workspaceId}` : null
 
@@ -86,21 +88,46 @@ export function AppSidebar({ orgId }: AppSidebarProps) {
     <Tooltip.Provider delayDuration={300}>
       <aside className="flex w-56 shrink-0 flex-col border-r border-border bg-sidebar">
         {/* Org switcher — no bottom border, tighter appearance */}
-        <div className="px-3 py-3">
-          <OrganizationSwitcher
-            hidePersonal
-            appearance={{
-              elements: {
-                rootBox: 'w-full',
-                organizationSwitcherTrigger:
-                  'w-full flex items-center gap-2 rounded-lg px-2 py-2 text-body font-medium text-foreground bg-white/10 transition-colors',
-                organizationPreviewMainIdentifier: 'text-body font-medium text-foreground',
-                organizationPreviewSecondaryIdentifier: 'hidden',
-                organizationSwitcherTriggerIcon: 'text-muted ml-auto',
-              },
-            }}
-          />
+        <div className="flex items-center gap-1.5 px-3 py-3">
+          <div className="min-w-0 flex-1">
+            <OrganizationSwitcher
+              hidePersonal
+              appearance={{
+                elements: {
+                  rootBox: 'w-full',
+                  organizationSwitcherTrigger:
+                    'w-full flex items-center gap-2 rounded-lg px-2 py-2 text-body font-medium text-foreground bg-white/10 transition-colors',
+                  organizationPreviewMainIdentifier: 'text-body font-medium text-foreground',
+                  organizationPreviewSecondaryIdentifier: 'hidden',
+                  organizationSwitcherTriggerIcon: 'text-muted ml-auto',
+                },
+              }}
+            />
+          </div>
+          <Tooltip.Root>
+            <Tooltip.Trigger asChild>
+              <button
+                onClick={() => setOrgSettingsOpen(true)}
+                aria-label="Organisation settings"
+                className="shrink-0 rounded-md p-2 text-muted transition-colors hover:bg-elevated hover:text-foreground"
+              >
+                <Settings size={16} />
+              </button>
+            </Tooltip.Trigger>
+            <Tooltip.Portal>
+              <Tooltip.Content
+                side="bottom"
+                sideOffset={8}
+                className="rounded bg-elevated px-2 py-1 text-caption text-muted shadow-md"
+              >
+                Organisation settings
+                <Tooltip.Arrow className="fill-elevated" />
+              </Tooltip.Content>
+            </Tooltip.Portal>
+          </Tooltip.Root>
         </div>
+
+        <OrgSettingsModal orgId={orgId} open={orgSettingsOpen} onOpenChange={setOrgSettingsOpen} />
 
         <nav className="flex-1 overflow-y-auto px-2 py-2 space-y-4">
           {/* Workspaces */}
