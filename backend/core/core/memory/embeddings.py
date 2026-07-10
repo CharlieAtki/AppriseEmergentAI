@@ -1,18 +1,22 @@
 from __future__ import annotations
 
 import asyncio
+import threading
 
 from fastembed import TextEmbedding
 
 from core.config import settings
 
 _encoder: TextEmbedding | None = None
+_encoder_lock = threading.Lock()
 
 
 def get_encoder() -> TextEmbedding:
     global _encoder
     if _encoder is None:
-        _encoder = TextEmbedding(settings.memory.embedding_model)
+        with _encoder_lock:
+            if _encoder is None:
+                _encoder = TextEmbedding(settings.memory.embedding_model)
     return _encoder
 
 

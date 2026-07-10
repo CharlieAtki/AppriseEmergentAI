@@ -30,6 +30,7 @@ def _ctx() -> dict[str, object]:
 def _wctx() -> MagicMock:
     wctx = MagicMock()
     wctx.redis = AsyncMock()
+    wctx.centrifugo_publish = AsyncMock()
     wctx.event_bus.apublish = AsyncMock()
     wctx.bus.apublish = AsyncMock()
     chat_model = MagicMock()

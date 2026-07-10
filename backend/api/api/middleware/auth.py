@@ -15,10 +15,11 @@ from api.services.auth_service import validate_api_key, validate_clerk_token
 
 EXEMPT_PATHS = {"/health", "/docs", "/openapi.json", "/redoc"}
 
-# All routes under /webhooks use inbound HMAC verification (Svix) rather than
-# bearer/API-key credentials. AuthMiddleware is structurally not responsible
-# for them — each webhook router applies its own signature dependency.
-EXEMPT_PREFIXES = {"/webhooks"}
+# Routes under /webhooks (Svix HMAC) and /centrifugo (shared proxy secret, see
+# require_centrifugo_proxy_secret in api/deps.py) use credentials other than
+# bearer/API-key. AuthMiddleware is structurally not responsible for them —
+# each router applies its own credential dependency instead.
+EXEMPT_PREFIXES = {"/webhooks", "/centrifugo"}
 
 # Requests that cannot carry credentials by design or HTTP specification are
 # passed through without authentication. OPTIONS preflights are the primary

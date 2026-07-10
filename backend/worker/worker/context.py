@@ -3,11 +3,13 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
+import httpx
 from core.agents.graphs.factory import build_universal_graph
 from core.agents.tooling.artifact_store import LocalArtifactStore
 from core.agents.tooling.registry import tool_registry
 from core.config import settings
 from core.database import get_session
+from core.eventing.activity.centrifugo_publish import make_centrifugo_publish
 from core.eventing.bus.in_process_bus import EventBus
 from core.eventing.bus.redis_bus import RedisBus
 from core.intelligence.llm_router import LLMRouter
@@ -16,6 +18,7 @@ from core.intelligence.routing_config import resolve_routing
 from core.intelligence.sync import sync_models, sync_tools
 from core.memory.agent_memory import AgentMemory
 from core.memory.collections import ensure_collections
+from core.memory.embeddings import get_encoder
 from core.memory.resilient_client import ResilientQdrantClient
 from core.vendors.anthropic.provider import AnthropicProvider
 from core.vendors.aws.provider import AWSProvider
@@ -27,6 +30,7 @@ from redis.asyncio import Redis
 if TYPE_CHECKING:
     from arq import ArqRedis
     from core.agents.tooling.artifact_store import ArtifactStore
+    from core.eventing.activity.base import PubSubPublishFn
     from core.eventing.bus.protocols import SubscribableBusProtocol
     from langgraph.graph.state import CompiledStateGraph
 
@@ -37,13 +41,17 @@ if TYPE_CHECKING:
 class WorkerContext:
     graphs: dict[str, CompiledStateGraph]  # single key: "universal"
     bus: SubscribableBusProtocol  # Redis Streams — durable task events
-    redis: Redis  # raw Redis — Pub/Sub + SETNX reservations
+    redis: Redis  # raw Redis — SETNX reservations (Pub/Sub moved to Centrifugo)
     arq_queue: ArqRedis  # ARQ job queue — enqueue_job()
     memory: AgentMemory  # Qdrant-backed three-tier memory
     llm_router: LLMRouter  # routes all LLM calls by CallType
     event_bus: EventBus  # in-process — same-process side effects
     reflection_manager: ReflectionManager  # post-execution learning pipeline
     artifact_store: ArtifactStore  # artifact bytes storage
+    centrifugo_http_client: httpx.AsyncClient  # backs centrifugo_publish; closed on shutdown
+    centrifugo_publish: (
+        PubSubPublishFn  # dashboard/trace event transport — JobSpan.stream, WorkspaceStreamLogger
+    )
 
     @classmethod
     async def build(cls, arq_queue: ArqRedis) -> WorkerContext:
@@ -87,13 +95,22 @@ class WorkerContext:
         qdrant = ResilientQdrantClient(_raw_qdrant)
         memory = AgentMemory(qdrant)
 
+        # 4b. Pre-warm the fastembed encoder — first-call lazy init races when
+        # concurrent jobs hit search_episodic_memory on a cold worker.
+        get_encoder()
+
         # 5. Compile one universal graph — expensive, done ONCE per process.
         # Model and tools are injected per-task via RunnableConfig.configurable in execute_task.
         graphs: dict[str, CompiledStateGraph] = {"universal": build_universal_graph()}
 
-        # 6. Two separate Redis connections — Streams bus vs raw Pub/Sub + locks
+        # 6. Two separate Redis connections — Streams bus vs SETNX reservation locks
         redis = Redis.from_url(settings.redis.url, decode_responses=True)
         bus = await RedisBus.create(settings.redis.url)
+
+        # 6b. Centrifugo publish transport — dashboard/trace events (formerly raw
+        # Redis Pub/Sub). One shared httpx client, closed in shutdown().
+        centrifugo_http_client = httpx.AsyncClient()
+        centrifugo_publish = make_centrifugo_publish(settings.centrifugo, centrifugo_http_client)
 
         # 7. In-process event bus — must be created from the running event loop
         import asyncio  # local import avoids circular: startup imports this module at module level
@@ -121,6 +138,8 @@ class WorkerContext:
             event_bus=event_bus,
             reflection_manager=reflection_manager,
             artifact_store=artifact_store,
+            centrifugo_http_client=centrifugo_http_client,
+            centrifugo_publish=centrifugo_publish,
         )
 
 

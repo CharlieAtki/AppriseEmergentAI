@@ -5,8 +5,14 @@ import uuid
 from core.models.tenant import Workspace
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 
-from api.deps import get_workspace_service, require_workspace
-from api.schemas.workspace import CreateWorkspaceRequest, UpdateWorkspaceRequest, WorkspaceResponse
+from api.deps import get_workspace_observability_service, get_workspace_service, require_workspace
+from api.schemas.workspace import (
+    CreateWorkspaceRequest,
+    UpdateWorkspaceRequest,
+    WorkspaceMetricsResponse,
+    WorkspaceResponse,
+)
+from api.services.workspace_observability_service import WorkspaceObservabilityService
 from api.services.workspace_service import (
     CreateWorkspaceCommand,
     UpdateWorkspaceCommand,
@@ -54,6 +60,21 @@ async def get_workspace(
     return WorkspaceResponse.model_validate(ws)
 
 
+@router.get("/{workspace_id}/metrics", response_model=WorkspaceMetricsResponse)
+async def get_workspace_metrics(
+    workspace: Workspace = Depends(require_workspace("read")),
+    service: WorkspaceObservabilityService = Depends(get_workspace_observability_service),
+) -> WorkspaceMetricsResponse:
+    """The latest Workspace Metrics Snapshot — the routine periodic sample (Gini,
+    specialisation index, agent count), distinct from an Emergence Event. See
+    docs/backend/CONTEXT.md. 404 if sample_metrics hasn't run for this workspace yet
+    (fewer than 2 active agents, or simply not enough time has passed)."""
+    metrics = await service.get_latest_metrics(workspace.id)
+    if metrics is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No metrics yet")
+    return WorkspaceMetricsResponse.model_validate(metrics)
+
+
 @router.patch("/{workspace_id}", response_model=WorkspaceResponse)
 async def update_workspace(
     body: UpdateWorkspaceRequest,
@@ -78,3 +99,9 @@ async def delete_workspace(
     service: WorkspaceService = Depends(get_workspace_service),
 ) -> None:
     await service.delete(workspace)
+
+
+# The live dashboard WebSocket (formerly GET /{workspace_id}/stream, ticket-auth'd)
+# is now served directly by Centrifugo — the browser connects to Centrifugo, not
+# this API process. See api/routers/centrifugo_proxy.py for the connect/subscribe
+# auth callbacks Centrifugo calls back to this process for.

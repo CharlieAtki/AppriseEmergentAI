@@ -1,4 +1,4 @@
-"""Callable type aliases for the two publish surfaces in the event system.
+"""Callable type aliases for the three publish surfaces in the event system.
 
 ``PublishFn`` — in-process, typed domain events
     Used by activity loggers (TaskActivityLogger, AgentActivityLogger). Accepts a
@@ -10,9 +10,16 @@
     stream_key are used by RedisBus.apublish() for serialization and routing.
     Survives crash, delivers at-least-once. Injected as ``bus.apublish``.
 
-Never mix the two: in-process handlers cannot receive stream events and vice versa.
-Both use ``apublish`` as the method name — the distinction is the argument type:
-DomainEvent for in-process, StreamEvent for cross-process.
+``PubSubPublishFn`` — cross-process, Redis Pub/Sub
+    Used by WorkspaceStreamLogger. Raw (channel, json_payload) — no consumer group,
+    no durability; a message published with no subscriber is lost. Used only for
+    fan-out to live WebSocket viewers, never for coordination state. Injected as
+    ``redis.publish``.
+
+Never mix these: in-process handlers cannot receive stream or pub/sub events and
+vice versa. ``PublishFn``/``StreamPublishFn`` both use ``apublish`` as the method
+name — the distinction is the argument type: DomainEvent for in-process, StreamEvent
+for cross-process. ``PubSubPublishFn`` matches ``redis.publish``'s own signature.
 """
 
 from __future__ import annotations
@@ -24,3 +31,4 @@ from core.eventing.bus.common import DomainEvent, StreamEvent
 
 PublishFn = Callable[[DomainEvent], Awaitable[list[asyncio.Task[None]]]]
 StreamPublishFn = Callable[[StreamEvent], Awaitable[None]]
+PubSubPublishFn = Callable[[str, str], Awaitable[None]]

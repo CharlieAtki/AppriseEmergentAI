@@ -25,6 +25,7 @@ from api.handlers.task_bridge import TaskCreatedRedisPublisher
 from api.middleware.auth import AuthMiddleware
 from api.routers import agents as agents_router
 from api.routers import api_keys as api_keys_router
+from api.routers import centrifugo_proxy as centrifugo_proxy_router
 from api.routers import tasks as tasks_router
 from api.routers import workspace_tools as workspace_tools_router
 from api.routers import workspaces as workspaces_router
@@ -129,6 +130,12 @@ app.include_router(
     webhooks_router,
     prefix="/webhooks",
     tags=["webhooks"],
+)
+app.include_router(
+    centrifugo_proxy_router.router,
+    prefix="/centrifugo",
+    tags=["centrifugo"],
+    include_in_schema=False,
 )
 app.include_router(
     workspaces_router.router,

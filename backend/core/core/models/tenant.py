@@ -127,6 +127,15 @@ class Workspace(Base, TimestampMixin):
 
     __table_args__ = (sa.Index("ix_workspaces_organisation_id", "organisation_id"),)
 
+    @staticmethod
+    def is_active_status(status: str) -> bool:
+        """Single source of truth for what "active" means, over a raw status
+        string — usable from both the ORM instance (require_workspace()) and
+        the WorkspaceData DTO (WorkspaceService.get_active()), which don't
+        share a base class. Mirrors TaskStateMachine.is_terminal()'s shape:
+        a static predicate over status, not tied to one representation."""
+        return status == "active"
+
     organisation: Mapped[Organisation] = relationship(back_populates="workspaces")
     api_keys: Mapped[list[ApiKey]] = relationship(
         back_populates="workspace",

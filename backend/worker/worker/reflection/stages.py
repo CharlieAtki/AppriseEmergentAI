@@ -168,6 +168,7 @@ async def _stage_skills(
 
         current_skills: dict[str, float] = agent.skills or {}
         updated = dict(current_skills)
+        deltas: dict[str, float] = {}
 
         for skill_name in result.skill_domains:
             # Guard: only apply deltas to known required skills.
@@ -177,6 +178,7 @@ async def _stage_skills(
             current = current_skills.get(skill_name, 0.0)
             delta = compute_delta_magnitude(rctx.heuristic_score, current)
             updated[skill_name] = apply_skill_delta(current, delta)
+            deltas[skill_name] = delta
 
         filtered_out = [s for s in result.skill_domains if s not in rctx.required_skills]
         if filtered_out:
@@ -193,6 +195,12 @@ async def _stage_skills(
 
         agent.skills = updated
         await agent_repo.save(agent)
+
+        if deltas:
+            # agent.influence may be slightly stale relative to AgentCreditHandler (a
+            # separate handler on a different event) — an accepted eventual-consistency
+            # tradeoff already embraced elsewhere for influence (see that handler's docstring).
+            await span.stream.skill_updated(rctx.workspace_id, agent.id, deltas, agent.influence)
         await skill_repo.record(
             agent_id=agent.id,
             organisation_id=rctx.organisation_id,

@@ -70,6 +70,19 @@ class WorkspaceService:
         ws = await self._repo.get(org_id=org_id, workspace_id=workspace_id)
         return WorkspaceData.from_domain(ws) if ws is not None else None
 
+    async def get_active(self, org_id: uuid.UUID, workspace_id: uuid.UUID) -> WorkspaceData | None:
+        """Ownership + active-status check in one call — returns None if the org
+        doesn't own the workspace or it's not active. Used by callers that only
+        need an allow/deny decision (e.g. the Centrifugo subscribe proxy), not a
+        distinct 404-vs-409 HTTP response — require_workspace() in deps.py keeps
+        its own two-step check for that distinction, but both call
+        Workspace.is_active_status() as the single source of truth for what
+        "active" means, so the invariant itself is never duplicated."""
+        ws = await self._repo.get(org_id=org_id, workspace_id=workspace_id)
+        if ws is None or not Workspace.is_active_status(ws.status):
+            return None
+        return WorkspaceData.from_domain(ws)
+
     async def list(self, org_id: uuid.UUID) -> list[WorkspaceData]:
         rows = await self._repo.list_with_agent_counts(org_id=org_id)
         return [WorkspaceData.from_domain(ws, agent_count=count) for ws, count in rows]

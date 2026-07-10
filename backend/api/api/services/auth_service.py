@@ -6,6 +6,9 @@ from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any, Literal
 
 import bcrypt as _bcrypt
+import httpx
+from clerk_backend_api.security import VerifyTokenOptions, verify_token_async
+from clerk_backend_api.security.types import TokenVerificationError
 from fastapi import HTTPException, status
 from pydantic import BaseModel
 
@@ -75,6 +78,31 @@ async def validate_api_key(
     record.last_used_at = datetime.now(UTC)
 
     return payload
+
+
+async def verify_clerk_session_token(token: str, secret_key: str) -> dict[str, Any]:
+    """Verifies a bare Clerk session token string (no Request object available —
+    used by the Centrifugo connect proxy, which only receives a JSON token, not
+    an HTTP request/cookie). AuthMiddleware's bearer-token path goes through
+    clerk.authenticate_request_async() instead, which flattens Clerk's v2-token
+    org claim (nested at claims["o"]["id"]) into a top-level "org_id" key before
+    validate_clerk_token() ever sees it. verify_token_async() skips that
+    normalization, so it's replicated here — this is the only place a bare
+    token string is verified, so this is the only place that needs to do it."""
+    try:
+        claims: dict[str, Any] = await verify_token_async(
+            token, VerifyTokenOptions(secret_key=secret_key)
+        )
+    except (TokenVerificationError, httpx.HTTPError) as exc:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED, detail="Unauthorised"
+        ) from exc
+
+    if claims.get("v") == 2 and "org_id" not in claims:
+        org_claims = claims.get("o") or {}
+        claims["org_id"] = org_claims.get("id")
+
+    return claims
 
 
 async def validate_clerk_token(

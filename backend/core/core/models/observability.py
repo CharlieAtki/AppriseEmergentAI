@@ -1,7 +1,10 @@
 from __future__ import annotations
 
 import uuid
+from collections.abc import Mapping
+from dataclasses import dataclass
 from datetime import datetime
+from typing import Any
 
 import sqlalchemy as sa
 from sqlalchemy.dialects.postgresql import JSONB, UUID
@@ -131,6 +134,36 @@ class WorkspaceMetricsSnapshot(Base):
 
     def __repr__(self) -> str:
         return f"<WorkspaceMetricsSnapshot id={self.id} workspace={self.workspace_id}>"
+
+
+@dataclass(frozen=True)
+class WorkspaceMetricsPayload:
+    """The shape of WorkspaceMetricsSnapshot.metrics (JSONB) — single source of
+    truth for both the writer (worker/jobs/sample_metrics.py) and the reader
+    (api/services/workspace_observability_service.py). Lives in core/ because
+    both processes need it (see CLAUDE.md's api/worker/core boundary rule) —
+    previously the write side built this as a raw dict literal and the read
+    side re-typed it separately, with nothing enforcing the two stayed in sync.
+    """
+
+    gini: float
+    specialisation_index: float
+    agent_count: int
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "gini": self.gini,
+            "specialisation_index": self.specialisation_index,
+            "agent_count": self.agent_count,
+        }
+
+    @classmethod
+    def from_dict(cls, raw: Mapping[str, Any]) -> WorkspaceMetricsPayload:
+        return cls(
+            gini=raw["gini"],
+            specialisation_index=raw["specialisation_index"],
+            agent_count=raw["agent_count"],
+        )
 
 
 class EmergenceEvent(Base):

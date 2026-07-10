@@ -10,6 +10,7 @@ from core.config.redis import RedisConfig
 from core.config.vendors.anthropic import AnthropicConfig
 from core.config.vendors.aws import AWSConfig
 from core.config.vendors.azure import AzureConfig
+from core.config.vendors.centrifugo import CentrifugoConfig
 from core.config.vendors.clerk import ClerkConfig
 from core.config.vendors.ollama import OllamaConfig
 from core.config.worker import WorkerConfig
@@ -52,6 +53,7 @@ class Settings(BaseSettings):
     aws: AWSConfig = Field(default_factory=AWSConfig)
     ollama: OllamaConfig = Field(default_factory=OllamaConfig)
     clerk: ClerkConfig = Field(default_factory=ClerkConfig)
+    centrifugo: CentrifugoConfig = Field(default_factory=CentrifugoConfig)
     worker: WorkerConfig = Field(default_factory=WorkerConfig)
 
 
