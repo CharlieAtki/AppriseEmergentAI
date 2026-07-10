@@ -8,6 +8,12 @@ Multi-tenant agent platform. Agents specialise through task execution. ContractN
 
 ---
 
+## Design Context
+
+Frontend UI/UX decisions are governed by `PRODUCT.md` (register: product; users, purpose, positioning, anti-references) and `DESIGN.md` (visual system: colors, typography, elevation, components — "The Living Canopy" theme). Read both before designing or reviewing frontend changes; DESIGN.md wins on visual decisions, PRODUCT.md wins on strategic/voice decisions.
+
+---
+
 ## The one rule that governs everything
 
 > `api/` never runs agent logic. `worker/` never serves HTTP. `core/` never runs — it is a library.

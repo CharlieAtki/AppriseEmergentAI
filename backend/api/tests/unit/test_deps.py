@@ -28,7 +28,7 @@ async def test_require_organisation_rejects_api_key_auth():
 
     dep = require_organisation("write")
     with pytest.raises(HTTPException) as exc_info:
-        await dep(org_id, request, org_repo)
+        await dep("org_clerkid123", request, org_repo)
 
     assert exc_info.value.status_code == 403
     org_repo.get_by_id.assert_not_called()
@@ -42,19 +42,37 @@ async def test_require_organisation_accepts_user_session_for_own_org():
     org_repo.get_by_id.return_value = org
 
     dep = require_organisation("write")
-    result = await dep(org_id, request, org_repo)
+    result = await dep("org_clerkid123", request, org_repo)
 
     assert result is org
     org_repo.get_by_id.assert_awaited_once_with(org_id)
 
 
-async def test_require_organisation_rejects_mismatched_org():
-    request = _make_request(uuid.uuid4(), auth_type="user")
+async def test_require_organisation_ignores_path_org_id():
+    """The `org_id` path segment is Clerk's org id (not our internal UUID) and
+    exists for URL readability only — identity comes exclusively from
+    request.state.auth.org_id, so an arbitrary/non-matching path value must
+    not affect the outcome."""
+    org_id = uuid.uuid4()
+    request = _make_request(org_id, auth_type="user")
+    org = MagicMock()
+    org_repo = AsyncMock()
+    org_repo.get_by_id.return_value = org
+
+    dep = require_organisation("write")
+    result = await dep("org_totally_different_clerk_id", request, org_repo)
+
+    assert result is org
+    org_repo.get_by_id.assert_awaited_once_with(org_id)
+
+
+async def test_require_organisation_rejects_missing_auth_org_id():
+    request = _make_request(None, auth_type="user")
     org_repo = AsyncMock()
 
     dep = require_organisation("write")
     with pytest.raises(HTTPException) as exc_info:
-        await dep(uuid.uuid4(), request, org_repo)
+        await dep("org_clerkid123", request, org_repo)
 
     assert exc_info.value.status_code == 401
     org_repo.get_by_id.assert_not_called()

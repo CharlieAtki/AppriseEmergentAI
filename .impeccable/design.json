@@ -1,0 +1,187 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-07-10T17:00:16Z",
+  "title": "Design System: Apprise",
+  "extensions": {
+    "colorMeta": {
+      "brand-forest-600": {
+        "role": "primary",
+        "displayName": "Forest 600",
+        "canonical": "oklch(49.1% 0.057 148.8)",
+        "tonalRamp": [
+          "oklch(15% 0.02 155)",
+          "oklch(24% 0.035 158)",
+          "oklch(29.1% 0.035 161.4)",
+          "oklch(34.2% 0.053 166.1)",
+          "oklch(41% 0.055 156)",
+          "oklch(49.1% 0.057 148.8)",
+          "oklch(67.3% 0.072 138.5)",
+          "oklch(96% 0.02 155)"
+        ]
+      },
+      "brand-purple-500": {
+        "role": "secondary",
+        "displayName": "Violet Accent",
+        "canonical": "oklch(70% 0.15 280)",
+        "tonalRamp": [
+          "oklch(20% 0.08 280)",
+          "oklch(30% 0.1 280)",
+          "oklch(40% 0.12 280)",
+          "oklch(50% 0.13 280)",
+          "oklch(60% 0.14 280)",
+          "oklch(70% 0.15 280)",
+          "oklch(82% 0.1 280)",
+          "oklch(93% 0.04 280)"
+        ]
+      },
+      "brand-amber-500": {
+        "role": "tertiary",
+        "displayName": "Amber Highlight",
+        "canonical": "oklch(72% 0.18 45)",
+        "tonalRamp": [
+          "oklch(20% 0.09 45)",
+          "oklch(30% 0.12 45)",
+          "oklch(40% 0.14 45)",
+          "oklch(50% 0.16 45)",
+          "oklch(62% 0.17 45)",
+          "oklch(72% 0.18 45)",
+          "oklch(84% 0.12 45)",
+          "oklch(94% 0.05 45)"
+        ]
+      },
+      "neutral-900": {
+        "role": "neutral",
+        "displayName": "Surface",
+        "canonical": "oklch(21% 0.016 158)",
+        "tonalRamp": [
+          "#0a0a0f",
+          "oklch(18% 0.008 160)",
+          "oklch(21% 0.016 158)",
+          "oklch(24% 0.012 160)",
+          "oklch(30% 0.012 160)",
+          "oklch(45% 0.01 160)",
+          "oklch(65% 0.01 160)",
+          "oklch(90% 0.006 160)"
+        ]
+      },
+      "status-success": { "role": "success", "displayName": "Success", "canonical": "oklch(68% 0.18 145)" },
+      "status-warning": { "role": "warning", "displayName": "Warning", "canonical": "oklch(75% 0.18 70)" },
+      "status-error": { "role": "error", "displayName": "Error", "canonical": "oklch(62% 0.22 25)" },
+      "status-info": { "role": "info", "displayName": "Info", "canonical": "oklch(68% 0.16 230)" }
+    },
+    "typographyMeta": {
+      "display": { "displayName": "Display", "purpose": "Rare — largest page-level moments only." },
+      "heading": { "displayName": "Heading", "purpose": "Section-level headers." },
+      "title": { "displayName": "Title", "purpose": "Dialog titles, card titles, agent node names — any h1-h6." },
+      "body": { "displayName": "Body", "purpose": "Default reading text, form fields, buttons." },
+      "label": { "displayName": "Label", "purpose": "Field labels, uppercase nav section headers." },
+      "caption": { "displayName": "Caption", "purpose": "Metadata, timestamps, skill-bar values." },
+      "code": { "displayName": "Code", "purpose": "IDs and technical values." }
+    },
+    "shadows": [
+      {
+        "name": "hover-glow",
+        "value": "0 0 0 1px var(--color-brand), 0 8px 24px oklch(from var(--glow-shadow) l c h / 0.4)",
+        "purpose": "Default interactive-surface treatment on hover — workspace cards, agent nodes. Substitute the agent's own accent var for --color-brand on agent-specific surfaces."
+      },
+      {
+        "name": "dialog-shadow",
+        "value": "shadow-xl (Tailwind default)",
+        "purpose": "The one conventional drop shadow in the system, reserved for the dialog overlay layer."
+      }
+    ],
+    "motion": [
+      { "name": "duration-fast", "value": "100ms", "purpose": "Micro state changes (icon color shifts)." },
+      { "name": "duration-base", "value": "150ms", "purpose": "Default transition duration (button hover, border color)." },
+      { "name": "duration-slow", "value": "250ms", "purpose": "Card/node hover glow transitions." },
+      { "name": "ease-standard", "value": "cubic-bezier(0.4, 0, 0.2, 1)", "purpose": "Default easing for all CSS transitions." },
+      { "name": "card-hover-spring", "value": "type: spring, damping: 30, stiffness: 400, y: -3", "purpose": "Framer Motion lift-on-hover for workspace cards." },
+      { "name": "card-entrance", "value": "opacity 0->1, y 12->0, duration 0.25s, ease [0.4,0,0.2,1], stagger delay index*0.05s", "purpose": "Staggered entrance for lists of cards." },
+      { "name": "agent-node-entrance", "value": "type: spring, damping: 28, stiffness: 340, opacity 0->1, scale 0.88->1", "purpose": "Agent node mount animation on the ReactFlow canvas." },
+      { "name": "skill-bar-fill", "value": "duration 0.6s, delay 0.15s, ease [0.4,0,0.2,1], width 0->value%", "purpose": "Skill bar fill animation on agent node mount." }
+    ],
+    "breakpoints": []
+  },
+  "components": [
+    {
+      "name": "Primary Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "Default call-to-action button — dialog submits, primary actions.",
+      "html": "<button class=\"ds-btn-primary\">Save</button>",
+      "css": ".ds-btn-primary { background: var(--color-brand); color: var(--color-bg-base); padding: 8px 16px; border-radius: 8px; border: none; font-family: var(--font-manrope); font-size: 0.875rem; font-weight: 500; transition: background 150ms cubic-bezier(0.4,0,0.2,1); cursor: pointer; } .ds-btn-primary:hover { background: var(--color-brand-hover); } .ds-btn-primary:focus-visible { outline: 2px solid var(--color-brand); outline-offset: 2px; } .ds-btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }"
+    },
+    {
+      "name": "Ghost Button",
+      "kind": "button",
+      "refersTo": "button-ghost",
+      "description": "Secondary/cancel action — no background at rest.",
+      "html": "<button class=\"ds-btn-ghost\">Cancel</button>",
+      "css": ".ds-btn-ghost { background: transparent; color: var(--color-text-muted); padding: 8px 16px; border-radius: 8px; border: none; font-family: var(--font-manrope); font-size: 0.875rem; transition: color 150ms cubic-bezier(0.4,0,0.2,1); cursor: pointer; } .ds-btn-ghost:hover { color: var(--color-text-primary); }"
+    },
+    {
+      "name": "Text Input",
+      "kind": "input",
+      "refersTo": "input",
+      "description": "Default form field.",
+      "html": "<input class=\"ds-input\" type=\"text\" placeholder=\"Workspace name\" />",
+      "css": ".ds-input { background: var(--color-bg-elevated); color: var(--color-text-primary); border: 1px solid var(--border-default); border-radius: 8px; padding: 8px 12px; font-family: var(--font-manrope); font-size: 0.875rem; width: 100%; transition: border-color 150ms cubic-bezier(0.4,0,0.2,1); } .ds-input::placeholder { color: var(--color-text-muted); } .ds-input:focus-visible { outline: none; border-color: var(--color-brand); box-shadow: 0 0 0 1px var(--color-brand); }"
+    },
+    {
+      "name": "Status Badge",
+      "kind": "chip",
+      "refersTo": "badge",
+      "description": "Status/source pill — dot plus label, color never alone.",
+      "html": "<span class=\"ds-badge ds-badge-success\"><span class=\"ds-badge-dot\"></span>Active</span>",
+      "css": ".ds-badge { display: inline-flex; align-items: center; gap: 6px; border-radius: 9999px; padding: 2px 10px; font-family: var(--font-manrope); font-size: 0.75rem; font-weight: 500; } .ds-badge-dot { width: 6px; height: 6px; border-radius: 9999px; background: currentColor; } .ds-badge-success { background: color-mix(in oklch, var(--color-success) 10%, transparent); color: var(--color-success); }"
+    },
+    {
+      "name": "Workspace Card",
+      "kind": "card",
+      "refersTo": "card-surface",
+      "description": "Flat-at-rest card with accent glow on hover — the base card pattern used across workspaces and agent nodes.",
+      "html": "<div class=\"ds-card\"><p class=\"ds-card-title\">Acme Engineering</p><p class=\"ds-card-sub\">12 agents · active</p></div>",
+      "css": ".ds-card { background: var(--color-bg-surface); border: 1px solid var(--border-default); border-radius: 8px; padding: 16px; transition: box-shadow 250ms cubic-bezier(0.4,0,0.2,1), border-color 250ms cubic-bezier(0.4,0,0.2,1); } .ds-card:hover { border-color: var(--color-brand); box-shadow: 0 0 0 1px var(--color-brand), 0 8px 24px oklch(20% 0.10 150 / 0.4); } .ds-card-title { font-family: var(--font-space-grotesk); font-size: 1rem; font-weight: 600; color: var(--color-text-primary); } .ds-card-sub { font-family: var(--font-manrope); font-size: 0.6875rem; color: var(--color-text-muted); margin-top: 2px; }"
+    },
+    {
+      "name": "Sidebar Nav Item",
+      "kind": "nav",
+      "refersTo": "nav-item",
+      "description": "Active/inactive nav row in the app sidebar.",
+      "html": "<a class=\"ds-nav-item ds-nav-item-active\">Agents</a>",
+      "css": ".ds-nav-item { display: flex; align-items: center; gap: 12px; padding: 8px 12px; border-radius: 6px; font-family: var(--font-manrope); font-size: 0.875rem; color: var(--color-text-muted); text-decoration: none; } .ds-nav-item:hover { background: var(--color-bg-hover); color: var(--color-text-primary); } .ds-nav-item-active { border-left: 2px solid var(--color-brand); background: color-mix(in oklch, var(--color-brand) 10%, transparent); color: var(--color-brand); font-weight: 500; padding-left: 10px; border-radius: 0 6px 6px 0; }"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Living Canopy",
+    "overview": "Apprise's dashboard reads as an organic surface with something growing underneath it, not a static admin console. The base is a near-black forest floor, lit from one corner by a soft green glow that never fully resolves into a shape — the same radial gradient sits behind the sidebar and the page body, tying every screen back to one ambient light source. A faint crack-pattern texture sits under the sidebar and the page at 6-9% opacity: enough to read as ground with structure to it, never enough to compete with content. Onto that surface, individual elements pick up a colored glow of their own when active or interactive, as if catching light from the same source rather than being told to look important via a drop shadow. This system explicitly rejects the generic AI-SaaS dashboard and the cluttered enterprise-admin panel. Apprise is infrastructure for a self-organising agent workforce; the interface should feel alive and precise at once.",
+    "keyCharacteristics": [
+      "Dark forest-green base with a single ambient glow source, not a flat black or navy",
+      "Flat surfaces at rest; glow (not shadow darkness) signals elevation and interactivity",
+      "A crack-pattern ground texture underneath everything, always subtle",
+      "Space Grotesk for anything that names or labels a section; Manrope for everything read at length; JetBrains Mono for anything code-shaped",
+      "Motion is a signal of underlying state — never decoration layered on top of static content"
+    ],
+    "rules": [
+      { "name": "The Agent Accent Rotation", "body": "Every agent gets one of Forest 600 / Violet Accent / Amber Highlight, deterministically hashed from its ID, applied to avatar, hover ring, and node glow. Placeholder mechanic, not locked — moving toward unique per-agent organic identities later.", "section": "colors" },
+      { "name": "The One Light Source Rule", "body": "Every glow in the interface reads as light from the same origin. Don't introduce a second, differently-colored glow source; extend the existing one.", "section": "colors" },
+      { "name": "The Naming Font Rule", "body": "Space Grotesk appears only on things that name or title something. Everything else stays in Manrope. Don't reach for Space Grotesk for emphasis; use weight instead.", "section": "typography" },
+      { "name": "The Glow-Not-Shadow Rule", "body": "Depth is never communicated by a darker shadow or lighter surface. It's communicated by a colored glow appearing where there wasn't one.", "section": "elevation" }
+    ],
+    "dos": [
+      "Do use a colored glow to signal hover/interactive state on cards and nodes, sourced from the same ambient light direction as the page background.",
+      "Do keep Space Grotesk scoped to things that name or title something; everything else is Manrope.",
+      "Do pair every status/state signal with a non-color cue.",
+      "Do let the per-agent accent color carry through avatar, ring, and glow consistently for a given agent.",
+      "Do keep surfaces flat at rest — border only, no shadow."
+    ],
+    "donts": [
+      "Don't use cream, beige, or any warm near-white background.",
+      "Don't use gradient text or background-clip: text for emphasis.",
+      "Don't build identical stat-tile grids or a generic hero-metric template.",
+      "Don't add drop-shadow-based elevation to cards or panels.",
+      "Don't introduce a second ambient glow color distinct from the existing forest-green corner glow.",
+      "Don't treat the current three-color Agent Accent Rotation as permanent."
+    ]
+  }
+}

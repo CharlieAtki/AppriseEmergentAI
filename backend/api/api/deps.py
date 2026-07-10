@@ -127,13 +127,20 @@ def require_organisation(permission: str = "write") -> Callable[..., Awaitable[O
     """
 
     async def dep(
-        org_id: uuid.UUID,
+        # `org_id` in the URL is the Clerk org id (e.g. "org_abc123"), not our
+        # internal UUID — the frontend builds this route from Clerk's org id
+        # because that's all it has. It exists in the path for readability
+        # only and is never trusted for authorization: identity comes
+        # exclusively from request.state.auth.org_id (the internal UUID the
+        # auth middleware resolved from the verified Clerk token), exactly
+        # like require_workspace() never takes org_id from its own path.
+        org_id: str,
         request: Request,
         org_repo: OrganisationRepository = Depends(get_org_repo),
     ) -> Organisation:
         auth = request.state.auth
         auth_org_id = getattr(auth, "org_id", None)
-        if auth_org_id is None or auth_org_id != org_id:
+        if auth_org_id is None:
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Unauthorised")
 
         # ApiKeyPayload carries org_id alongside workspace_id, but API keys are
@@ -148,7 +155,7 @@ def require_organisation(permission: str = "write") -> Callable[..., Awaitable[O
                 detail="API keys are workspace-scoped; organisation-level configuration requires a user session",
             )
 
-        org = await org_repo.get_by_id(org_id)
+        org = await org_repo.get_by_id(auth_org_id)
         if org is None:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND, detail="Organisation not found"
