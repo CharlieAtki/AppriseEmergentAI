@@ -238,6 +238,72 @@ async def test_setnx_loss_on_first_win_on_second(make_task):
     )
 
 
+# ── DB failure after SETNX win releases the reservation ────────────────────────
+
+
+async def test_flush_failure_after_setnx_win_releases_reservation(make_task):
+    """A transient DB failure between winning the SETNX and enqueueing must not
+    leak the reservation key — otherwise the task is stuck "reserved" forever
+    and no other agent can ever win that slot. Regression test for the
+    atomicity gap: the try/except used to wrap only enqueue_job, not
+    TaskStateMachine.transition/save/flush."""
+    task_repo, session, redis, arq_queue = _make_deps()
+
+    task_id = uuid.uuid4()
+    ws_id = uuid.uuid4()
+    task = make_task(status="open", id=task_id, workspace_id=ws_id)
+
+    redis.set = AsyncMock(return_value=b"OK")  # SETNX acquired
+    session.get = AsyncMock(return_value=task)
+    session.flush = AsyncMock(side_effect=Exception("db unavailable"))
+
+    agent = _agent(skills={"python": 1.0})
+
+    with pytest.raises(Exception, match="db unavailable"):
+        await score_and_reserve(
+            task_repo=task_repo,
+            agents=[agent],
+            task_id=task_id,
+            workspace_id=ws_id,
+            required_skills={"python": 1.0},
+            domain_tags=None,
+            redis=redis,
+            arq_queue=arq_queue,
+        )
+
+    redis.delete.assert_called_once_with(f"reservation:{ws_id}:{task_id}")
+    arq_queue.enqueue_job.assert_not_called()
+
+
+async def test_enqueue_success_is_never_undone_by_a_later_step(make_task):
+    """logger.info() runs after the protected try/except — it must never trigger
+    a spurious reservation-key deletion once enqueue_job has already succeeded."""
+    task_repo, session, redis, arq_queue = _make_deps()
+
+    task_id = uuid.uuid4()
+    ws_id = uuid.uuid4()
+    task = make_task(status="open", id=task_id, workspace_id=ws_id)
+
+    redis.set = AsyncMock(return_value=b"OK")
+    session.get = AsyncMock(return_value=task)
+
+    agent = _agent(skills={"python": 1.0})
+
+    await score_and_reserve(
+        task_repo=task_repo,
+        agents=[agent],
+        task_id=task_id,
+        workspace_id=ws_id,
+        required_skills={"python": 1.0},
+        domain_tags=None,
+        redis=redis,
+        arq_queue=arq_queue,
+    )
+
+    arq_queue.enqueue_job.assert_called_once()
+    redis.delete.assert_not_called()
+
+
 # ── Enqueue failure compensation ──────────────────────────────────────────────
 
 
