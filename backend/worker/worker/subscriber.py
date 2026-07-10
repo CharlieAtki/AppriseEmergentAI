@@ -127,8 +127,9 @@ class StreamSubscriber(ExternalEventSubscriber):
                 if event is not None:
                     tasks = await self.publish(event)
                     await asyncio.gather(*tasks)
-                await self.bus.ack(self.stream, self.group, msg_id)
             except Exception:
                 logger.exception(
                     "%s subscriber error on message %s: %r", self.name, msg_id, payload
                 )
+            finally:
+                await self.bus.ack(self.stream, self.group, msg_id)

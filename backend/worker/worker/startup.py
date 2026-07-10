@@ -42,6 +42,7 @@ async def startup(ctx: dict[str, Any]) -> None:
         "worker startup: context ready, graphs compiled for %d task types", len(wctx.graphs)
     )
 
+    from core.eventing.bus.handlers import Retry
     from core.eventing.events.stream_events import (
         CfpIssuedStreamEvent,
         TaskCompletedStreamEvent,
@@ -72,11 +73,13 @@ async def startup(ctx: dict[str, Any]) -> None:
 
     # Stream handlers: cross-process events deserialized from Redis Streams
     wctx.event_bus.bind(
-        TaskCreatedStreamEvent, TaskBiddingHandler(redis=wctx.redis, arq_queue=wctx.arq_queue)
+        TaskCreatedStreamEvent,
+        Retry(TaskBiddingHandler(redis=wctx.redis, arq_queue=wctx.arq_queue)),
     )
     wctx.event_bus.bind(TaskCompletedStreamEvent, SocialMemoryHandler(memory=wctx.memory))
     wctx.event_bus.bind(
-        CfpIssuedStreamEvent, CfpHandler(redis=wctx.redis, arq_queue=wctx.arq_queue)
+        CfpIssuedStreamEvent,
+        Retry(CfpHandler(redis=wctx.redis, arq_queue=wctx.arq_queue)),
     )
 
     logger.info("worker startup: event bus handlers registered")

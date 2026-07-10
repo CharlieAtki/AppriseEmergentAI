@@ -75,10 +75,10 @@ async def score_and_reserve(
                 )
                 await redis.delete(f"reservation:{workspace_id_str}:{task_id_str}")
             else:
-                TaskStateMachine.transition(task, "reserved")
-                await task_repo.save(task)
-                await task_repo.flush()  # must precede enqueue_job — ensures task.id is committed before worker picks it up
                 try:
+                    TaskStateMachine.transition(task, "reserved")
+                    await task_repo.save(task)
+                    await task_repo.flush()  # must precede enqueue_job — ensures task.id is committed before worker picks it up
                     await arq_queue.enqueue_job(
                         "execute_task",
                         agent_id=str(agent.id),

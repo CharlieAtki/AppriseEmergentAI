@@ -109,9 +109,16 @@ class StreamEvent(DomainEvent):
     def from_payload(cls, payload): ... # reconstruct from parsed Redis dict
 ```
 
-`stream_key` is a property rather than a `ClassVar` because CFP event keys embed
-`workspace_id` at runtime (`f"cfp.{self.workspace_id}.issued"`), which a class-level
-constant cannot do.
+`stream_key` is a property rather than a `ClassVar` so a subclass could vary it
+per-instance if needed. In practice every current `StreamEvent` subclass returns a
+static key (`stream:task`, `stream:cfp`), not scoped by `workspace_id`. This is
+safe because Redis consumer groups already deliver each message to exactly one
+worker (competing consumers, see `worker/startup.py`) — there is no fan-out to
+de-duplicate across workers. `event.workspace_id` is read only by the handler
+that claims the message, to scope its own DB query; it plays no role in routing
+or filtering the message itself. (`CfpIssuedStreamEvent` additionally uses a
+per-workspace SETNX reservation key at the coordination layer, unrelated to the
+stream key, to prevent two agents from being awarded the same task.)
 
 Each `StreamEvent` subclass is the single source of truth for its event: field definitions,
 stream routing, serialization, and deserialization all live on the class. Changing a field
@@ -218,7 +225,7 @@ not full ORM snapshots, which cannot cross a process boundary.
 |-------|-------------|-------------|-------------|
 | `TaskCreatedStreamEvent` | `task.created` | `stream:task` | `TaskBiddingHandler` |
 | `TaskCompletedStreamEvent` | `task.completed` | `stream:task` | `SocialMemoryHandler` |
-| `CfpIssuedStreamEvent` | `cfp.issued` | `cfp.{workspace_id}.issued` | no consumer yet |
+| `CfpIssuedStreamEvent` | `cfp.issued` | `stream:cfp` | `CfpHandler` |
 
 Each class owns its full wire contract:
 

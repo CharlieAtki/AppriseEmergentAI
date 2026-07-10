@@ -24,8 +24,16 @@ class StreamEvent(DomainEvent):
     silently publishing a malformed payload.
 
     stream_key  — the Redis stream name to XADD to. Implemented as a property
-                  (not a ClassVar) because CFP keys embed workspace_id at runtime:
-                  ``f"cfp.{self.workspace_id}.issued"``. ClassVar cannot do this.
+                  (not a ClassVar) so a subclass can vary it per-instance if a
+                  future event type needs to; today's subclasses (task, cfp)
+                  all return a static, non-workspace-scoped key. Redis consumer
+                  groups (see worker/startup.py) already deliver each message to
+                  exactly one worker — there is no fan-out across workers to
+                  de-duplicate, so a single shared key per event type is
+                  sufficient. ``event.workspace_id`` is only read by the handler
+                  that claims the message, to scope its own DB query (e.g. which
+                  agents belong to that workspace) — it does not route or filter
+                  the message itself.
 
     event_type  — discriminator string written into every payload so the subscriber
                   can route to the correct ``from_payload`` without knowing the
