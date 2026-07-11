@@ -2,14 +2,19 @@
 
 import * as Dialog from '@radix-ui/react-dialog'
 import { useState } from 'react'
-import { DASHBOARD_PANEL_DEFINITIONS } from '@/lib/dashboardPanels'
+import { DASHBOARD_PANEL_CATEGORIES, DASHBOARD_PANEL_DEFINITIONS, type DashboardPanelCategory } from '@/lib/dashboardPanels'
 import { IconAdd, IconClose } from '@/lib/icons'
 import { useDashboardLayoutStore } from '@/stores/dashboardLayout'
 import { PanelFootprintPreview } from './PanelFootprintPreview'
+import { DashboardPagerArrow } from './DashboardPagerArrow'
+import { DashboardPagerDots } from './DashboardPagerDots'
 
 export function AddPanelDialog() {
   const [open, setOpen] = useState(false)
+  const [categoryIndex, setCategoryIndex] = useState(0)
   const addPanel = useDashboardLayoutStore((state) => state.addPanel)
+  const activeCategory: DashboardPanelCategory = DASHBOARD_PANEL_CATEGORIES[categoryIndex]!
+  const visibleDefinitions = DASHBOARD_PANEL_DEFINITIONS.filter((d) => d.category === activeCategory)
 
   function handleAdd(type: string) {
     addPanel(type)
@@ -33,8 +38,25 @@ export function AddPanelDialog() {
             Pick a panel to add to this page. You can drag, resize, or remove it afterward.
           </Dialog.Description>
 
-          <div className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-3">
-            {DASHBOARD_PANEL_DEFINITIONS.map((definition) => {
+          <div className="mt-4 flex items-center justify-center gap-1">
+            <DashboardPagerArrow
+              direction="prev"
+              disabled={categoryIndex === 0}
+              onClick={() => setCategoryIndex((i) => Math.max(0, i - 1))}
+            />
+            <span className="min-w-20 text-center text-label font-semibold uppercase tracking-architectural text-foreground">
+              {activeCategory}
+            </span>
+            <DashboardPagerDots page={categoryIndex} pageCount={DASHBOARD_PANEL_CATEGORIES.length} onChange={setCategoryIndex} />
+            <DashboardPagerArrow
+              direction="next"
+              disabled={categoryIndex === DASHBOARD_PANEL_CATEGORIES.length - 1}
+              onClick={() => setCategoryIndex((i) => Math.min(DASHBOARD_PANEL_CATEGORIES.length - 1, i + 1))}
+            />
+          </div>
+
+          <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3">
+            {visibleDefinitions.map((definition) => {
               const Icon = definition.icon
               return (
                 <button

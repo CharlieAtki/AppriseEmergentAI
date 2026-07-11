@@ -25,6 +25,7 @@ const slideVariants = {
 }
 
 interface DashboardCanvasProps {
+  workspaceId: string
   panels: DashboardPanelInstance[]
   page: number
   direction: number
@@ -32,6 +33,7 @@ interface DashboardCanvasProps {
   onSwipe: (direction: 1 | -1) => void
   onRemovePanel: (id: string) => void
   onMovePanel: (id: string, dx: number, dy: number) => void
+  onUpdateConfig: (id: string, config: Record<string, unknown>) => void
 }
 
 // Owns canvas measurement, the grid itself — fixed 12x7 no-scroll above the
@@ -43,6 +45,7 @@ interface DashboardCanvasProps {
 // reliably restore the desktop layout after shrinking past the breakpoint
 // and back.
 export function DashboardCanvas({
+  workspaceId,
   panels,
   page,
   direction,
@@ -50,6 +53,7 @@ export function DashboardCanvas({
   onSwipe,
   onRemovePanel,
   onMovePanel,
+  onUpdateConfig,
 }: DashboardCanvasProps) {
   const { containerRef, width, height, mounted } = useContainerSize<HTMLDivElement>()
   const dragControls = useDragControls()
@@ -122,7 +126,14 @@ export function DashboardCanvas({
               >
                 {displayPanels.map((panel) => (
                   <div key={panel.i}>
-                    <DashboardPanel panel={panel} onRemove={onRemovePanel} onMove={onMovePanel} moveDisabled={isCompact} />
+                    <DashboardPanel
+                      workspaceId={workspaceId}
+                      panel={panel}
+                      onRemove={onRemovePanel}
+                      onMove={onMovePanel}
+                      onUpdateConfig={onUpdateConfig}
+                      moveDisabled={isCompact}
+                    />
                   </div>
                 ))}
               </GridLayout>

@@ -4,7 +4,12 @@ import uuid
 from dataclasses import dataclass
 from datetime import datetime
 
-from core.models.observability import WorkspaceMetricsPayload, WorkspaceMetricsSnapshot
+from core.models.observability import (
+    EmergenceEvent,
+    WorkspaceMetricsPayload,
+    WorkspaceMetricsSnapshot,
+)
+from core.repositories.emergence_event_repository import EmergenceEventRepository
 from core.repositories.workspace_metrics_repository import WorkspaceMetricsRepository
 
 
@@ -34,10 +39,31 @@ class WorkspaceMetricsData:
         )
 
 
+@dataclass(frozen=True)
+class EmergenceEventData:
+    """ORM boundary DTO for an Emergence Event — a discrete "hub agent detected"
+    occurrence, distinct from the routine WorkspaceMetricsSnapshot sample."""
+
+    id: uuid.UUID
+    event_type: str
+    gini_coefficient: float | None
+    hub_agent_id: uuid.UUID | None
+    recorded_at: datetime
+
+    @classmethod
+    def from_domain(cls, event: EmergenceEvent) -> EmergenceEventData:
+        return cls(
+            id=event.id,
+            event_type=event.event_type,
+            gini_coefficient=event.gini_coefficient,
+            hub_agent_id=event.hub_agent_id,
+            recorded_at=event.recorded_at,
+        )
+
+
 class WorkspaceObservabilityService:
-    """Boundary for the GET /workspaces/{id}/metrics REST read. Emergence event
-    history is the same bounded concept and belongs here too when a read for it
-    is needed — see core/models/observability.py.
+    """Boundary for the GET /workspaces/{id}/metrics and GET /workspaces/{id}/emergence
+    REST reads — see core/models/observability.py.
 
     Kept separate from WorkspaceService (pure CRUD) and WorkspaceStreamService
     (WS ticket/connect orchestration). WorkspaceStreamService's WS init payload
@@ -47,9 +73,27 @@ class WorkspaceObservabilityService:
     which both this service and WorkspaceStreamService call for shaping.
     """
 
-    def __init__(self, metrics_repo: WorkspaceMetricsRepository) -> None:
+    def __init__(
+        self,
+        metrics_repo: WorkspaceMetricsRepository,
+        emergence_repo: EmergenceEventRepository,
+    ) -> None:
         self._metrics_repo = metrics_repo
+        self._emergence_repo = emergence_repo
 
     async def get_latest_metrics(self, workspace_id: uuid.UUID) -> WorkspaceMetricsData | None:
         snapshot = await self._metrics_repo.get_latest(workspace_id)
         return WorkspaceMetricsData.from_domain(snapshot) if snapshot is not None else None
+
+    async def get_emergence_events(
+        self,
+        workspace_id: uuid.UUID,
+        *,
+        since: datetime | None = None,
+        until: datetime | None = None,
+        limit: int = 50,
+    ) -> list[EmergenceEventData]:
+        events = await self._emergence_repo.list_recent(
+            workspace_id, since=since, until=until, limit=limit
+        )
+        return [EmergenceEventData.from_domain(e) for e in events]

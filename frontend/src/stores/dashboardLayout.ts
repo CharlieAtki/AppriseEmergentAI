@@ -7,6 +7,11 @@ import { findFreeSlot, GRID_ROWS } from '@/lib/dashboardGrid'
 
 export interface DashboardPanelInstance extends LayoutItem {
   panelType: string
+  /** Per-instance display/query prefs (agent selection, time window, sort, ...).
+   * Blob rather than a discriminated union — keeps this UI-state store decoupled
+   * from feature-specific panel shapes; per-type validation lives in the panel
+   * body component that reads it. */
+  config: Record<string, unknown>
 }
 
 interface DashboardLayoutStore {
@@ -17,6 +22,7 @@ interface DashboardLayoutStore {
   removePanel: (id: string) => void
   setLayout: (pageIndex: number, layout: Layout) => void
   movePanel: (pageIndex: number, id: string, dx: number, dy: number, cols: number) => void
+  updatePanelConfig: (pageIndex: number, id: string, config: Record<string, unknown>) => void
 }
 
 // Reuses the previous item's object reference when nothing about it actually
@@ -29,7 +35,7 @@ function withTypes(layout: Layout, previous: DashboardPanelInstance[]): Dashboar
     const prev = byId.get(item.i)
     const unchanged =
       prev && prev.x === item.x && prev.y === item.y && prev.w === item.w && prev.h === item.h && prev.minW === item.minW && prev.minH === item.minH
-    return unchanged ? prev : { ...item, panelType: prev?.panelType ?? 'unknown' }
+    return unchanged ? prev : { ...item, panelType: prev?.panelType ?? 'unknown', config: prev?.config ?? {} }
   })
 }
 
@@ -57,6 +63,7 @@ export const useDashboardLayoutStore = create<DashboardLayoutStore>()(
           minW: definition.minW,
           minH: definition.minH,
           panelType,
+          config: {},
         })
 
         // Try the active page first, then later pages in order — reuses
@@ -116,18 +123,38 @@ export const useDashboardLayoutStore = create<DashboardLayoutStore>()(
         nextPages[pageIndex] = withTypes(moved, panels)
         set({ pages: nextPages })
       },
+
+      updatePanelConfig: (pageIndex, id, config) => {
+        const { pages } = get()
+        const panels = pages[pageIndex] ?? []
+        const nextPanels = panels.map((panel) =>
+          panel.i === id ? { ...panel, config: { ...panel.config, ...config } } : panel,
+        )
+        const nextPages = [...pages]
+        nextPages[pageIndex] = nextPanels
+        set({ pages: nextPages })
+      },
     }),
     {
       name: 'apprise-dashboard-layout',
-      // v0 persisted a flat `panels[]`; v1 introduced multi-page `pages[][]`.
-      // Old localStorage data doesn't have a `pages` key, so zustand's default
-      // shallow merge would silently keep the fresh-store default instead of
-      // surfacing an error — discard it explicitly instead of leaving stray
-      // `panels` data sitting unused alongside an empty `pages`.
-      version: 1,
+      // v0 persisted a flat `panels[]`; v1 introduced multi-page `pages[][]`;
+      // v2 added per-instance `config`. Old localStorage data doesn't have
+      // the new key, so zustand's default shallow merge would silently keep
+      // the fresh-store default instead of surfacing an error — backfill or
+      // discard explicitly instead of leaving stray data sitting unused.
+      version: 2,
       migrate: (_persistedState, version) => {
         if (version < 1) return { pages: [[]], activePage: 0 }
-        return _persistedState as Pick<DashboardLayoutStore, 'pages' | 'activePage'>
+        const state = _persistedState as Pick<DashboardLayoutStore, 'pages' | 'activePage'>
+        if (version < 2) {
+          return {
+            ...state,
+            pages: state.pages.map((page) =>
+              page.map((panel) => ({ ...panel, config: (panel as DashboardPanelInstance).config ?? {} })),
+            ),
+          }
+        }
+        return state
       },
     },
   ),

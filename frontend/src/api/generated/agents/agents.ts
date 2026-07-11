@@ -24,10 +24,16 @@ import type {
 
 import type {
   CreateAgentRequest,
+  GetAgentsInfluenceHistoryWorkspacesWorkspaceIdAgentsInfluenceHistoryGetParams,
+  GetAgentsTaskTimelineWorkspacesWorkspaceIdAgentsTaskTimelineGetParams,
   HTTPValidationError,
   UpdateAgentRequest,
 } from "../model";
-import { AgentResponse } from "../model";
+import {
+  AgentResponse,
+  InfluenceHistoryPointResponse,
+  TaskTimelineEntryResponse,
+} from "../model";
 
 import { customInstance } from "../../client";
 
@@ -50,6 +56,751 @@ const withQueryKey = <T extends object, K>(
   }
   return result;
 };
+
+/**
+ * @summary Get Agents Influence History
+ */
+export const getAgentsInfluenceHistoryWorkspacesWorkspaceIdAgentsInfluenceHistoryGet =
+  (
+    workspaceId: string,
+    params: GetAgentsInfluenceHistoryWorkspacesWorkspaceIdAgentsInfluenceHistoryGetParams,
+    options?: SecondParameter<typeof customInstance>,
+    signal?: AbortSignal,
+  ) => {
+    return customInstance<InfluenceHistoryPointResponse[]>(
+      {
+        url: `/workspaces/${workspaceId}/agents/influence-history`,
+        method: "GET",
+        params,
+        ...(signal ? { signal } : {}),
+      },
+      options,
+      z.array(InfluenceHistoryPointResponse),
+    );
+  };
+
+export const getGetAgentsInfluenceHistoryWorkspacesWorkspaceIdAgentsInfluenceHistoryGetQueryKey =
+  (
+    workspaceId: string,
+    params?: GetAgentsInfluenceHistoryWorkspacesWorkspaceIdAgentsInfluenceHistoryGetParams,
+  ) => {
+    return [
+      `/workspaces/${workspaceId}/agents/influence-history`,
+      ...(params ? [params] : []),
+    ] as const;
+  };
+
+export const getGetAgentsInfluenceHistoryWorkspacesWorkspaceIdAgentsInfluenceHistoryGetQueryOptions =
+  <
+    TData = Awaited<
+      ReturnType<
+        typeof getAgentsInfluenceHistoryWorkspacesWorkspaceIdAgentsInfluenceHistoryGet
+      >
+    >,
+    TError = HTTPValidationError,
+  >(
+    workspaceId: string,
+    params: GetAgentsInfluenceHistoryWorkspacesWorkspaceIdAgentsInfluenceHistoryGetParams,
+    options?: {
+      query?: Partial<
+        UseQueryOptions<
+          Awaited<
+            ReturnType<
+              typeof getAgentsInfluenceHistoryWorkspacesWorkspaceIdAgentsInfluenceHistoryGet
+            >
+          >,
+          TError,
+          TData
+        >
+      >;
+      request?: SecondParameter<typeof customInstance>;
+    },
+  ) => {
+    const { query: queryOptions, request: requestOptions } = options ?? {};
+
+    const queryKey =
+      queryOptions?.queryKey ??
+      getGetAgentsInfluenceHistoryWorkspacesWorkspaceIdAgentsInfluenceHistoryGetQueryKey(
+        workspaceId,
+        params,
+      );
+
+    const queryFn: QueryFunction<
+      Awaited<
+        ReturnType<
+          typeof getAgentsInfluenceHistoryWorkspacesWorkspaceIdAgentsInfluenceHistoryGet
+        >
+      >
+    > = ({ signal }) =>
+      getAgentsInfluenceHistoryWorkspacesWorkspaceIdAgentsInfluenceHistoryGet(
+        workspaceId,
+        params,
+        requestOptions,
+        signal,
+      );
+
+    return {
+      queryKey,
+      queryFn,
+      enabled: workspaceId !== null && workspaceId !== undefined,
+      ...queryOptions,
+    } as UseQueryOptions<
+      Awaited<
+        ReturnType<
+          typeof getAgentsInfluenceHistoryWorkspacesWorkspaceIdAgentsInfluenceHistoryGet
+        >
+      >,
+      TError,
+      TData
+    > & { queryKey: DataTag<QueryKey, TData, TError> };
+  };
+
+export type GetAgentsInfluenceHistoryWorkspacesWorkspaceIdAgentsInfluenceHistoryGetQueryResult =
+  NonNullable<
+    Awaited<
+      ReturnType<
+        typeof getAgentsInfluenceHistoryWorkspacesWorkspaceIdAgentsInfluenceHistoryGet
+      >
+    >
+  >;
+export type GetAgentsInfluenceHistoryWorkspacesWorkspaceIdAgentsInfluenceHistoryGetQueryError =
+  HTTPValidationError;
+
+export function useGetAgentsInfluenceHistoryWorkspacesWorkspaceIdAgentsInfluenceHistoryGet<
+  TData = Awaited<
+    ReturnType<
+      typeof getAgentsInfluenceHistoryWorkspacesWorkspaceIdAgentsInfluenceHistoryGet
+    >
+  >,
+  TError = HTTPValidationError,
+>(
+  workspaceId: string,
+  params: GetAgentsInfluenceHistoryWorkspacesWorkspaceIdAgentsInfluenceHistoryGetParams,
+  options: {
+    query: Partial<
+      UseQueryOptions<
+        Awaited<
+          ReturnType<
+            typeof getAgentsInfluenceHistoryWorkspacesWorkspaceIdAgentsInfluenceHistoryGet
+          >
+        >,
+        TError,
+        TData
+      >
+    > &
+      Pick<
+        DefinedInitialDataOptions<
+          Awaited<
+            ReturnType<
+              typeof getAgentsInfluenceHistoryWorkspacesWorkspaceIdAgentsInfluenceHistoryGet
+            >
+          >,
+          TError,
+          Awaited<
+            ReturnType<
+              typeof getAgentsInfluenceHistoryWorkspacesWorkspaceIdAgentsInfluenceHistoryGet
+            >
+          >
+        >,
+        "initialData"
+      >;
+    request?: SecondParameter<typeof customInstance>;
+  },
+  queryClient?: QueryClient,
+): DefinedUseQueryResult<TData, TError> & {
+  queryKey: DataTag<QueryKey, TData, TError>;
+};
+export function useGetAgentsInfluenceHistoryWorkspacesWorkspaceIdAgentsInfluenceHistoryGet<
+  TData = Awaited<
+    ReturnType<
+      typeof getAgentsInfluenceHistoryWorkspacesWorkspaceIdAgentsInfluenceHistoryGet
+    >
+  >,
+  TError = HTTPValidationError,
+>(
+  workspaceId: string,
+  params: GetAgentsInfluenceHistoryWorkspacesWorkspaceIdAgentsInfluenceHistoryGetParams,
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<
+          ReturnType<
+            typeof getAgentsInfluenceHistoryWorkspacesWorkspaceIdAgentsInfluenceHistoryGet
+          >
+        >,
+        TError,
+        TData
+      >
+    > &
+      Pick<
+        UndefinedInitialDataOptions<
+          Awaited<
+            ReturnType<
+              typeof getAgentsInfluenceHistoryWorkspacesWorkspaceIdAgentsInfluenceHistoryGet
+            >
+          >,
+          TError,
+          Awaited<
+            ReturnType<
+              typeof getAgentsInfluenceHistoryWorkspacesWorkspaceIdAgentsInfluenceHistoryGet
+            >
+          >
+        >,
+        "initialData"
+      >;
+    request?: SecondParameter<typeof customInstance>;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & {
+  queryKey: DataTag<QueryKey, TData, TError>;
+};
+export function useGetAgentsInfluenceHistoryWorkspacesWorkspaceIdAgentsInfluenceHistoryGet<
+  TData = Awaited<
+    ReturnType<
+      typeof getAgentsInfluenceHistoryWorkspacesWorkspaceIdAgentsInfluenceHistoryGet
+    >
+  >,
+  TError = HTTPValidationError,
+>(
+  workspaceId: string,
+  params: GetAgentsInfluenceHistoryWorkspacesWorkspaceIdAgentsInfluenceHistoryGetParams,
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<
+          ReturnType<
+            typeof getAgentsInfluenceHistoryWorkspacesWorkspaceIdAgentsInfluenceHistoryGet
+          >
+        >,
+        TError,
+        TData
+      >
+    >;
+    request?: SecondParameter<typeof customInstance>;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & {
+  queryKey: DataTag<QueryKey, TData, TError>;
+};
+/**
+ * @summary Get Agents Influence History
+ */
+
+export function useGetAgentsInfluenceHistoryWorkspacesWorkspaceIdAgentsInfluenceHistoryGet<
+  TData = Awaited<
+    ReturnType<
+      typeof getAgentsInfluenceHistoryWorkspacesWorkspaceIdAgentsInfluenceHistoryGet
+    >
+  >,
+  TError = HTTPValidationError,
+>(
+  workspaceId: string,
+  params: GetAgentsInfluenceHistoryWorkspacesWorkspaceIdAgentsInfluenceHistoryGetParams,
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<
+          ReturnType<
+            typeof getAgentsInfluenceHistoryWorkspacesWorkspaceIdAgentsInfluenceHistoryGet
+          >
+        >,
+        TError,
+        TData
+      >
+    >;
+    request?: SecondParameter<typeof customInstance>;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & {
+  queryKey: DataTag<QueryKey, TData, TError>;
+} {
+  const queryOptions =
+    getGetAgentsInfluenceHistoryWorkspacesWorkspaceIdAgentsInfluenceHistoryGetQueryOptions(
+      workspaceId,
+      params,
+      options,
+    );
+
+  const query = useQuery(queryOptions, queryClient) as UseQueryResult<
+    TData,
+    TError
+  > & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+/**
+ * @summary Get Agents Influence History
+ */
+export const invalidateGetAgentsInfluenceHistoryWorkspacesWorkspaceIdAgentsInfluenceHistoryGet =
+  async (
+    queryClient: QueryClient,
+    workspaceId: string,
+    params: GetAgentsInfluenceHistoryWorkspacesWorkspaceIdAgentsInfluenceHistoryGetParams,
+    options?: InvalidateOptions,
+  ): Promise<QueryClient> => {
+    await queryClient.invalidateQueries(
+      {
+        queryKey:
+          getGetAgentsInfluenceHistoryWorkspacesWorkspaceIdAgentsInfluenceHistoryGetQueryKey(
+            workspaceId,
+            params,
+          ),
+      },
+      options,
+    );
+
+    return queryClient;
+  };
+
+/**
+ * @summary Get Agents Influence History
+ */
+export const useSetGetAgentsInfluenceHistoryWorkspacesWorkspaceIdAgentsInfluenceHistoryGetQueryData =
+  () => {
+    const queryClient = useQueryClient();
+    return (
+      workspaceId: string,
+      params:
+        | GetAgentsInfluenceHistoryWorkspacesWorkspaceIdAgentsInfluenceHistoryGetParams
+        | undefined,
+      updater:
+        | Awaited<
+            ReturnType<
+              typeof getAgentsInfluenceHistoryWorkspacesWorkspaceIdAgentsInfluenceHistoryGet
+            >
+          >
+        | undefined
+        | ((
+            old:
+              | Awaited<
+                  ReturnType<
+                    typeof getAgentsInfluenceHistoryWorkspacesWorkspaceIdAgentsInfluenceHistoryGet
+                  >
+                >
+              | undefined,
+          ) =>
+            | Awaited<
+                ReturnType<
+                  typeof getAgentsInfluenceHistoryWorkspacesWorkspaceIdAgentsInfluenceHistoryGet
+                >
+              >
+            | undefined),
+    ) => {
+      queryClient.setQueriesData<
+        Awaited<
+          ReturnType<
+            typeof getAgentsInfluenceHistoryWorkspacesWorkspaceIdAgentsInfluenceHistoryGet
+          >
+        >
+      >(
+        {
+          queryKey:
+            getGetAgentsInfluenceHistoryWorkspacesWorkspaceIdAgentsInfluenceHistoryGetQueryKey(
+              workspaceId,
+              params,
+            ),
+        },
+        updater,
+      );
+    };
+  };
+
+/**
+ * @summary Get Agents Influence History
+ */
+export const useGetGetAgentsInfluenceHistoryWorkspacesWorkspaceIdAgentsInfluenceHistoryGetQueryData =
+  () => {
+    const queryClient = useQueryClient();
+    return (
+      workspaceId: string,
+      params: GetAgentsInfluenceHistoryWorkspacesWorkspaceIdAgentsInfluenceHistoryGetParams,
+    ) =>
+      queryClient.getQueryData<
+        Awaited<
+          ReturnType<
+            typeof getAgentsInfluenceHistoryWorkspacesWorkspaceIdAgentsInfluenceHistoryGet
+          >
+        >
+      >(
+        getGetAgentsInfluenceHistoryWorkspacesWorkspaceIdAgentsInfluenceHistoryGetQueryKey(
+          workspaceId,
+          params,
+        ),
+      );
+  };
+
+/**
+ * @summary Get Agents Task Timeline
+ */
+export const getAgentsTaskTimelineWorkspacesWorkspaceIdAgentsTaskTimelineGet = (
+  workspaceId: string,
+  params: GetAgentsTaskTimelineWorkspacesWorkspaceIdAgentsTaskTimelineGetParams,
+  options?: SecondParameter<typeof customInstance>,
+  signal?: AbortSignal,
+) => {
+  return customInstance<TaskTimelineEntryResponse[]>(
+    {
+      url: `/workspaces/${workspaceId}/agents/task-timeline`,
+      method: "GET",
+      params,
+      ...(signal ? { signal } : {}),
+    },
+    options,
+    z.array(TaskTimelineEntryResponse),
+  );
+};
+
+export const getGetAgentsTaskTimelineWorkspacesWorkspaceIdAgentsTaskTimelineGetQueryKey =
+  (
+    workspaceId: string,
+    params?: GetAgentsTaskTimelineWorkspacesWorkspaceIdAgentsTaskTimelineGetParams,
+  ) => {
+    return [
+      `/workspaces/${workspaceId}/agents/task-timeline`,
+      ...(params ? [params] : []),
+    ] as const;
+  };
+
+export const getGetAgentsTaskTimelineWorkspacesWorkspaceIdAgentsTaskTimelineGetQueryOptions =
+  <
+    TData = Awaited<
+      ReturnType<
+        typeof getAgentsTaskTimelineWorkspacesWorkspaceIdAgentsTaskTimelineGet
+      >
+    >,
+    TError = HTTPValidationError,
+  >(
+    workspaceId: string,
+    params: GetAgentsTaskTimelineWorkspacesWorkspaceIdAgentsTaskTimelineGetParams,
+    options?: {
+      query?: Partial<
+        UseQueryOptions<
+          Awaited<
+            ReturnType<
+              typeof getAgentsTaskTimelineWorkspacesWorkspaceIdAgentsTaskTimelineGet
+            >
+          >,
+          TError,
+          TData
+        >
+      >;
+      request?: SecondParameter<typeof customInstance>;
+    },
+  ) => {
+    const { query: queryOptions, request: requestOptions } = options ?? {};
+
+    const queryKey =
+      queryOptions?.queryKey ??
+      getGetAgentsTaskTimelineWorkspacesWorkspaceIdAgentsTaskTimelineGetQueryKey(
+        workspaceId,
+        params,
+      );
+
+    const queryFn: QueryFunction<
+      Awaited<
+        ReturnType<
+          typeof getAgentsTaskTimelineWorkspacesWorkspaceIdAgentsTaskTimelineGet
+        >
+      >
+    > = ({ signal }) =>
+      getAgentsTaskTimelineWorkspacesWorkspaceIdAgentsTaskTimelineGet(
+        workspaceId,
+        params,
+        requestOptions,
+        signal,
+      );
+
+    return {
+      queryKey,
+      queryFn,
+      enabled: workspaceId !== null && workspaceId !== undefined,
+      ...queryOptions,
+    } as UseQueryOptions<
+      Awaited<
+        ReturnType<
+          typeof getAgentsTaskTimelineWorkspacesWorkspaceIdAgentsTaskTimelineGet
+        >
+      >,
+      TError,
+      TData
+    > & { queryKey: DataTag<QueryKey, TData, TError> };
+  };
+
+export type GetAgentsTaskTimelineWorkspacesWorkspaceIdAgentsTaskTimelineGetQueryResult =
+  NonNullable<
+    Awaited<
+      ReturnType<
+        typeof getAgentsTaskTimelineWorkspacesWorkspaceIdAgentsTaskTimelineGet
+      >
+    >
+  >;
+export type GetAgentsTaskTimelineWorkspacesWorkspaceIdAgentsTaskTimelineGetQueryError =
+  HTTPValidationError;
+
+export function useGetAgentsTaskTimelineWorkspacesWorkspaceIdAgentsTaskTimelineGet<
+  TData = Awaited<
+    ReturnType<
+      typeof getAgentsTaskTimelineWorkspacesWorkspaceIdAgentsTaskTimelineGet
+    >
+  >,
+  TError = HTTPValidationError,
+>(
+  workspaceId: string,
+  params: GetAgentsTaskTimelineWorkspacesWorkspaceIdAgentsTaskTimelineGetParams,
+  options: {
+    query: Partial<
+      UseQueryOptions<
+        Awaited<
+          ReturnType<
+            typeof getAgentsTaskTimelineWorkspacesWorkspaceIdAgentsTaskTimelineGet
+          >
+        >,
+        TError,
+        TData
+      >
+    > &
+      Pick<
+        DefinedInitialDataOptions<
+          Awaited<
+            ReturnType<
+              typeof getAgentsTaskTimelineWorkspacesWorkspaceIdAgentsTaskTimelineGet
+            >
+          >,
+          TError,
+          Awaited<
+            ReturnType<
+              typeof getAgentsTaskTimelineWorkspacesWorkspaceIdAgentsTaskTimelineGet
+            >
+          >
+        >,
+        "initialData"
+      >;
+    request?: SecondParameter<typeof customInstance>;
+  },
+  queryClient?: QueryClient,
+): DefinedUseQueryResult<TData, TError> & {
+  queryKey: DataTag<QueryKey, TData, TError>;
+};
+export function useGetAgentsTaskTimelineWorkspacesWorkspaceIdAgentsTaskTimelineGet<
+  TData = Awaited<
+    ReturnType<
+      typeof getAgentsTaskTimelineWorkspacesWorkspaceIdAgentsTaskTimelineGet
+    >
+  >,
+  TError = HTTPValidationError,
+>(
+  workspaceId: string,
+  params: GetAgentsTaskTimelineWorkspacesWorkspaceIdAgentsTaskTimelineGetParams,
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<
+          ReturnType<
+            typeof getAgentsTaskTimelineWorkspacesWorkspaceIdAgentsTaskTimelineGet
+          >
+        >,
+        TError,
+        TData
+      >
+    > &
+      Pick<
+        UndefinedInitialDataOptions<
+          Awaited<
+            ReturnType<
+              typeof getAgentsTaskTimelineWorkspacesWorkspaceIdAgentsTaskTimelineGet
+            >
+          >,
+          TError,
+          Awaited<
+            ReturnType<
+              typeof getAgentsTaskTimelineWorkspacesWorkspaceIdAgentsTaskTimelineGet
+            >
+          >
+        >,
+        "initialData"
+      >;
+    request?: SecondParameter<typeof customInstance>;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & {
+  queryKey: DataTag<QueryKey, TData, TError>;
+};
+export function useGetAgentsTaskTimelineWorkspacesWorkspaceIdAgentsTaskTimelineGet<
+  TData = Awaited<
+    ReturnType<
+      typeof getAgentsTaskTimelineWorkspacesWorkspaceIdAgentsTaskTimelineGet
+    >
+  >,
+  TError = HTTPValidationError,
+>(
+  workspaceId: string,
+  params: GetAgentsTaskTimelineWorkspacesWorkspaceIdAgentsTaskTimelineGetParams,
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<
+          ReturnType<
+            typeof getAgentsTaskTimelineWorkspacesWorkspaceIdAgentsTaskTimelineGet
+          >
+        >,
+        TError,
+        TData
+      >
+    >;
+    request?: SecondParameter<typeof customInstance>;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & {
+  queryKey: DataTag<QueryKey, TData, TError>;
+};
+/**
+ * @summary Get Agents Task Timeline
+ */
+
+export function useGetAgentsTaskTimelineWorkspacesWorkspaceIdAgentsTaskTimelineGet<
+  TData = Awaited<
+    ReturnType<
+      typeof getAgentsTaskTimelineWorkspacesWorkspaceIdAgentsTaskTimelineGet
+    >
+  >,
+  TError = HTTPValidationError,
+>(
+  workspaceId: string,
+  params: GetAgentsTaskTimelineWorkspacesWorkspaceIdAgentsTaskTimelineGetParams,
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<
+          ReturnType<
+            typeof getAgentsTaskTimelineWorkspacesWorkspaceIdAgentsTaskTimelineGet
+          >
+        >,
+        TError,
+        TData
+      >
+    >;
+    request?: SecondParameter<typeof customInstance>;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & {
+  queryKey: DataTag<QueryKey, TData, TError>;
+} {
+  const queryOptions =
+    getGetAgentsTaskTimelineWorkspacesWorkspaceIdAgentsTaskTimelineGetQueryOptions(
+      workspaceId,
+      params,
+      options,
+    );
+
+  const query = useQuery(queryOptions, queryClient) as UseQueryResult<
+    TData,
+    TError
+  > & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+/**
+ * @summary Get Agents Task Timeline
+ */
+export const invalidateGetAgentsTaskTimelineWorkspacesWorkspaceIdAgentsTaskTimelineGet =
+  async (
+    queryClient: QueryClient,
+    workspaceId: string,
+    params: GetAgentsTaskTimelineWorkspacesWorkspaceIdAgentsTaskTimelineGetParams,
+    options?: InvalidateOptions,
+  ): Promise<QueryClient> => {
+    await queryClient.invalidateQueries(
+      {
+        queryKey:
+          getGetAgentsTaskTimelineWorkspacesWorkspaceIdAgentsTaskTimelineGetQueryKey(
+            workspaceId,
+            params,
+          ),
+      },
+      options,
+    );
+
+    return queryClient;
+  };
+
+/**
+ * @summary Get Agents Task Timeline
+ */
+export const useSetGetAgentsTaskTimelineWorkspacesWorkspaceIdAgentsTaskTimelineGetQueryData =
+  () => {
+    const queryClient = useQueryClient();
+    return (
+      workspaceId: string,
+      params:
+        | GetAgentsTaskTimelineWorkspacesWorkspaceIdAgentsTaskTimelineGetParams
+        | undefined,
+      updater:
+        | Awaited<
+            ReturnType<
+              typeof getAgentsTaskTimelineWorkspacesWorkspaceIdAgentsTaskTimelineGet
+            >
+          >
+        | undefined
+        | ((
+            old:
+              | Awaited<
+                  ReturnType<
+                    typeof getAgentsTaskTimelineWorkspacesWorkspaceIdAgentsTaskTimelineGet
+                  >
+                >
+              | undefined,
+          ) =>
+            | Awaited<
+                ReturnType<
+                  typeof getAgentsTaskTimelineWorkspacesWorkspaceIdAgentsTaskTimelineGet
+                >
+              >
+            | undefined),
+    ) => {
+      queryClient.setQueriesData<
+        Awaited<
+          ReturnType<
+            typeof getAgentsTaskTimelineWorkspacesWorkspaceIdAgentsTaskTimelineGet
+          >
+        >
+      >(
+        {
+          queryKey:
+            getGetAgentsTaskTimelineWorkspacesWorkspaceIdAgentsTaskTimelineGetQueryKey(
+              workspaceId,
+              params,
+            ),
+        },
+        updater,
+      );
+    };
+  };
+
+/**
+ * @summary Get Agents Task Timeline
+ */
+export const useGetGetAgentsTaskTimelineWorkspacesWorkspaceIdAgentsTaskTimelineGetQueryData =
+  () => {
+    const queryClient = useQueryClient();
+    return (
+      workspaceId: string,
+      params: GetAgentsTaskTimelineWorkspacesWorkspaceIdAgentsTaskTimelineGetParams,
+    ) =>
+      queryClient.getQueryData<
+        Awaited<
+          ReturnType<
+            typeof getAgentsTaskTimelineWorkspacesWorkspaceIdAgentsTaskTimelineGet
+          >
+        >
+      >(
+        getGetAgentsTaskTimelineWorkspacesWorkspaceIdAgentsTaskTimelineGetQueryKey(
+          workspaceId,
+          params,
+        ),
+      );
+  };
 
 /**
  * @summary Create Agent

@@ -7,20 +7,28 @@ import { DashboardPagerArrow } from './DashboardPagerArrow'
 import { DashboardPagerDots } from './DashboardPagerDots'
 import { AddPanelDialog } from './AddPanelDialog'
 import { useDashboardLayoutStore } from '@/stores/dashboardLayout'
+import { useDashboardDevModeStore } from '@/stores/dashboardDevMode'
 import { usePageDirection } from '@/hooks/dashboard/usePageDirection'
 import { GRID_COLS } from '@/lib/dashboardGrid'
-import { IconGridView } from '@/lib/icons'
+import { IconGridView, IconActivity } from '@/lib/icons'
+
+interface DashboardGridProps {
+  workspaceId: string
+}
 
 // Orchestrator only: reads the store, wires callbacks, and composes the
 // canvas + pager + add-panel pieces. No grid math or animation logic lives
 // here — see DashboardCanvas for the grid and swipe transition.
-export function DashboardGrid() {
+export function DashboardGrid({ workspaceId }: DashboardGridProps) {
   const pages = useDashboardLayoutStore((state) => state.pages)
   const activePage = useDashboardLayoutStore((state) => state.activePage)
   const setActivePage = useDashboardLayoutStore((state) => state.setActivePage)
   const setLayout = useDashboardLayoutStore((state) => state.setLayout)
   const removePanel = useDashboardLayoutStore((state) => state.removePanel)
   const movePanel = useDashboardLayoutStore((state) => state.movePanel)
+  const updatePanelConfig = useDashboardLayoutStore((state) => state.updatePanelConfig)
+  const devModeEnabled = useDashboardDevModeStore((state) => state.enabled)
+  const toggleDevMode = useDashboardDevModeStore((state) => state.toggle)
 
   const direction = usePageDirection(activePage)
   const isEmpty = pages.length === 1 && pages[0]!.length === 0
@@ -46,6 +54,10 @@ export function DashboardGrid() {
     (id: string, dx: number, dy: number) => movePanel(activePage, id, dx, dy, GRID_COLS),
     [activePage, movePanel],
   )
+  const handleUpdateConfig = useCallback(
+    (id: string, config: Record<string, unknown>) => updatePanelConfig(activePage, id, config),
+    [activePage, updatePanelConfig],
+  )
 
   return (
     <div
@@ -60,7 +72,22 @@ export function DashboardGrid() {
           <h1 className="font-display text-heading text-foreground">Observability</h1>
           <p className="mt-0.5 text-body text-muted">Build your own view into what the agent pool is doing.</p>
         </div>
-        {!isEmpty && <AddPanelDialog />}
+        <div className="flex items-center gap-2">
+          <button
+            onClick={toggleDevMode}
+            aria-pressed={devModeEnabled}
+            title="Preview panels with seeded mock data instead of real history"
+            className={`flex items-center gap-1.5 rounded-lg border px-3 py-2 text-body font-medium transition-colors ${
+              devModeEnabled
+                ? 'border-brand-primary bg-brand-primary/15 text-brand-primary'
+                : 'border-border bg-elevated text-muted hover:text-foreground'
+            }`}
+          >
+            <IconActivity size={14} />
+            Dev data
+          </button>
+          {!isEmpty && <AddPanelDialog />}
+        </div>
       </header>
 
       <div className="dashboard-grid-canvas relative flex min-h-0 flex-1 flex-col gap-2 p-6">
@@ -84,6 +111,7 @@ export function DashboardGrid() {
             )}
 
             <DashboardCanvas
+              workspaceId={workspaceId}
               panels={activePanels}
               page={activePage}
               direction={direction}
@@ -91,6 +119,7 @@ export function DashboardGrid() {
               onSwipe={handleSwipe}
               onRemovePanel={removePanel}
               onMovePanel={handleMovePanel}
+              onUpdateConfig={handleUpdateConfig}
             />
             <div className="flex h-11 shrink-0 items-center justify-center gap-1">
               {pageCount > 1 && (

@@ -27,6 +27,12 @@
   --status-warning: oklch(75% 0.18 70);
   --status-error:   oklch(62% 0.22 25);
   --status-info:    oklch(68% 0.16 230);
+
+  /* Chart categorical series — distinct from the Agent Accent Rotation
+     (agentColour.ts), which is agent identity, not chart data. Reuses
+     brand/accent/highlight/info hues for visual cohesion, plus one new
+     hue (rose) to reach 5 without inventing an unrelated palette. */
+  --chart-rose: oklch(65% 0.19 340);
 }
 
 /* ─── Tier 1a: Background scene primitives ──────────────────────────────────

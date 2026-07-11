@@ -146,6 +146,7 @@ class TaskExecution(Base):
     __table_args__ = (
         sa.Index("ix_task_executions_task_id", "task_id"),
         sa.Index("ix_task_executions_workspace_id_completed_at", "workspace_id", "completed_at"),
+        sa.Index("ix_task_executions_agent_id_started_at", "agent_id", "started_at"),
     )
 
     task: Mapped[Task] = relationship(back_populates="executions")

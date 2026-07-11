@@ -12,6 +12,8 @@ from core.intelligence.llm_router import LLMRouter
 from core.models.tenant import Organisation, Workspace
 from core.repositories.agent_repository import AgentRepository
 from core.repositories.api_key_repository import ApiKeyRepository
+from core.repositories.emergence_event_repository import EmergenceEventRepository
+from core.repositories.influence_snapshot_repository import InfluenceSnapshotRepository
 from core.repositories.org_repository import OrganisationRepository
 from core.repositories.task_execution_repository import TaskExecutionRepository
 from core.repositories.task_repository import TaskRepository
@@ -80,10 +82,17 @@ def get_workspace_metrics_repo(
     return WorkspaceMetricsRepository(session)
 
 
+def get_emergence_event_repo(
+    session: AsyncSession = Depends(get_db),
+) -> EmergenceEventRepository:
+    return EmergenceEventRepository(session)
+
+
 def get_workspace_observability_service(
     repo: WorkspaceMetricsRepository = Depends(get_workspace_metrics_repo),
+    emergence_repo: EmergenceEventRepository = Depends(get_emergence_event_repo),
 ) -> WorkspaceObservabilityService:
-    return WorkspaceObservabilityService(repo)
+    return WorkspaceObservabilityService(repo, emergence_repo)
 
 
 def get_task_service(repo: TaskRepository = Depends(get_task_repo)) -> TaskService:
@@ -94,11 +103,18 @@ def get_task_execution_repo(session: AsyncSession = Depends(get_db)) -> TaskExec
     return TaskExecutionRepository(session)
 
 
+def get_influence_snapshot_repo(
+    session: AsyncSession = Depends(get_db),
+) -> InfluenceSnapshotRepository:
+    return InfluenceSnapshotRepository(session)
+
+
 def get_agent_service(
     repo: AgentRepository = Depends(get_agent_repo),
     exec_repo: TaskExecutionRepository = Depends(get_task_execution_repo),
+    influence_snapshot_repo: InfluenceSnapshotRepository = Depends(get_influence_snapshot_repo),
 ) -> AgentService:
-    return AgentService(repo, exec_repo)
+    return AgentService(repo, exec_repo, influence_snapshot_repo)
 
 
 def get_workspace_stream_service(

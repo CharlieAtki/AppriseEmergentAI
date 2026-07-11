@@ -1,13 +1,15 @@
 from __future__ import annotations
 
 import uuid
+from datetime import datetime
 
 from core.models.tenant import Workspace
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 
 from api.deps import get_workspace_observability_service, get_workspace_service, require_workspace
 from api.schemas.workspace import (
     CreateWorkspaceRequest,
+    EmergenceEventResponse,
     UpdateWorkspaceRequest,
     WorkspaceMetricsResponse,
     WorkspaceResponse,
@@ -73,6 +75,20 @@ async def get_workspace_metrics(
     if metrics is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No metrics yet")
     return WorkspaceMetricsResponse.model_validate(metrics)
+
+
+@router.get("/{workspace_id}/emergence", response_model=list[EmergenceEventResponse])
+async def get_workspace_emergence(
+    workspace: Workspace = Depends(require_workspace("read")),
+    since: datetime | None = None,
+    until: datetime | None = None,
+    limit: int = Query(50, le=200),
+    service: WorkspaceObservabilityService = Depends(get_workspace_observability_service),
+) -> list[EmergenceEventResponse]:
+    """Recent Emergence Events (hub-detection occurrences), newest first. An
+    empty list is a valid response (no hub ever detected), unlike /metrics."""
+    events = await service.get_emergence_events(workspace.id, since=since, until=until, limit=limit)
+    return [EmergenceEventResponse.model_validate(e) for e in events]
 
 
 @router.patch("/{workspace_id}", response_model=WorkspaceResponse)

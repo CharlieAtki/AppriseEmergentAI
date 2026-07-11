@@ -11,6 +11,7 @@ from api.schemas.agent import AgentResponse
 
 __all__ = [
     "CreateWorkspaceRequest",
+    "EmergenceEventResponse",
     "UpdateWorkspaceRequest",
     "WorkspaceMetricsResponse",
     "WorkspaceResponse",
@@ -54,6 +55,19 @@ class WorkspaceMetricsResponse(BaseModel):
     gini: float
     specialisation_index: float
     agent_count: int
+    recorded_at: datetime
+
+
+class EmergenceEventResponse(BaseModel):
+    """A discrete "hub agent detected" occurrence, distinct from the routine
+    WorkspaceMetricsSnapshot sample. See docs/backend/CONTEXT.md."""
+
+    model_config = {"from_attributes": True}
+
+    id: uuid.UUID
+    event_type: str
+    gini_coefficient: float | None
+    hub_agent_id: uuid.UUID | None
     recorded_at: datetime
 
 

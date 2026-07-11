@@ -1,7 +1,9 @@
 'use client'
 
+import { useParams } from 'next/navigation'
 import { DashboardGrid } from '@/components/dashboard/DashboardGrid'
 
 export default function WorkspacePage() {
-  return <DashboardGrid />
+  const { workspaceId } = useParams<{ workspaceId: string }>()
+  return <DashboardGrid workspaceId={workspaceId} />
 }

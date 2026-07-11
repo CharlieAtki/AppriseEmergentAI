@@ -24,10 +24,15 @@ import type {
 
 import type {
   CreateWorkspaceRequest,
+  GetWorkspaceEmergenceWorkspacesWorkspaceIdEmergenceGetParams,
   HTTPValidationError,
   UpdateWorkspaceRequest,
 } from "../model";
-import { WorkspaceMetricsResponse, WorkspaceResponse } from "../model";
+import {
+  EmergenceEventResponse,
+  WorkspaceMetricsResponse,
+  WorkspaceResponse,
+} from "../model";
 
 import { customInstance } from "../../client";
 
@@ -1095,6 +1100,369 @@ export const useGetGetWorkspaceMetricsWorkspacesWorkspaceIdMetricsGetQueryData =
       >(
         getGetWorkspaceMetricsWorkspacesWorkspaceIdMetricsGetQueryKey(
           workspaceId,
+        ),
+      );
+  };
+
+/**
+ * Recent Emergence Events (hub-detection occurrences), newest first. An
+ * empty list is a valid response (no hub ever detected), unlike /metrics.
+ * @summary Get Workspace Emergence
+ */
+export const getWorkspaceEmergenceWorkspacesWorkspaceIdEmergenceGet = (
+  workspaceId: string,
+  params?: GetWorkspaceEmergenceWorkspacesWorkspaceIdEmergenceGetParams,
+  options?: SecondParameter<typeof customInstance>,
+  signal?: AbortSignal,
+) => {
+  return customInstance<EmergenceEventResponse[]>(
+    {
+      url: `/workspaces/${workspaceId}/emergence`,
+      method: "GET",
+      params,
+      ...(signal ? { signal } : {}),
+    },
+    options,
+    z.array(EmergenceEventResponse),
+  );
+};
+
+export const getGetWorkspaceEmergenceWorkspacesWorkspaceIdEmergenceGetQueryKey =
+  (
+    workspaceId: string,
+    params?: GetWorkspaceEmergenceWorkspacesWorkspaceIdEmergenceGetParams,
+  ) => {
+    return [
+      `/workspaces/${workspaceId}/emergence`,
+      ...(params ? [params] : []),
+    ] as const;
+  };
+
+export const getGetWorkspaceEmergenceWorkspacesWorkspaceIdEmergenceGetQueryOptions =
+  <
+    TData = Awaited<
+      ReturnType<typeof getWorkspaceEmergenceWorkspacesWorkspaceIdEmergenceGet>
+    >,
+    TError = HTTPValidationError,
+  >(
+    workspaceId: string,
+    params?: GetWorkspaceEmergenceWorkspacesWorkspaceIdEmergenceGetParams,
+    options?: {
+      query?: Partial<
+        UseQueryOptions<
+          Awaited<
+            ReturnType<
+              typeof getWorkspaceEmergenceWorkspacesWorkspaceIdEmergenceGet
+            >
+          >,
+          TError,
+          TData
+        >
+      >;
+      request?: SecondParameter<typeof customInstance>;
+    },
+  ) => {
+    const { query: queryOptions, request: requestOptions } = options ?? {};
+
+    const queryKey =
+      queryOptions?.queryKey ??
+      getGetWorkspaceEmergenceWorkspacesWorkspaceIdEmergenceGetQueryKey(
+        workspaceId,
+        params,
+      );
+
+    const queryFn: QueryFunction<
+      Awaited<
+        ReturnType<
+          typeof getWorkspaceEmergenceWorkspacesWorkspaceIdEmergenceGet
+        >
+      >
+    > = ({ signal }) =>
+      getWorkspaceEmergenceWorkspacesWorkspaceIdEmergenceGet(
+        workspaceId,
+        params,
+        requestOptions,
+        signal,
+      );
+
+    return {
+      queryKey,
+      queryFn,
+      enabled: workspaceId !== null && workspaceId !== undefined,
+      ...queryOptions,
+    } as UseQueryOptions<
+      Awaited<
+        ReturnType<
+          typeof getWorkspaceEmergenceWorkspacesWorkspaceIdEmergenceGet
+        >
+      >,
+      TError,
+      TData
+    > & { queryKey: DataTag<QueryKey, TData, TError> };
+  };
+
+export type GetWorkspaceEmergenceWorkspacesWorkspaceIdEmergenceGetQueryResult =
+  NonNullable<
+    Awaited<
+      ReturnType<typeof getWorkspaceEmergenceWorkspacesWorkspaceIdEmergenceGet>
+    >
+  >;
+export type GetWorkspaceEmergenceWorkspacesWorkspaceIdEmergenceGetQueryError =
+  HTTPValidationError;
+
+export function useGetWorkspaceEmergenceWorkspacesWorkspaceIdEmergenceGet<
+  TData = Awaited<
+    ReturnType<typeof getWorkspaceEmergenceWorkspacesWorkspaceIdEmergenceGet>
+  >,
+  TError = HTTPValidationError,
+>(
+  workspaceId: string,
+  params:
+    undefined | GetWorkspaceEmergenceWorkspacesWorkspaceIdEmergenceGetParams,
+  options: {
+    query: Partial<
+      UseQueryOptions<
+        Awaited<
+          ReturnType<
+            typeof getWorkspaceEmergenceWorkspacesWorkspaceIdEmergenceGet
+          >
+        >,
+        TError,
+        TData
+      >
+    > &
+      Pick<
+        DefinedInitialDataOptions<
+          Awaited<
+            ReturnType<
+              typeof getWorkspaceEmergenceWorkspacesWorkspaceIdEmergenceGet
+            >
+          >,
+          TError,
+          Awaited<
+            ReturnType<
+              typeof getWorkspaceEmergenceWorkspacesWorkspaceIdEmergenceGet
+            >
+          >
+        >,
+        "initialData"
+      >;
+    request?: SecondParameter<typeof customInstance>;
+  },
+  queryClient?: QueryClient,
+): DefinedUseQueryResult<TData, TError> & {
+  queryKey: DataTag<QueryKey, TData, TError>;
+};
+export function useGetWorkspaceEmergenceWorkspacesWorkspaceIdEmergenceGet<
+  TData = Awaited<
+    ReturnType<typeof getWorkspaceEmergenceWorkspacesWorkspaceIdEmergenceGet>
+  >,
+  TError = HTTPValidationError,
+>(
+  workspaceId: string,
+  params?: GetWorkspaceEmergenceWorkspacesWorkspaceIdEmergenceGetParams,
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<
+          ReturnType<
+            typeof getWorkspaceEmergenceWorkspacesWorkspaceIdEmergenceGet
+          >
+        >,
+        TError,
+        TData
+      >
+    > &
+      Pick<
+        UndefinedInitialDataOptions<
+          Awaited<
+            ReturnType<
+              typeof getWorkspaceEmergenceWorkspacesWorkspaceIdEmergenceGet
+            >
+          >,
+          TError,
+          Awaited<
+            ReturnType<
+              typeof getWorkspaceEmergenceWorkspacesWorkspaceIdEmergenceGet
+            >
+          >
+        >,
+        "initialData"
+      >;
+    request?: SecondParameter<typeof customInstance>;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & {
+  queryKey: DataTag<QueryKey, TData, TError>;
+};
+export function useGetWorkspaceEmergenceWorkspacesWorkspaceIdEmergenceGet<
+  TData = Awaited<
+    ReturnType<typeof getWorkspaceEmergenceWorkspacesWorkspaceIdEmergenceGet>
+  >,
+  TError = HTTPValidationError,
+>(
+  workspaceId: string,
+  params?: GetWorkspaceEmergenceWorkspacesWorkspaceIdEmergenceGetParams,
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<
+          ReturnType<
+            typeof getWorkspaceEmergenceWorkspacesWorkspaceIdEmergenceGet
+          >
+        >,
+        TError,
+        TData
+      >
+    >;
+    request?: SecondParameter<typeof customInstance>;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & {
+  queryKey: DataTag<QueryKey, TData, TError>;
+};
+/**
+ * @summary Get Workspace Emergence
+ */
+
+export function useGetWorkspaceEmergenceWorkspacesWorkspaceIdEmergenceGet<
+  TData = Awaited<
+    ReturnType<typeof getWorkspaceEmergenceWorkspacesWorkspaceIdEmergenceGet>
+  >,
+  TError = HTTPValidationError,
+>(
+  workspaceId: string,
+  params?: GetWorkspaceEmergenceWorkspacesWorkspaceIdEmergenceGetParams,
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<
+          ReturnType<
+            typeof getWorkspaceEmergenceWorkspacesWorkspaceIdEmergenceGet
+          >
+        >,
+        TError,
+        TData
+      >
+    >;
+    request?: SecondParameter<typeof customInstance>;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & {
+  queryKey: DataTag<QueryKey, TData, TError>;
+} {
+  const queryOptions =
+    getGetWorkspaceEmergenceWorkspacesWorkspaceIdEmergenceGetQueryOptions(
+      workspaceId,
+      params,
+      options,
+    );
+
+  const query = useQuery(queryOptions, queryClient) as UseQueryResult<
+    TData,
+    TError
+  > & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+/**
+ * @summary Get Workspace Emergence
+ */
+export const invalidateGetWorkspaceEmergenceWorkspacesWorkspaceIdEmergenceGet =
+  async (
+    queryClient: QueryClient,
+    workspaceId: string,
+    params?: GetWorkspaceEmergenceWorkspacesWorkspaceIdEmergenceGetParams,
+    options?: InvalidateOptions,
+  ): Promise<QueryClient> => {
+    await queryClient.invalidateQueries(
+      {
+        queryKey:
+          getGetWorkspaceEmergenceWorkspacesWorkspaceIdEmergenceGetQueryKey(
+            workspaceId,
+            params,
+          ),
+      },
+      options,
+    );
+
+    return queryClient;
+  };
+
+/**
+ * @summary Get Workspace Emergence
+ */
+export const useSetGetWorkspaceEmergenceWorkspacesWorkspaceIdEmergenceGetQueryData =
+  () => {
+    const queryClient = useQueryClient();
+    return (
+      workspaceId: string,
+      params:
+        | GetWorkspaceEmergenceWorkspacesWorkspaceIdEmergenceGetParams
+        | undefined,
+      updater:
+        | Awaited<
+            ReturnType<
+              typeof getWorkspaceEmergenceWorkspacesWorkspaceIdEmergenceGet
+            >
+          >
+        | undefined
+        | ((
+            old:
+              | Awaited<
+                  ReturnType<
+                    typeof getWorkspaceEmergenceWorkspacesWorkspaceIdEmergenceGet
+                  >
+                >
+              | undefined,
+          ) =>
+            | Awaited<
+                ReturnType<
+                  typeof getWorkspaceEmergenceWorkspacesWorkspaceIdEmergenceGet
+                >
+              >
+            | undefined),
+    ) => {
+      queryClient.setQueriesData<
+        Awaited<
+          ReturnType<
+            typeof getWorkspaceEmergenceWorkspacesWorkspaceIdEmergenceGet
+          >
+        >
+      >(
+        {
+          queryKey:
+            getGetWorkspaceEmergenceWorkspacesWorkspaceIdEmergenceGetQueryKey(
+              workspaceId,
+              params,
+            ),
+        },
+        updater,
+      );
+    };
+  };
+
+/**
+ * @summary Get Workspace Emergence
+ */
+export const useGetGetWorkspaceEmergenceWorkspacesWorkspaceIdEmergenceGetQueryData =
+  () => {
+    const queryClient = useQueryClient();
+    return (
+      workspaceId: string,
+      params?: GetWorkspaceEmergenceWorkspacesWorkspaceIdEmergenceGetParams,
+    ) =>
+      queryClient.getQueryData<
+        Awaited<
+          ReturnType<
+            typeof getWorkspaceEmergenceWorkspacesWorkspaceIdEmergenceGet
+          >
+        >
+      >(
+        getGetWorkspaceEmergenceWorkspacesWorkspaceIdEmergenceGetQueryKey(
+          workspaceId,
+          params,
         ),
       );
   };

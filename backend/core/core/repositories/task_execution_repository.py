@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import uuid
+from collections.abc import Sequence
 from datetime import UTC, datetime
 
 from sqlalchemy import func, select
@@ -133,6 +134,33 @@ class TaskExecutionRepository:
             )
         )
         return (result.scalar() or 0) > 0
+
+    async def list_for_agents(
+        self,
+        workspace_id: uuid.UUID,
+        agent_ids: Sequence[uuid.UUID],
+        *,
+        since: datetime | None = None,
+        until: datetime | None = None,
+    ) -> list[TaskExecution]:
+        """Per-agent execution history for the Agent Lanes dashboard panel.
+
+        Uses ix_task_executions_agent_id_started_at (migration 013) — required
+        because this runs on every dashboard load.
+        """
+        if not agent_ids:
+            return []
+        query = select(TaskExecution).where(
+            TaskExecution.workspace_id == workspace_id,
+            TaskExecution.agent_id.in_(agent_ids),
+        )
+        if since is not None:
+            query = query.where(TaskExecution.started_at >= since)
+        if until is not None:
+            query = query.where(TaskExecution.started_at <= until)
+        query = query.order_by(TaskExecution.started_at.asc())
+        result = await self._session.execute(query)
+        return list(result.scalars().all())
 
     async def save(self, execution: TaskExecution) -> None:
         """Stage execution for persistence. async for interface consistency —
