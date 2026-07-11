@@ -92,15 +92,6 @@ class AgentService:
         agents = await self._repo.list_all(workspace_id=workspace_id)
         return [AgentData.from_domain(a) for a in agents]
 
-    async def list_active(self, workspace_id: uuid.UUID) -> list[AgentData]:
-        """Active agents only — the "current agent pool" for a live dashboard.
-
-        Matches sample_metrics.py's own definition of the agent pool (active only),
-        unlike list() which returns agents of any status.
-        """
-        agents = await self._repo.get_all_active(workspace_id)
-        return [AgentData.from_domain(a) for a in agents]
-
     async def delete(self, agent_id: uuid.UUID, workspace_id: uuid.UUID) -> bool:
         agent = await self._repo.get(agent_id, workspace_id)
         if agent is None:
