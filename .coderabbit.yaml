@@ -104,6 +104,8 @@ reviews:
     - "!**/node_modules/**"
     - "!**/__pycache__/**"
     - "!**/generated/**"
+    - "!.github/skills/**"
+    - "!.impeccable/**"
 
 integrations:
   linear:
