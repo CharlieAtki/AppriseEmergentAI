@@ -263,6 +263,67 @@ body::before {
   background-color: transparent;
 }
 
+/* ─── Dashboard grid (react-grid-layout) theme overrides ───────────────────
+   RGL's own stylesheet loads after globals.css (client component import,
+   same ordering issue as ReactFlow above) and its placeholder/item rules
+   are already two classes deep (.react-grid-item.react-grid-placeholder),
+   so a same-specificity override loses the tie on source order. Scoping
+   every override under .dashboard-grid-canvas adds a third class and wins
+   outright, the same fix in spirit as the ReactFlow block's nesting trick. */
+
+.dashboard-panel {
+  transition: box-shadow var(--duration-slow) var(--ease-standard),
+              border-color var(--duration-slow) var(--ease-standard);
+}
+
+.dashboard-panel:hover {
+  box-shadow: 0 0 0 1px var(--color-brand), 0 8px 24px oklch(from var(--glow-shadow) l c h / 0.4);
+  border-color: var(--color-brand);
+}
+
+.dashboard-grid-canvas .react-grid-item.react-draggable-dragging .dashboard-panel,
+.dashboard-grid-canvas .react-grid-item.resizing .dashboard-panel {
+  box-shadow: 0 0 0 1px var(--color-brand), 0 8px 24px oklch(from var(--glow-shadow) l c h / 0.4);
+  border-color: var(--color-brand);
+}
+
+.dashboard-grid-canvas .react-grid-item.react-grid-placeholder {
+  background-color: var(--color-brand);
+  border-radius: 8px;
+  opacity: 0.12;
+}
+
+.dashboard-resize-handle {
+  position: absolute;
+  right: 4px;
+  bottom: 4px;
+  width: 10px;
+  height: 10px;
+  cursor: se-resize;
+  border-right: 2px solid var(--color-text-muted);
+  border-bottom: 2px solid var(--color-text-muted);
+  border-radius: 0 0 2px 0;
+  opacity: 0;
+  transition: opacity var(--duration-fast) var(--ease-standard), border-color var(--duration-fast) var(--ease-standard);
+}
+
+.react-grid-item:hover .dashboard-resize-handle {
+  opacity: 1;
+}
+
+.dashboard-resize-handle:hover {
+  border-color: var(--color-brand);
+}
+
+/* RGL's own stylesheet animates every reflow (left/top/width/height or
+   transform) at 200ms regardless of user preference. Collapse it to instant
+   repositioning under reduced motion, matching the brief's crossfade rule. */
+@media (prefers-reduced-motion: reduce) {
+  .dashboard-grid-canvas .react-grid-item {
+    transition: none !important;
+  }
+}
+
 /* ─── Agent node hover glow ─────────────────────────────────────────────── */
 .agent-node {
   transition: box-shadow var(--duration-slow) var(--ease-standard),
