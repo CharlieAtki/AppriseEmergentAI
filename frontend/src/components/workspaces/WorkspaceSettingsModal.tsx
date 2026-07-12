@@ -13,6 +13,7 @@ import {
 import { Checkbox } from '@/components/ui/checkbox'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { Skeleton } from '@/components/ui/skeleton'
 import { FieldLabel } from '@/components/ui/field'
 import { useEffect, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
@@ -238,10 +239,10 @@ export function WorkspaceSettingsModal({ workspaceId, open, onOpenChange }: Work
 
             {isLoading &&
               COORDINATION_CONFIG_FIELDS.map((field) => (
-                <div key={field.key} className="space-y-1.5 animate-pulse">
-                  <div className="h-4 w-32 rounded bg-elevated" />
-                  <div className="h-3 w-full rounded bg-elevated" />
-                  <div className="h-9 w-full rounded-lg bg-elevated" />
+                <div key={field.key} className="space-y-1.5">
+                  <Skeleton className="h-4 w-32 bg-elevated" />
+                  <Skeleton className="h-3 w-full bg-elevated" />
+                  <Skeleton className="h-9 w-full rounded-lg bg-elevated" />
                 </div>
               ))}
 
@@ -334,10 +335,10 @@ export function WorkspaceSettingsModal({ workspaceId, open, onOpenChange }: Work
             </p>
 
             {biddingIsLoading && (
-              <div className="space-y-1.5 animate-pulse">
-                <div className="h-4 w-32 rounded bg-elevated" />
-                <div className="h-3 w-full rounded bg-elevated" />
-                <div className="h-9 w-full rounded-lg bg-elevated" />
+              <div className="space-y-1.5">
+                <Skeleton className="h-4 w-32 bg-elevated" />
+                <Skeleton className="h-3 w-full bg-elevated" />
+                <Skeleton className="h-9 w-full rounded-lg bg-elevated" />
               </div>
             )}
 

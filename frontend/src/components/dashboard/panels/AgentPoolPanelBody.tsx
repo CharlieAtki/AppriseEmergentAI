@@ -1,6 +1,7 @@
 "use client";
 
 import { Button } from "@/components/ui/button";
+import { Skeleton } from "@/components/ui/skeleton";
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
@@ -52,8 +53,8 @@ function SparklineCardSkeleton() {
       className="flex flex-col gap-1 rounded-md bg-elevated p-2"
       aria-hidden="true"
     >
-      <div className="h-3 w-16 rounded bg-hover motion-safe:animate-pulse" />
-      <div className="mt-1 h-6 flex-1 rounded bg-hover motion-safe:animate-pulse" />
+      <Skeleton className="h-3 w-16 bg-hover motion-reduce:animate-none" />
+      <Skeleton className="mt-1 h-6 flex-1 bg-hover motion-reduce:animate-none" />
     </div>
   );
 }
@@ -215,7 +216,7 @@ export function AgentPoolPanelBody({
           ) : (
             <div
               key="grid"
-              className="grid h-full gap-2 p-3"
+              className="grid h-full auto-rows-fr gap-2 p-3"
               style={{
                 gridTemplateColumns: `repeat(${Math.min(selectedAgents.length, 4)}, minmax(0, 1fr))`,
               }}
@@ -225,7 +226,7 @@ export function AgentPoolPanelBody({
                 return (
                   <div
                     key={agent.id}
-                    className="group/card relative flex flex-col gap-1 rounded-md bg-elevated p-2"
+                    className="group/card relative flex min-h-0 flex-col gap-1 rounded-md bg-elevated p-2"
                   >
                     <div className="flex items-center justify-between gap-1">
                       <span className="truncate text-caption text-secondary">
@@ -237,6 +238,8 @@ export function AgentPoolPanelBody({
                         }}
                         onClick={() => setExpandedAgentId(agent.id)}
                         aria-label={`Expand ${agent.name}'s chart`}
+                        variant="ghost"
+                        size="icon"
                         className="shrink-0 rounded p-0.5 text-muted opacity-0 transition-opacity hover:bg-hover hover:text-foreground group-hover/card:opacity-100 focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-brand-primary"
                       >
                         <IconExpand size={11} />
@@ -249,7 +252,7 @@ export function AgentPoolPanelBody({
                           ? { duration: 0 }
                           : { type: "spring", damping: 30, stiffness: 300 }
                       }
-                      className="flex-1"
+                      className="min-h-0 flex-1"
                     >
                       {series.length < 2 ? (
                         <PanelEmptyState message="Not enough activity yet" />

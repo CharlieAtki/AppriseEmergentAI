@@ -80,6 +80,8 @@ export const DashboardPanel = memo(function DashboardPanel({
                 render={
                   <Button
                     aria-label={`${definition.label} panel settings`}
+                    variant="ghost"
+                    size="icon"
                     className="rounded p-1 text-muted opacity-0 transition-opacity hover:bg-hover hover:text-foreground group-hover:opacity-100 focus-visible:opacity-100"
                   />
                 }
@@ -107,6 +109,8 @@ export const DashboardPanel = memo(function DashboardPanel({
           <Button
             onClick={() => onRemove(panel.i)}
             aria-label={`Remove ${definition.label} panel`}
+            variant="ghost"
+            size="icon"
             className="rounded p-1 text-muted opacity-0 transition-opacity hover:bg-hover hover:text-foreground group-hover:opacity-100 focus-visible:opacity-100"
           >
             <IconClose size={12} />

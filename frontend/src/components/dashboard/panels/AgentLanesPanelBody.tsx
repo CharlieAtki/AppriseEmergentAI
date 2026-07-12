@@ -2,6 +2,7 @@
 
 import { useMemo } from "react";
 import { Tooltip, TooltipProvider, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
+import { Skeleton } from "@/components/ui/skeleton";
 import { useListAgentsWorkspacesWorkspaceIdAgentsGet } from "@/api/generated/agents/agents";
 import { useGetAgentsTaskTimelineWorkspacesWorkspaceIdAgentsTaskTimelineGet } from "@/api/generated/agents/agents";
 import {
@@ -64,10 +65,10 @@ function LaneRowSkeleton() {
   return (
     <div className="flex items-center gap-2 py-1" aria-hidden="true">
       <div className="flex w-28 shrink-0 items-center gap-1.5">
-        <div className="h-6 w-6 shrink-0 rounded-md bg-elevated motion-safe:animate-pulse" />
-        <div className="h-3 w-16 rounded bg-elevated motion-safe:animate-pulse" />
+        <Skeleton className="h-6 w-6 shrink-0 rounded-md bg-elevated motion-reduce:animate-none" />
+        <Skeleton className="h-3 w-16 bg-elevated motion-reduce:animate-none" />
       </div>
-      <div className="h-4 flex-1 rounded bg-elevated motion-safe:animate-pulse" />
+      <Skeleton className="h-4 flex-1 bg-elevated motion-reduce:animate-none" />
     </div>
   );
 }

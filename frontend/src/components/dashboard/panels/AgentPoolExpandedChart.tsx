@@ -62,6 +62,8 @@ export const AgentPoolExpandedChart = forwardRef<HTMLButtonElement, Props>(
             ref={closeButtonRef}
             onClick={onClose}
             aria-label="Close expanded chart"
+            variant="ghost"
+            size="icon"
             className="rounded p-1 text-muted transition-colors hover:bg-hover hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-brand-primary"
           >
             <IconClose size={14} />

@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button'
 
 import { memo, useState } from 'react'
 import { type NodeProps } from '@xyflow/react'
-import { motion, type MotionStyle } from 'framer-motion'
+import { motion, useReducedMotion, type MotionStyle } from 'framer-motion'
 import { format } from 'date-fns'
 import { AgentAvatar } from './AgentAvatar'
 import { AgentInfoPopover } from './AgentInfoPopover'
@@ -27,6 +27,7 @@ function AgentNodeInner({ data: rawData }: NodeProps) {
   const [deleteOpen, setDeleteOpen] = useState(false)
 
   const { deleteAgent } = useAgentDelete(data.workspace_id)
+  const shouldReduceMotion = useReducedMotion()
   const ringBorder = getAgentRingBorderClass(data.id)
   const accentStyle = { '--agent-accent': getAgentAccentVar(data.id) } as unknown as MotionStyle
 
@@ -43,7 +44,7 @@ function AgentNodeInner({ data: rawData }: NodeProps) {
       <motion.div
         initial={{ opacity: 0, scale: 0.88 }}
         animate={{ opacity: 1, scale: 1 }}
-        transition={{ type: 'spring', damping: 28, stiffness: 340 }}
+        transition={shouldReduceMotion ? { duration: 0 } : { type: 'spring', damping: 28, stiffness: 340 }}
         style={accentStyle}
         className="agent-node nopan nodrag w-64 rounded-xl border border-border bg-surface shadow-lg"
       >
@@ -79,7 +80,11 @@ function AgentNodeInner({ data: rawData }: NodeProps) {
                       className="h-full rounded-full bg-brand-primary"
                       initial={{ width: 0 }}
                       animate={{ width: `${Math.min(value * 100, 100)}%` }}
-                      transition={{ duration: 0.6, delay: 0.15, ease: [0.4, 0, 0.2, 1] }}
+                      transition={
+                        shouldReduceMotion
+                          ? { duration: 0 }
+                          : { duration: 0.6, delay: 0.15, ease: [0.4, 0, 0.2, 1] }
+                      }
                     />
                   </div>
                   <span className="w-6 text-right text-caption text-muted">

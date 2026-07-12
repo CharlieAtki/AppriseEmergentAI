@@ -3,7 +3,7 @@
 import { Button } from '@/components/ui/button'
 
 import Link from 'next/link'
-import { motion } from 'framer-motion'
+import { motion, useReducedMotion } from 'framer-motion'
 import { IconEdit, IconDelete } from '@/lib/icons'
 import { useState } from 'react'
 import { formatDistanceToNow } from 'date-fns'
@@ -26,6 +26,7 @@ export function WorkspaceCard({ workspace, orgId, view }: WorkspaceCardProps) {
   const [editOpen, setEditOpen] = useState(false)
   const [deleteOpen, setDeleteOpen] = useState(false)
   const { deleteWorkspace } = useWorkspaceDelete()
+  const shouldReduceMotion = useReducedMotion()
 
   const createdAt = workspace.created_at
     ? formatDistanceToNow(new Date(workspace.created_at), { addSuffix: true })
@@ -42,6 +43,8 @@ export function WorkspaceCard({ workspace, orgId, view }: WorkspaceCardProps) {
       <Button
         onClick={() => setEditOpen(true)}
         aria-label="Edit workspace"
+        variant="ghost"
+        size="icon"
         className="rounded-md p-1.5 text-muted transition-colors hover:bg-hover hover:text-foreground"
       >
         <IconEdit size={14} />
@@ -49,6 +52,8 @@ export function WorkspaceCard({ workspace, orgId, view }: WorkspaceCardProps) {
       <Button
         onClick={() => setDeleteOpen(true)}
         aria-label="Delete workspace"
+        variant="ghost"
+        size="icon"
         className="rounded-md p-1.5 text-error transition-colors hover:bg-error/10"
       >
         <IconDelete size={14} />
@@ -72,8 +77,8 @@ export function WorkspaceCard({ workspace, orgId, view }: WorkspaceCardProps) {
     return (
       <>
         <motion.div
-          whileHover={cardHover}
           className="workspace-card group flex items-center gap-4 rounded-lg border border-border bg-surface px-4 py-3 focus-within:ring-2 focus-within:ring-brand-primary"
+          {...(!shouldReduceMotion && { whileHover: cardHover })}
         >
           <WorkspaceAvatar name={workspace.name} size="md" />
 
@@ -99,6 +104,8 @@ export function WorkspaceCard({ workspace, orgId, view }: WorkspaceCardProps) {
               <Button
                 onClick={() => setEditOpen(true)}
                 aria-label="Edit workspace"
+                variant="ghost"
+                size="icon"
                 className="rounded-md p-1.5 text-muted transition-colors hover:bg-hover hover:text-foreground"
               >
                 <IconEdit size={14} />
@@ -106,6 +113,8 @@ export function WorkspaceCard({ workspace, orgId, view }: WorkspaceCardProps) {
               <Button
                 onClick={() => setDeleteOpen(true)}
                 aria-label="Delete workspace"
+                variant="ghost"
+                size="icon"
                 className="rounded-md p-1.5 text-error transition-colors hover:bg-error/10"
               >
                 <IconDelete size={14} />
@@ -121,8 +130,8 @@ export function WorkspaceCard({ workspace, orgId, view }: WorkspaceCardProps) {
   return (
     <>
       <motion.div
-        whileHover={cardHover}
         className="workspace-card group flex flex-col rounded-lg border border-border bg-surface focus-within:ring-2 focus-within:ring-brand-primary"
+        {...(!shouldReduceMotion && { whileHover: cardHover })}
       >
         <Link
           href={`/orgs/${orgId}/workspaces/${workspace.id}`}

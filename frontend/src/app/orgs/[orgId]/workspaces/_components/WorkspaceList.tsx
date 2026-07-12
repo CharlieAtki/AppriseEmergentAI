@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { Input } from '@/components/ui/input'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
+import { Skeleton } from '@/components/ui/skeleton'
 import { IconGridView, IconListView, IconSearch } from '@/lib/icons'
 import { useParams } from 'next/navigation'
 import { useListWorkspacesWorkspacesGet } from '@/api/generated/workspaces/workspaces'
@@ -78,7 +79,7 @@ export function WorkspaceList() {
       {isPending && !isError && (
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {Array.from({ length: 6 }).map((_, i) => (
-            <div key={i} className="h-36 animate-pulse rounded-lg bg-surface" />
+            <Skeleton key={i} className="h-36 rounded-lg bg-surface motion-reduce:animate-none" />
           ))}
         </div>
       )}
