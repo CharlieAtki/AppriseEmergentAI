@@ -82,14 +82,15 @@ reviews:
     # ── Frontend ──────────────────────────────────────────────────────────────
     - path: "frontend/**"
       instructions: |
-        Next.js 15 App Router. TanStack Query v5 for server state, Zustand for UI-only state, Orval-generated typed hooks, Tailwind v4, Lucide React icons only.
+        Next.js 15 App Router. TanStack Query v5 for server state, Zustand for UI-only state, Orval-generated typed hooks, Tailwind v4, shadcn/ui (Base UI) components, Phosphor React icons only.
         - All HTTP goes through Orval-generated hooks — never raw fetch() or axios imports in components.
         - 'use client' belongs only in app/orgs/[orgId]/workspaces/[workspaceId]/layout.tsx — never on individual dashboard leaf components.
         - Cache invalidation must use Orval key factories (getList*QueryKey) — never hand-written query key arrays.
         - WebSocket events must go through WorkspaceEvent.safeParse() before touching the query cache — malformed events must be silently discarded, not thrown.
         - Zustand must not duplicate TanStack Query server state.
-        - No inline SVGs for UI icons — Lucide React only.
-        - Framer Motion only for genuinely stateful or physics-based animations — not CSS-replaceable transitions.
+        - No inline SVGs for UI icons — Phosphor React only, imported through lib/icons.ts, never lucide-react or raw @radix-ui/*.
+        - Loading placeholders must use components/ui/skeleton.tsx's Skeleton — never hand-rolled animate-pulse divs.
+        - Framer Motion only for genuinely stateful or physics-based animations — not CSS-replaceable transitions. Any framer-motion animation on transform/scale/opacity must gate with useReducedMotion().
 
     # ── Migrations ────────────────────────────────────────────────────────────
     - path: "backend/core/core/migrations/**"
@@ -104,6 +105,13 @@ reviews:
     - "!**/node_modules/**"
     - "!**/__pycache__/**"
     - "!**/generated/**"
+    - "!.claude/**"
+    - "!.agents/**"
+    - "!.codex/**"
+    - "!.impeccable/**"
+    - "!skills-lock.json"
+    - "!**/*.tsbuildinfo"
+    - "!**/.next/**"
 
 integrations:
   linear:
