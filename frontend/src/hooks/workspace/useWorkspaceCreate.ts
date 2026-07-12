@@ -5,13 +5,12 @@ import {
   getListWorkspacesWorkspacesGetQueryKey,
 } from '@/api/generated/workspaces/workspaces'
 import type { WorkspaceResponse } from '@/api/generated/model'
-import { useAutoDismissToast } from '@/hooks/useAutoDismissToast'
+import { toast } from 'sonner'
 
 const CREATE_TOAST_DURATION_MS = 5000
 
 export function useWorkspaceCreate() {
   const queryClient = useQueryClient()
-  const showToast = useAutoDismissToast()
 
   const { mutate, isPending } = useCreateWorkspaceWorkspacesPost({
     mutation: {
@@ -20,7 +19,7 @@ export function useWorkspaceCreate() {
         queryClient.setQueryData<WorkspaceResponse[]>(queryKey, (old) =>
           old ? [...old, response] : [response]
         )
-        showToast({ title: 'Workspace created', description: response.name, variant: 'success', duration: CREATE_TOAST_DURATION_MS })
+        toast.success('Workspace created', { description: response.name, duration: CREATE_TOAST_DURATION_MS })
       },
     },
   })

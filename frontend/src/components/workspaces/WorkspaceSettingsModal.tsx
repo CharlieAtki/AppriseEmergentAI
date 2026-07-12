@@ -1,9 +1,19 @@
 'use client'
 
-import * as Dialog from '@radix-ui/react-dialog'
-import * as AlertDialog from '@radix-ui/react-alert-dialog'
-import * as Checkbox from '@radix-ui/react-checkbox'
-import { Check, X } from 'lucide-react'
+import { Dialog, DialogContent, DialogTitle, DialogDescription } from '@/components/ui/dialog'
+import {
+  AlertDialog,
+  AlertDialogContent,
+  AlertDialogTitle,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogCancel,
+  AlertDialogAction,
+} from '@/components/ui/alert-dialog'
+import { Checkbox } from '@/components/ui/checkbox'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { FieldLabel } from '@/components/ui/field'
 import { useEffect, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import {
@@ -20,7 +30,7 @@ import type { CoordinationConfigResponse } from '@/api/generated/model'
 import { COORDINATION_CONFIG_FIELDS, type ConfigFieldMeta } from '@/config/coordinationConfigFields'
 import { BIDDING_CONFIG_FIELDS, type BiddingFieldMeta } from '@/config/biddingConfigFields'
 import { Badge } from '@/components/ui/Badge'
-import { useToastStore } from '@/stores/toast'
+import { toast } from 'sonner'
 
 interface WorkspaceSettingsModalProps {
   workspaceId: string
@@ -76,7 +86,6 @@ export function WorkspaceSettingsModal({ workspaceId, open, onOpenChange }: Work
   const [biddingInitialFields, setBiddingInitialFields] = useState<Record<string, FieldState>>({})
   const [confirmDiscardOpen, setConfirmDiscardOpen] = useState(false)
   const queryClient = useQueryClient()
-  const { toast } = useToastStore()
 
   const { data, isLoading, isError, refetch } = useGetWorkspaceCoordinationConfigWorkspacesWorkspaceIdCoordinationConfigGet(
     workspaceId,
@@ -134,10 +143,10 @@ export function WorkspaceSettingsModal({ workspaceId, open, onOpenChange }: Work
         void queryClient.invalidateQueries({
           queryKey: getGetWorkspaceCoordinationConfigWorkspacesWorkspaceIdCoordinationConfigGetQueryKey(workspaceId),
         })
-        toast({ title: 'Workspace settings saved', variant: 'default' })
+        toast('Workspace settings saved')
       },
       onError: () => {
-        toast({ title: 'Failed to update workspace settings', variant: 'error' })
+        toast.error('Failed to update workspace settings')
       },
     },
   })
@@ -149,10 +158,10 @@ export function WorkspaceSettingsModal({ workspaceId, open, onOpenChange }: Work
           void queryClient.invalidateQueries({
             queryKey: getGetWorkspaceBiddingConfigWorkspacesWorkspaceIdBiddingConfigGetQueryKey(workspaceId),
           })
-          toast({ title: 'Bid scoring settings saved', variant: 'default' })
+          toast('Bid scoring settings saved')
         },
         onError: () => {
-          toast({ title: 'Failed to update bid scoring settings', variant: 'error' })
+          toast.error('Failed to update bid scoring settings')
         },
       },
     })
@@ -213,16 +222,14 @@ export function WorkspaceSettingsModal({ workspaceId, open, onOpenChange }: Work
   }
 
   return (
-    <Dialog.Root open={open} onOpenChange={handleOpenChange}>
-      <Dialog.Portal>
-        <Dialog.Overlay className="dialog-overlay fixed inset-0 bg-background/60 backdrop-blur-sm" />
-        <Dialog.Content className="dialog-content fixed left-1/2 top-1/2 w-full max-w-2xl -translate-x-1/2 -translate-y-1/2 rounded-xl border border-border bg-surface p-6 shadow-xl focus:outline-none">
-          <Dialog.Title className="text-title font-semibold text-foreground">
+    <Dialog open={open} onOpenChange={handleOpenChange}>
+      <DialogContent className="fixed left-1/2 top-1/2 w-full max-w-2xl -translate-x-1/2 -translate-y-1/2 rounded-xl border border-border bg-surface p-6 shadow-xl focus:outline-none">
+          <DialogTitle className="text-title font-semibold text-foreground">
             Workspace settings
-          </Dialog.Title>
-          <Dialog.Description className="mt-1 text-body text-muted">
+          </DialogTitle>
+          <DialogDescription className="mt-1 text-body text-muted">
             Override the organisation's defaults for this workspace only.
-          </Dialog.Description>
+          </DialogDescription>
 
           <form onSubmit={handleSubmit} className="mt-5 space-y-4">
             <p className="text-label font-semibold uppercase tracking-architectural text-muted">
@@ -241,13 +248,13 @@ export function WorkspaceSettingsModal({ workspaceId, open, onOpenChange }: Work
             {isError && (
               <div className="space-y-2 rounded-lg border border-error/30 bg-error/10 px-3 py-2.5">
                 <p className="text-caption text-error">Couldn't load workspace settings.</p>
-                <button
+                <Button
                   type="button"
                   onClick={() => refetch()}
                   className="text-caption font-medium text-error underline underline-offset-2"
                 >
                   Try again
-                </button>
+                </Button>
               </div>
             )}
 
@@ -263,21 +270,17 @@ export function WorkspaceSettingsModal({ workspaceId, open, onOpenChange }: Work
                 return (
                   <div key={field.key} className="space-y-1.5">
                     <div className="flex items-center justify-between gap-2">
-                      <label className="text-label font-medium text-secondary">{field.label}</label>
+                      <FieldLabel className="text-label font-medium text-secondary">{field.label}</FieldLabel>
                       <div className="flex items-center gap-2">
                         <Badge status={source} />
                         <div className="flex items-center gap-1.5 text-caption text-muted">
-                          <Checkbox.Root
+                          <Checkbox
                             id={`workspace-override-${field.key}`}
                             checked={state.overrideEnabled}
-                            onCheckedChange={(checked) => toggleOverride(field, checked === true)}
-                            className="flex h-4 w-4 items-center justify-center rounded border border-border bg-elevated data-[state=checked]:border-brand-primary data-[state=checked]:bg-brand-primary focus:outline-none focus:ring-1 focus:ring-brand-primary"
-                          >
-                            <Checkbox.Indicator className="text-background">
-                              <Check size={12} strokeWidth={3} />
-                            </Checkbox.Indicator>
-                          </Checkbox.Root>
-                          <label htmlFor={`workspace-override-${field.key}`}>Override</label>
+                            onCheckedChange={(checked) => toggleOverride(field, checked)}
+                            className="h-4 w-4 rounded border-border bg-elevated data-checked:border-brand-primary data-checked:bg-brand-primary data-checked:text-background focus-visible:ring-brand-primary"
+                          />
+                          <FieldLabel htmlFor={`workspace-override-${field.key}`}>Override</FieldLabel>
                         </div>
                       </div>
                     </div>
@@ -287,7 +290,7 @@ export function WorkspaceSettingsModal({ workspaceId, open, onOpenChange }: Work
                         Clamped to the platform ceiling ({data.platform_max_delegation_depth_ceiling}).
                       </p>
                     )}
-                    <input
+                    <Input
                       type="number"
                       inputMode={field.type === 'integer' ? 'numeric' : 'decimal'}
                       min={field.min}
@@ -313,13 +316,13 @@ export function WorkspaceSettingsModal({ workspaceId, open, onOpenChange }: Work
               })}
 
             <div className="flex justify-end pt-1">
-              <button
+              <Button
                 type="submit"
                 disabled={isPending || !data || hasErrors}
                 className="rounded-lg bg-brand-primary px-4 py-2 text-body font-medium text-background transition-colors hover:bg-brand-hover disabled:opacity-50"
               >
                 {isPending ? 'Saving…' : 'Save'}
-              </button>
+              </Button>
             </div>
           </form>
 
@@ -341,39 +344,35 @@ export function WorkspaceSettingsModal({ workspaceId, open, onOpenChange }: Work
             {biddingIsError && (
               <div className="space-y-2 rounded-lg border border-error/30 bg-error/10 px-3 py-2.5">
                 <p className="text-caption text-error">Couldn't load bid scoring settings.</p>
-                <button
+                <Button
                   type="button"
                   onClick={() => refetchBidding()}
                   className="text-caption font-medium text-error underline underline-offset-2"
                 >
                   Try again
-                </button>
+                </Button>
               </div>
             )}
 
             {biddingData && biddingState && (
               <div className="space-y-1.5">
                 <div className="flex items-center justify-between gap-2">
-                  <label className="text-label font-medium text-secondary">{biddingField.label}</label>
+                  <FieldLabel className="text-label font-medium text-secondary">{biddingField.label}</FieldLabel>
                   <div className="flex items-center gap-2">
                     <Badge status={biddingData.bid_score_threshold_source} />
                     <div className="flex items-center gap-1.5 text-caption text-muted">
-                      <Checkbox.Root
+                      <Checkbox
                         id="workspace-override-bid_score_threshold"
                         checked={biddingState.overrideEnabled}
-                        onCheckedChange={(checked) => toggleBiddingOverride(checked === true)}
-                        className="flex h-4 w-4 items-center justify-center rounded border border-border bg-elevated data-[state=checked]:border-brand-primary data-[state=checked]:bg-brand-primary focus:outline-none focus:ring-1 focus:ring-brand-primary"
-                      >
-                        <Checkbox.Indicator className="text-background">
-                          <Check size={12} strokeWidth={3} />
-                        </Checkbox.Indicator>
-                      </Checkbox.Root>
-                      <label htmlFor="workspace-override-bid_score_threshold">Override</label>
+                        onCheckedChange={(checked) => toggleBiddingOverride(checked)}
+                        className="h-4 w-4 rounded border-border bg-elevated data-checked:border-brand-primary data-checked:bg-brand-primary data-checked:text-background focus-visible:ring-brand-primary"
+                      />
+                      <FieldLabel htmlFor="workspace-override-bid_score_threshold">Override</FieldLabel>
                     </div>
                   </div>
                 </div>
                 <p className="text-caption text-muted">{biddingField.description}</p>
-                <input
+                <Input
                   type="number"
                   inputMode={biddingField.type === 'integer' ? 'numeric' : 'decimal'}
                   min={biddingField.min}
@@ -400,58 +399,39 @@ export function WorkspaceSettingsModal({ workspaceId, open, onOpenChange }: Work
             )}
 
             <div className="flex justify-end pt-1">
-              <button
+              <Button
                 type="submit"
                 disabled={biddingIsPending || !biddingData || biddingError !== null}
                 className="rounded-lg bg-brand-primary px-4 py-2 text-body font-medium text-background transition-colors hover:bg-brand-hover disabled:opacity-50"
               >
                 {biddingIsPending ? 'Saving…' : 'Save'}
-              </button>
+              </Button>
             </div>
           </form>
 
-          <Dialog.Close asChild>
-            <button
-              className="absolute right-4 top-4 text-muted transition-colors hover:text-foreground"
-              aria-label="Close"
-            >
-              <X size={16} />
-            </button>
-          </Dialog.Close>
-        </Dialog.Content>
-      </Dialog.Portal>
+      </DialogContent>
 
-      <AlertDialog.Root open={confirmDiscardOpen} onOpenChange={setConfirmDiscardOpen}>
-        <AlertDialog.Portal>
-          <AlertDialog.Overlay className="dialog-overlay fixed inset-0 bg-background/60 backdrop-blur-sm" />
-          <AlertDialog.Content className="dialog-content fixed left-1/2 top-1/2 w-full max-w-sm -translate-x-1/2 -translate-y-1/2 rounded-xl border border-border bg-surface p-6 shadow-xl focus:outline-none">
-            <AlertDialog.Title className="text-title font-semibold text-foreground">
-              Discard changes?
-            </AlertDialog.Title>
-            <AlertDialog.Description className="mt-1 text-body text-muted">
-              You have unsaved changes to this workspace's settings. Closing now will discard them.
-            </AlertDialog.Description>
-            <div className="mt-6 flex justify-end gap-2">
-              <AlertDialog.Cancel asChild>
-                <button
-                  type="button"
-                  className="rounded-lg px-4 py-2 text-body text-muted transition-colors hover:text-foreground"
-                >
-                  Keep editing
-                </button>
-              </AlertDialog.Cancel>
-              <AlertDialog.Action asChild>
-                <button
-                  onClick={() => onOpenChange(false)}
-                  className="rounded-lg bg-error px-4 py-2 text-body font-medium text-white transition-colors hover:opacity-90"
-                >
-                  Discard
-                </button>
-              </AlertDialog.Action>
-            </div>
-          </AlertDialog.Content>
-        </AlertDialog.Portal>
-      </AlertDialog.Root>
-    </Dialog.Root>
+      <AlertDialog open={confirmDiscardOpen} onOpenChange={setConfirmDiscardOpen}>
+        <AlertDialogContent className="fixed left-1/2 top-1/2 w-full max-w-sm -translate-x-1/2 -translate-y-1/2 rounded-xl border border-border bg-surface p-6 shadow-xl focus:outline-none">
+          <AlertDialogTitle className="text-title font-semibold text-foreground">
+            Discard changes?
+          </AlertDialogTitle>
+          <AlertDialogDescription className="mt-1 text-body text-muted">
+            You have unsaved changes to this workspace's settings. Closing now will discard them.
+          </AlertDialogDescription>
+          <AlertDialogFooter className="mt-6 -mx-0 -mb-0 flex justify-end gap-2 rounded-none border-t-0 bg-transparent p-0">
+            <AlertDialogCancel className="rounded-lg px-4 py-2 text-body text-muted transition-colors hover:text-foreground">
+              Keep editing
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => onOpenChange(false)}
+              className="rounded-lg bg-error px-4 py-2 text-body font-medium text-white transition-colors hover:opacity-90"
+            >
+              Discard
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </Dialog>
   )
 }

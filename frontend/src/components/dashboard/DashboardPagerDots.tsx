@@ -1,3 +1,4 @@
+import { Button } from '@/components/ui/button'
 interface DashboardPagerDotsProps {
   page: number
   pageCount: number
@@ -14,11 +15,12 @@ export function DashboardPagerDots({ page, pageCount, onChange }: DashboardPager
   return (
     <>
       {Array.from({ length: pageCount }, (_, i) => (
-        <button
+        <Button
           key={i}
           onClick={() => onChange(i)}
           aria-label={`Go to page ${i + 1}`}
           aria-current={i === page}
+          variant="icon"
           className="group flex h-11 w-11 items-center justify-center rounded outline-none focus-visible:ring-1 focus-visible:ring-brand-primary"
         >
           <span
@@ -26,7 +28,7 @@ export function DashboardPagerDots({ page, pageCount, onChange }: DashboardPager
               i === page ? 'w-4 bg-brand-primary' : 'w-1.5 bg-hover group-hover:bg-border'
             }`}
           />
-        </button>
+        </Button>
       ))}
     </>
   )

@@ -1,5 +1,7 @@
 'use client'
 
+import { Button } from '@/components/ui/button'
+
 import { memo, useState } from 'react'
 import { type NodeProps } from '@xyflow/react'
 import { motion, type MotionStyle } from 'framer-motion'
@@ -109,39 +111,47 @@ function AgentNodeInner({ data: rawData }: NodeProps) {
         <div className="flex items-center gap-0.5 border-t border-border-subtle px-2 py-1.5">
           <AgentInfoPopover agent={agent} />
 
-          <button
+          <Button
             onClick={(e) => { e.stopPropagation(); setEditOpen(true) }}
             aria-label="Edit agent"
+            variant="ghost"
+            size="icon"
             className="rounded-md p-1.5 text-muted transition-colors hover:bg-hover hover:text-foreground"
           >
             <IconEdit size={13} />
-          </button>
+          </Button>
 
           {data.status === 'active' ? (
-            <button
+            <Button
               onClick={(e) => { e.stopPropagation(); data.onDeactivate(data.id) }}
               aria-label="Deactivate agent"
+              variant="ghost"
+              size="icon"
               className="rounded-md p-1.5 text-muted transition-colors hover:bg-error/10 hover:text-error"
             >
               <IconDeactivate size={13} />
-            </button>
+            </Button>
           ) : (
-            <button
+            <Button
               onClick={(e) => { e.stopPropagation(); data.onReactivate(data.id) }}
               aria-label="Reactivate agent"
+              variant="ghost"
+              size="icon"
               className="rounded-md p-1.5 text-muted transition-colors hover:bg-success/10 hover:text-success"
             >
               <IconActivate size={13} />
-            </button>
+            </Button>
           )}
 
-          <button
+          <Button
             onClick={(e) => { e.stopPropagation(); setDeleteOpen(true) }}
             aria-label="Delete agent"
+            variant="ghost"
+            size="icon"
             className="ml-auto rounded-md p-1.5 text-muted transition-colors hover:bg-error/10 hover:text-error"
           >
             <IconDelete size={13} />
-          </button>
+          </Button>
         </div>
 
         {/* TODO: add ReactFlow Handles (source + target, all sides) in the same commit as edge connections */}

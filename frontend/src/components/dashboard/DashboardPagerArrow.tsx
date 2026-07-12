@@ -1,3 +1,4 @@
+import { Button } from '@/components/ui/button'
 import { IconChevronLeft, IconChevronRight } from '@/lib/icons'
 
 interface DashboardPagerArrowProps {
@@ -15,13 +16,14 @@ export function DashboardPagerArrow({ direction, disabled, onClick }: DashboardP
   const Icon = direction === 'prev' ? IconChevronLeft : IconChevronRight
 
   return (
-    <button
+    <Button
       onClick={onClick}
       disabled={disabled}
       aria-label={direction === 'prev' ? 'Previous page' : 'Next page'}
+      variant="icon"
       className="flex h-11 w-11 items-center justify-center rounded text-muted outline-none transition-colors hover:text-foreground focus-visible:ring-1 focus-visible:ring-brand-primary disabled:pointer-events-none disabled:opacity-30"
     >
       <Icon size={14} />
-    </button>
+    </Button>
   )
 }

@@ -1,6 +1,7 @@
 'use client'
 
-import { Plus } from 'lucide-react'
+import { IconAdd } from '@/lib/icons'
+import { Button } from '@/components/ui/button'
 import Link from 'next/link'
 import { useParams, usePathname } from 'next/navigation'
 import { useState } from 'react'
@@ -67,13 +68,10 @@ export function WorkspaceSidebarSection({ orgId }: WorkspaceSidebarSectionProps)
             )
           })}
           <li>
-            <button
-              onClick={() => setDialogOpen(true)}
-              className="flex w-full items-center gap-1.5 rounded-md px-2 py-1.5 text-body text-muted transition-colors hover:bg-elevated hover:text-foreground"
-            >
-              <Plus size={13} className="shrink-0" />
+            <Button type="button" variant="ghost" size="sm" onClick={() => setDialogOpen(true)} className="w-full justify-start text-body">
+              <IconAdd data-icon="inline-start" />
               New workspace
-            </button>
+            </Button>
           </li>
         </ul>
       </div>

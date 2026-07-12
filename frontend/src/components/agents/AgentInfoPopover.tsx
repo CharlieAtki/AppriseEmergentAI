@@ -1,6 +1,8 @@
 'use client'
 
-import * as Popover from '@radix-ui/react-popover'
+import { Button } from '@/components/ui/button'
+
+import { Popover, PopoverTrigger, PopoverContent, PopoverArrow } from '@/components/ui/popover'
 import { useState, useEffect, useRef } from 'react'
 import { format } from 'date-fns'
 import { Badge } from '@/components/ui/Badge'
@@ -40,24 +42,27 @@ export function AgentInfoPopover({ agent }: AgentInfoPopoverProps) {
   const createdAt = format(new Date(agent.created_at), 'dd MMM yyyy, HH:mm')
 
   return (
-    <Popover.Root open={open} onOpenChange={setOpen}>
-      <Popover.Trigger asChild>
-        <button
-          aria-label="Agent info"
-          className="rounded-md p-1.5 text-muted transition-colors hover:bg-hover hover:text-foreground"
-        >
-          <IconInfo size={13} />
-        </button>
-      </Popover.Trigger>
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger
+        render={
+          <Button
+            aria-label="Agent info"
+            variant="ghost"
+            size="icon"
+            className="rounded-md p-1.5 text-muted transition-colors hover:bg-hover hover:text-foreground"
+          />
+        }
+      >
+        <IconInfo size={13} />
+      </PopoverTrigger>
 
-      <Popover.Portal>
-        <Popover.Content
-          ref={contentRef}
-          side="top"
-          align="end"
-          sideOffset={6}
-          className="popover-content z-50 w-64 rounded-xl border border-border bg-elevated p-4 shadow-xl"
-        >
+      <PopoverContent
+        ref={contentRef}
+        side="top"
+        align="end"
+        sideOffset={6}
+        className="popover-content z-50 w-64 rounded-xl border border-border bg-elevated p-4 shadow-xl"
+      >
           <p className="mb-3 text-label font-semibold uppercase tracking-architectural text-muted">
             Agent details
           </p>
@@ -69,16 +74,18 @@ export function AgentInfoPopover({ agent }: AgentInfoPopoverProps) {
                 <span className="flex-1 truncate font-mono text-code text-secondary">
                   {agent.id}
                 </span>
-                <button
+                <Button
                   onClick={copyId}
                   aria-label="Copy agent ID"
+                  variant="ghost"
+                  size="icon"
                   className="shrink-0 text-muted transition-colors hover:text-foreground"
                 >
                   {copied
                     ? <IconCheck size={12} className="text-success" />
                     : <IconCopy size={12} />
                   }
-                </button>
+                </Button>
               </dd>
             </div>
 
@@ -109,9 +116,8 @@ export function AgentInfoPopover({ agent }: AgentInfoPopoverProps) {
             </div>
           </dl>
 
-          <Popover.Arrow className="fill-border" />
-        </Popover.Content>
-      </Popover.Portal>
-    </Popover.Root>
+        <PopoverArrow />
+      </PopoverContent>
+    </Popover>
   )
 }

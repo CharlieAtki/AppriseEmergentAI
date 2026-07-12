@@ -1,5 +1,7 @@
 'use client'
 
+import { Input } from '@/components/ui/input'
+
 import '@xyflow/react/dist/style.css'
 
 import { useState, useMemo, useCallback } from 'react'
@@ -58,6 +60,7 @@ interface AgentGraphProps {
 export function AgentGraph({ workspaceId }: AgentGraphProps) {
   const [spawnOpen, setSpawnOpen] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
+  const headerControlClass = 'w-44 shrink-0 rounded-lg border border-border bg-surface/60 px-2.5 py-1 backdrop-blur-sm'
 
   const { data: agentsResponse } = useListAgentsWorkspacesWorkspaceIdAgentsGet(workspaceId)
   const agents = agentsResponse ?? []
@@ -136,8 +139,8 @@ export function AgentGraph({ workspaceId }: AgentGraphProps) {
               </div>
             )}
 
-            <div className="absolute left-4 top-4 z-10 flex items-center gap-3">
-              <div className="pointer-events-none flex items-center gap-3 rounded-lg border border-border bg-surface/60 px-3 py-1.5 backdrop-blur-sm">
+            <div className="absolute left-4 top-4 z-10 flex items-center gap-2.5">
+              <div className={`pointer-events-none flex items-center justify-between gap-3 ${headerControlClass}`}>
                 <span className="flex items-center gap-1.5 text-label font-medium text-success">
                   <span className="h-1.5 w-1.5 rounded-full bg-current" />
                   Active
@@ -149,14 +152,14 @@ export function AgentGraph({ workspaceId }: AgentGraphProps) {
                 </span>
               </div>
 
-              <div className="flex items-center gap-2 rounded-lg border border-border bg-surface/60 px-3 py-1.5 backdrop-blur-sm">
-                <IconSearch size={14} className="text-muted" />
-                <input
+              <div className={`relative flex items-center ${headerControlClass}`}>
+                <IconSearch size={14} className="pointer-events-none absolute left-3 text-muted" />
+                <Input
                   type="text"
                   placeholder="Search agents…"
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  className="w-32 bg-transparent text-label text-foreground placeholder:text-muted focus:outline-none"
+                  className="w-full border-0 bg-transparent pl-7 text-caption text-foreground shadow-none placeholder:text-muted focus-visible:border-0 focus-visible:ring-0"
                 />
               </div>
             </div>

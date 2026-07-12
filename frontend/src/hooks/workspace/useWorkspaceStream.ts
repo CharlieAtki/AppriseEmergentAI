@@ -11,7 +11,7 @@ import {
 import { AgentResponse, WorkspaceMetricsResponse } from '@/api/generated/model'
 import { getListTasksWorkspacesWorkspaceIdTasksGetQueryKey } from '@/api/generated/tasks/tasks'
 import { getGetWorkspaceMetricsWorkspacesWorkspaceIdMetricsGetQueryKey } from '@/api/generated/workspaces/workspaces'
-import { useToastStore } from '@/stores/toast'
+import { toast } from 'sonner'
 import { useWorkspaceStore } from '@/stores/workspace'
 
 const TaskCompletedEvent = z.object({
@@ -149,8 +149,7 @@ export function useWorkspaceStream(workspaceId: string): { connected: boolean } 
           // (nothing to invalidate against) and not Zustand (CLAUDE.md: never put
           // API/WebSocket data in a Zustand store). A persistent history view would
           // be a proper REST-backed query resource, not this.
-          useToastStore.getState().toast({
-            title: 'Emergence detected',
+          toast('Emergence detected', {
             description: `Hub agent detected (gini ${e.gini_coefficient.toFixed(2)})`,
           })
           break

@@ -1,8 +1,10 @@
 'use client'
 
+import { Button } from '@/components/ui/button'
+
 import Link from 'next/link'
 import { motion } from 'framer-motion'
-import { Pencil, Trash2 } from 'lucide-react'
+import { IconEdit, IconDelete } from '@/lib/icons'
 import { useState } from 'react'
 import { formatDistanceToNow } from 'date-fns'
 import type { WorkspaceResponse } from '@/api/generated/model'
@@ -37,20 +39,20 @@ export function WorkspaceCard({ workspace, orgId, view }: WorkspaceCardProps) {
   const actions = (
     <div className="flex items-center gap-0.5">
       <WorkspaceInfoPopover workspace={workspace} />
-      <button
+      <Button
         onClick={() => setEditOpen(true)}
         aria-label="Edit workspace"
         className="rounded-md p-1.5 text-muted transition-colors hover:bg-hover hover:text-foreground"
       >
-        <Pencil size={14} />
-      </button>
-      <button
+        <IconEdit size={14} />
+      </Button>
+      <Button
         onClick={() => setDeleteOpen(true)}
         aria-label="Delete workspace"
         className="rounded-md p-1.5 text-error transition-colors hover:bg-error/10"
       >
-        <Trash2 size={14} />
-      </button>
+        <IconDelete size={14} />
+      </Button>
     </div>
   )
 
@@ -94,20 +96,20 @@ export function WorkspaceCard({ workspace, orgId, view }: WorkspaceCardProps) {
             <Badge status={workspace.status} />
             <div className="flex items-center gap-0.5">
               <WorkspaceInfoPopover workspace={workspace} />
-              <button
+              <Button
                 onClick={() => setEditOpen(true)}
                 aria-label="Edit workspace"
                 className="rounded-md p-1.5 text-muted transition-colors hover:bg-hover hover:text-foreground"
               >
-                <Pencil size={14} />
-              </button>
-              <button
+                <IconEdit size={14} />
+              </Button>
+              <Button
                 onClick={() => setDeleteOpen(true)}
                 aria-label="Delete workspace"
                 className="rounded-md p-1.5 text-error transition-colors hover:bg-error/10"
               >
-                <Trash2 size={14} />
-              </button>
+                <IconDelete size={14} />
+              </Button>
             </div>
           </div>
         </motion.div>

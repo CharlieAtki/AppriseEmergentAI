@@ -1,37 +1,36 @@
-'use client'
-
-import type { EmergenceSignalConfig } from '../EmergenceSignalPanelBody'
-
-interface EmergenceSignalConfigFormProps {
-  config: EmergenceSignalConfig
-  onChange: (config: EmergenceSignalConfig) => void
+"use client";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Field, FieldContent, FieldLabel } from "@/components/ui/field";
+import type { EmergenceSignalConfig } from "../EmergenceSignalPanelBody";
+import { ConfigSection } from "./ConfigSection";
+import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+interface Props {
+  config: EmergenceSignalConfig;
+  onChange: (config: EmergenceSignalConfig) => void;
 }
-
-export function EmergenceSignalConfigForm({ config, onChange }: EmergenceSignalConfigFormProps) {
+export function EmergenceSignalConfigForm({ config, onChange }: Props) {
   return (
     <div className="flex flex-col gap-3">
-      <div>
-        <label className="text-caption font-semibold uppercase tracking-architectural text-muted">Time range</label>
-        <select
-          value={config.timeRange ?? '24h'}
-          onChange={(e) => onChange({ ...config, timeRange: e.target.value as '24h' | '7d' | '30d' | '90d' })}
-          className="mt-1 w-full rounded-md border border-border bg-elevated px-2 py-1.5 text-body text-foreground"
-        >
-          <option value="24h">24 hours</option>
-          <option value="7d">7 days</option>
-          <option value="30d">30 days</option>
-          <option value="90d">90 days</option>
-        </select>
-      </div>
-
-      <label className="flex items-center gap-2 text-caption text-secondary">
-        <input
-          type="checkbox"
+      <ConfigSection label="Time range">
+        <Select value={config.timeRange ?? "24h"} onValueChange={(value) => onChange({ ...config, timeRange: value as "24h" | "7d" | "30d" | "90d" })}><SelectTrigger className="mt-1 w-full"><SelectValue /></SelectTrigger><SelectContent><SelectGroup><SelectItem value="24h">24 hours</SelectItem><SelectItem value="7d">7 days</SelectItem><SelectItem value="30d">30 days</SelectItem><SelectItem value="90d">90 days</SelectItem></SelectGroup></SelectContent></Select>
+      </ConfigSection>
+      <Field
+        orientation="horizontal"
+        className="gap-2 text-caption text-secondary"
+      >
+        <Checkbox
+          id="emergence-signal-show-hub-markers"
           checked={config.showHubMarkers ?? true}
-          onChange={(e) => onChange({ ...config, showHubMarkers: e.target.checked })}
+          onCheckedChange={(checked) =>
+            onChange({ ...config, showHubMarkers: checked })
+          }
         />
-        Show hub-detection markers
-      </label>
+        <FieldContent>
+          <FieldLabel htmlFor="emergence-signal-show-hub-markers">
+            Show hub-detection markers
+          </FieldLabel>
+        </FieldContent>
+      </Field>
     </div>
-  )
+  );
 }

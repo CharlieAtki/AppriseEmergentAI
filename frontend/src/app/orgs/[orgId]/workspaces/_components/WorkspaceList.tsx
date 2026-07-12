@@ -1,7 +1,9 @@
 'use client'
 
 import { useState } from 'react'
-import { LayoutGrid, List, Search } from 'lucide-react'
+import { Input } from '@/components/ui/input'
+import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
+import { IconGridView, IconListView, IconSearch } from '@/lib/icons'
 import { useParams } from 'next/navigation'
 import { useListWorkspacesWorkspacesGet } from '@/api/generated/workspaces/workspaces'
 import { WorkspaceGrid } from '@/components/workspaces/WorkspaceGrid'
@@ -39,8 +41,8 @@ export function WorkspaceList() {
       {/* Toolbar */}
       <div className="flex items-center gap-3">
         <div className="relative w-64">
-          <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted pointer-events-none" />
-          <input
+          <IconSearch size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted pointer-events-none" />
+          <Input
             type="search"
             placeholder="Search workspaces..."
             value={query}
@@ -48,8 +50,8 @@ export function WorkspaceList() {
             className="w-full rounded-lg border border-border bg-elevated py-2 pl-9 pr-3 text-body text-foreground placeholder:text-muted focus:border-brand-primary focus:outline-none focus:ring-1 focus:ring-brand-primary"
           />
         </div>
-        <div className="flex items-center gap-1 rounded-lg border border-border bg-elevated p-1">
-          <button
+        <ToggleGroup value={[view]} onValueChange={(values) => values[0] && setView(values[0] as View)} spacing={1}>
+          <ToggleGroupItem
             aria-label="Grid view"
             aria-pressed={view === 'grid'}
             onClick={() => setView('grid')}
@@ -57,9 +59,9 @@ export function WorkspaceList() {
               view === 'grid' ? 'bg-hover text-foreground' : 'text-muted hover:text-foreground'
             }`}
           >
-            <LayoutGrid size={15} />
-          </button>
-          <button
+            <IconGridView size={15} />
+          </ToggleGroupItem>
+          <ToggleGroupItem
             aria-label="List view"
             aria-pressed={view === 'list'}
             onClick={() => setView('list')}
@@ -67,9 +69,9 @@ export function WorkspaceList() {
               view === 'list' ? 'bg-hover text-foreground' : 'text-muted hover:text-foreground'
             }`}
           >
-            <List size={15} />
-          </button>
-        </div>
+            <IconListView size={15} />
+          </ToggleGroupItem>
+        </ToggleGroup>
       </div>
 
       {/* Content */}

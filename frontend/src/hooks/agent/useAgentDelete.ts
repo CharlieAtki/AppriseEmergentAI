@@ -5,7 +5,7 @@ import {
   getListAgentsWorkspacesWorkspaceIdAgentsGetQueryKey,
 } from '@/api/generated/agents/agents'
 import type { AgentResponse } from '@/api/generated/model'
-import { useToastStore } from '@/stores/toast'
+import { toast } from 'sonner'
 import { clearAgentDeletePending, markAgentDeletePending } from './pendingAgentDeletes'
 
 export const DELETE_UNDO_DURATION_MS = 5000
@@ -18,7 +18,6 @@ function insertAt<T>(list: T[], item: T, index: number): T[] {
 
 export function useAgentDelete(workspaceId: string) {
   const queryClient = useQueryClient()
-  const { toast, dismiss } = useToastStore()
   const { mutateAsync } = useDeleteAgentWorkspacesWorkspaceIdAgentsAgentIdDelete()
 
   const deleteAgent = useCallback(
@@ -45,30 +44,31 @@ export function useAgentDelete(workspaceId: string) {
           queryClient.setQueryData<AgentResponse[]>(queryKey, (current) =>
             current ? insertAt(current, agent, originalIndex) : snapshot
           )
-          toast({ title: 'Failed to delete agent', description: agent.name, variant: 'error' })
+          toast.error('Failed to delete agent', { description: agent.name })
         } finally {
           clearAgentDeletePending(workspaceId)
-          dismiss(toastId)
+          toast.dismiss(toastId)
         }
       }, DELETE_UNDO_DURATION_MS)
 
-      toast({
+      toast.success('Agent deleted', {
         id: toastId,
-        title: 'Agent deleted',
         description: agent.name,
-        variant: 'success',
         duration: DELETE_UNDO_DURATION_MS,
-        undoAction: () => {
-          clearTimeout(timeoutId)
-          clearAgentDeletePending(workspaceId)
-          queryClient.setQueryData<AgentResponse[]>(queryKey, (current) =>
-            current ? insertAt(current, agent, originalIndex) : snapshot
-          )
-          dismiss(toastId)
+        action: {
+          label: 'Undo',
+          onClick: () => {
+            clearTimeout(timeoutId)
+            clearAgentDeletePending(workspaceId)
+            queryClient.setQueryData<AgentResponse[]>(queryKey, (current) =>
+              current ? insertAt(current, agent, originalIndex) : snapshot
+            )
+            toast.dismiss(toastId)
+          },
         },
       })
     },
-    [queryClient, mutateAsync, toast, dismiss, workspaceId]
+    [queryClient, mutateAsync, workspaceId]
   )
 
   return { deleteAgent }

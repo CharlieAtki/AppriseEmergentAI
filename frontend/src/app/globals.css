@@ -1,18 +1,24 @@
 @import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
+/* ---break---              */
+@custom-variant dark (&:is(.dark *));
 
 /* ─── Tier 1: Primitive palette ─────────────────────────────────────────────
    Raw values only. Components never reference these directly.              */
 :root {
   /* Brand — forest green scale (RGB source values preserved as reference)
      900: rgb(27 49 38) | 800: rgb(25 65 50) | 600: rgb(74 106 79) | 400: rgb(128 161 118) */
-  --brand-forest-50:  oklch(96% 0.02 155);
+  --brand-forest-50: oklch(96% 0.02 155);
   --brand-forest-400: oklch(67.3% 0.072 138.5);
   --brand-forest-600: oklch(49.1% 0.057 148.8);
   --brand-forest-800: oklch(34.2% 0.053 166.1);
-  --brand-forest-850: oklch(33.7% 0.067 169.0); /* logo deep green — #004231, higher chroma than 800 */
+  --brand-forest-850: oklch(
+    33.7% 0.067 169
+  ); /* logo deep green — #004231, higher chroma than 800 */
   --brand-forest-900: oklch(29.1% 0.035 161.4);
   --brand-purple-500: oklch(70% 0.15 280);
-  --brand-amber-500:  oklch(72% 0.18 45);
+  --brand-amber-500: oklch(72% 0.18 45);
 
   /* Neutrals — 900/800 lifted so cards sit above the new gradient background */
   --neutral-950: #0a0a0f;
@@ -25,88 +31,103 @@
   /* Status */
   --status-success: oklch(68% 0.18 145);
   --status-warning: oklch(75% 0.18 70);
-  --status-error:   oklch(62% 0.22 25);
-  --status-info:    oklch(68% 0.16 230);
+  --status-error: oklch(62% 0.22 25);
+  --status-info: oklch(68% 0.16 230);
 
   /* Chart categorical series — distinct from the Agent Accent Rotation
      (agentColour.ts), which is agent identity, not chart data. Reuses
      brand/accent/highlight/info hues for visual cohesion, plus one new
      hue (rose) to reach 5 without inventing an unrelated palette. */
   --chart-rose: oklch(65% 0.19 340);
+
+  /* shadcn/Base UI radius scale — genuinely new, no prior radius token
+     existed. Everything else shadcn's init wrote here (background,
+     primary, chart-1..5, sidebar-*, etc) was a generic greyscale theme
+     that duplicated this project's own Tier 1/2 system; deleted below
+     and re-pointed at the real tokens in the Tier 3 @theme inline block
+     instead, per this file's own "update Tier 1/2 and nothing else
+     changes" contract. */
+  --radius: 0.625rem;
 }
 
 /* ─── Tier 1a: Background scene primitives ──────────────────────────────────
    Raw gradient stops + sidebar surface. Components never reference these.  */
 :root {
-  --bg-page-base:   oklch(18% 0.008 160);       /* neutral dark base — whole page */
-  --bg-glow-corner: oklch(17% 0.090 152);       /* green glow source — top-left corner */
-  --bg-sidebar:     oklch(13% 0.055 152 / 88%); /* semi-transparent green — gradient shows through */
-  --glow-shadow:    oklch(20% 0.10 150);        /* shared glow source — body gradient + hover shadows */
+  --bg-page-base: oklch(18% 0.008 160); /* neutral dark base — whole page */
+  --bg-glow-corner: oklch(
+    17% 0.09 152
+  ); /* green glow source — top-left corner */
+  --bg-sidebar: oklch(
+    13% 0.055 152 / 88%
+  ); /* semi-transparent green — gradient shows through */
+  --glow-shadow: oklch(
+    20% 0.1 150
+  ); /* shared glow source — body gradient + hover shadows */
 }
 
 /* ─── Tier 1b: Type scale primitives ────────────────────────────────────────
    Raw size values only. Semantic step names live in Tier 2.               */
 :root {
-  --size-display: 2.25rem;   /* 36px */
-  --size-heading: 1.5rem;    /* 24px */
-  --size-title:   1rem;      /* 16px */
-  --size-body:    0.875rem;  /* 14px */
-  --size-label:   0.75rem;   /* 12px */
+  --size-display: 2.25rem; /* 36px */
+  --size-heading: 1.5rem; /* 24px */
+  --size-title: 1rem; /* 16px */
+  --size-body: 0.875rem; /* 14px */
+  --size-label: 0.75rem; /* 12px */
   --size-caption: 0.6875rem; /* 11px */
-  --size-code:    0.8125rem; /* 13px */
+  --size-code: 0.8125rem; /* 13px */
 }
 
 /* ─── Tier 2: Semantic tokens ────────────────────────────────────────────────
    These are what components reference. When the brand pack lands,
    update the right-hand values here and nothing else changes.             */
 :root {
-  --color-bg-base:        var(--neutral-950);
-  --color-bg-surface:     var(--neutral-900);
-  --color-bg-elevated:    var(--neutral-800);
-  --color-bg-hover:       var(--neutral-700);
+  --color-bg-base: var(--neutral-950);
+  --color-bg-surface: var(--neutral-900);
+  --color-bg-elevated: var(--neutral-800);
+  --color-bg-hover: var(--neutral-700);
 
-  --color-text-primary:   var(--neutral-100);
+  --color-text-primary: var(--neutral-100);
   --color-text-secondary: var(--neutral-200);
-  --color-text-muted:     oklch(55% 0.02 250);
+  --color-text-muted: oklch(55% 0.02 250);
 
-  --border-default:       var(--neutral-700);
-  --border-subtle:        var(--neutral-800);
+  --border-default: var(--neutral-700);
+  --border-subtle: var(--neutral-800);
 
-  --color-brand:          var(--brand-forest-600);
-  --color-brand-hover:    var(--brand-forest-800);
-  --color-accent:         var(--brand-purple-500);
-  --color-highlight:      var(--brand-amber-500);
+  --color-brand: var(--brand-forest-600);
+  --color-brand-hover: var(--brand-forest-800);
+  --brand-accent: var(--brand-purple-500);
+  --color-highlight: var(--brand-amber-500);
 
   --color-status-success: var(--status-success);
   --color-status-warning: var(--status-warning);
-  --color-status-error:   var(--status-error);
-  --color-status-info:    var(--status-info);
+  --color-status-error: var(--status-error);
+  --color-status-info: var(--status-info);
 
-  --color-bg-sidebar:     var(--bg-sidebar);
+  --color-bg-sidebar: var(--bg-sidebar);
 }
 
 /* ─── Tier 3: Tailwind theme mapping ─────────────────────────────────────────
    Maps semantic tokens → Tailwind utilities.
    bg-surface, text-muted, border-border, text-brand-primary, etc.        */
 @theme inline {
-  --color-background:      var(--color-bg-base);
-  --color-surface:         var(--color-bg-surface);
-  --color-elevated:        var(--color-bg-elevated);
-  --color-hover:           var(--color-bg-hover);
-  --color-foreground:      var(--color-text-primary);
-  --color-secondary:       var(--color-text-secondary);
-  --color-muted:           var(--color-text-muted);
-  --color-border:          var(--border-default);
-  --color-border-subtle:   var(--border-subtle);
-  --color-brand-primary:   var(--color-brand);
-  --color-brand-hover:     var(--color-brand-hover);
-  --color-brand-accent:    var(--color-accent);
+  --color-background: var(--color-bg-base);
+  --color-surface: var(--color-bg-surface);
+  --color-elevated: var(--color-bg-elevated);
+  --color-hover: var(--color-bg-hover);
+  --color-foreground: var(--color-text-primary);
+  --color-secondary: var(--color-text-secondary);
+  --color-muted: var(--color-text-muted);
+  --color-border: var(--border-default);
+  --color-border-subtle: var(--border-subtle);
+  --color-brand-primary: var(--color-brand);
+  --color-brand-hover: var(--color-brand-hover);
+  --color-brand-accent: var(--brand-accent);
   --color-brand-highlight: var(--color-highlight);
-  --color-success:         var(--color-status-success);
-  --color-warning:         var(--color-status-warning);
-  --color-error:           var(--color-status-error);
-  --color-info:            var(--color-status-info);
-  --color-sidebar:         var(--color-bg-sidebar);
+  --color-success: var(--color-status-success);
+  --color-warning: var(--color-status-warning);
+  --color-error: var(--color-status-error);
+  --color-info: var(--color-status-info);
+  --color-sidebar: var(--color-bg-sidebar);
   --font-sans: var(--font-manrope);
   --font-display: var(--font-space-grotesk);
   --font-mono: var(--font-jetbrains);
@@ -129,29 +150,81 @@
 
   /* Architectural tracking — uppercase labels at 0.08em */
   --tracking-architectural: 0.08em;
+
+  /* shadcn semantic vars — re-pointed at this file's own Tier 1/2 tokens
+     rather than shadcn init's generic greyscale defaults. No new color
+     decisions: card/popover/secondary reuse the existing bg-surface/
+     bg-elevated scale, primary/ring reuse the brand token, and
+     chart-1..5 reuse chartColors.ts's existing 5-color categorical
+     palette (brand/accent/highlight/info/rose) so shadcn's chart theming
+     lands on the same colors instead of inventing a new palette. */
+  --color-card: var(--color-bg-surface);
+  --color-card-foreground: var(--color-text-primary);
+  --color-popover: var(--color-bg-elevated);
+  --color-popover-foreground: var(--color-text-primary);
+  --color-primary: var(--color-brand);
+  --color-primary-foreground: var(--color-bg-base);
+  --color-accent: var(--color-bg-hover);
+  --color-accent-foreground: var(--color-text-primary);
+  --color-muted-foreground: var(--color-text-muted);
+  --color-destructive: var(--color-status-error);
+  --color-destructive-foreground: var(--color-bg-base);
+  --color-input: var(--border-default);
+  --color-ring: var(--color-brand);
+  --color-chart-1: var(--color-brand);
+  --color-chart-2: var(--color-brand-accent);
+  --color-chart-3: var(--color-highlight);
+  --color-chart-4: var(--color-info);
+  --color-chart-5: var(--chart-rose);
+  --color-sidebar-foreground: var(--color-text-primary);
+  --color-sidebar-primary: var(--color-brand);
+  --color-sidebar-primary-foreground: var(--color-bg-base);
+  --color-sidebar-accent: var(--color-bg-hover);
+  --color-sidebar-accent-foreground: var(--color-text-primary);
+  --color-sidebar-border: var(--border-default);
+  --color-sidebar-ring: var(--color-brand);
+
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) * 1.4);
+  --radius-2xl: calc(var(--radius) * 1.8);
+  --radius-3xl: calc(var(--radius) * 2.2);
+  --radius-4xl: calc(var(--radius) * 2.6);
 }
 
 body {
   background-color: var(--bg-page-base);
-  background-image: radial-gradient(
-    ellipse 85% 85% at 0% 0%,
-    var(--glow-shadow) 0%,
-    oklch(20% 0.10 150 / 0%) 100%
-  );
+  background-image:
+    radial-gradient(
+      ellipse 88% 88% at 0% 0%,
+      color-mix(in oklch, var(--glow-shadow) 82%, transparent) 0%,
+      oklch(20% 0.1 150 / 0%) 52%
+    ),
+    linear-gradient(
+      90deg,
+      color-mix(in oklch, var(--bg-sidebar) 72%, transparent) 0%,
+      oklch(18% 0.008 160 / 0%) 28%
+    );
   background-attachment: fixed;
   color: var(--color-text-primary);
   isolation: isolate;
 }
 
-h1, h2, h3, h4, h5, h6 {
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
   font-family: var(--font-space-grotesk);
 }
 
 body::before {
-  content: '';
+  content: "";
   position: fixed;
   inset: 0;
-  background-image: url('/crack-pattern.svg');
+  background-image: url("/crack-pattern.svg");
   background-size: 200px 200px;
   background-repeat: repeat;
   background-attachment: fixed;
@@ -163,10 +236,10 @@ body::before {
 /* ─── Tier 1c: Motion primitives ────────────────────────────────────────────
    CSS transitions only — Framer Motion uses src/lib/motion.ts instead.   */
 :root {
-  --duration-fast:   100ms;
-  --duration-base:   150ms;
-  --duration-slow:   250ms;
-  --ease-standard:   cubic-bezier(0.4, 0, 0.2, 1);
+  --duration-fast: 100ms;
+  --duration-base: 150ms;
+  --duration-slow: 250ms;
+  --ease-standard: cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 /* ─── Spacing conventions (raw Tailwind — no tokens until density mode needed)
@@ -184,10 +257,10 @@ body::before {
 }
 
 .bg-sidebar::before {
-  content: '';
+  content: "";
   position: absolute;
   inset: 0;
-  background-image: url('/crack-pattern.svg');
+  background-image: url("/crack-pattern.svg");
   background-size: 200px 200px;
   background-repeat: repeat;
   opacity: 0.09;
@@ -197,50 +270,16 @@ body::before {
 
 /* ─── Workspace card hover glow ─────────────────────────────────────────── */
 .workspace-card {
-  transition: box-shadow var(--duration-slow) var(--ease-standard),
-              border-color var(--duration-slow) var(--ease-standard);
+  transition:
+    box-shadow var(--duration-slow) var(--ease-standard),
+    border-color var(--duration-slow) var(--ease-standard);
 }
 
 .workspace-card:hover {
-  box-shadow: 0 0 0 1px var(--color-brand), 0 8px 24px oklch(from var(--glow-shadow) l c h / 0.4);
+  box-shadow:
+    0 0 0 1px var(--color-brand),
+    0 8px 24px oklch(from var(--glow-shadow) l c h / 0.4);
   border-color: var(--color-brand);
-}
-
-
-/* ─── Dialog & Popover animations ───────────────────────────────────────── */
-/* Radix watches for animationend on Overlay/Content before unmounting.     */
-
-@keyframes dialog-overlay-in  { from { opacity: 0 }           to { opacity: 1 } }
-@keyframes dialog-overlay-out { from { opacity: 1 }           to { opacity: 0 } }
-@keyframes dialog-content-in  { from { opacity: 0; scale: 0.96 } to { opacity: 1; scale: 1 } }
-@keyframes dialog-content-out { from { opacity: 1; scale: 1 }    to { opacity: 0; scale: 0.96 } }
-@keyframes popover-in  { from { opacity: 0; scale: 0.95; translate: 0 4px } to { opacity: 1; scale: 1; translate: 0 0 } }
-@keyframes popover-out { from { opacity: 1; scale: 1;    translate: 0 0 }    to { opacity: 0; scale: 0.95; translate: 0 4px } }
-
-.dialog-overlay[data-state="open"]   { animation: dialog-overlay-in  150ms ease; }
-.dialog-overlay[data-state="closed"] { animation: dialog-overlay-out 150ms ease; }
-
-.dialog-content[data-state="open"]   { animation: dialog-content-in  200ms cubic-bezier(0.16, 1, 0.3, 1); }
-.dialog-content[data-state="closed"] { animation: dialog-content-out 150ms ease; }
-
-.popover-content[data-state="open"]   { animation: popover-in  150ms cubic-bezier(0.16, 1, 0.3, 1); }
-.popover-content[data-state="closed"] { animation: popover-out 100ms ease; }
-
-/* ─── Radix Collapsible animations ──────────────────────────────────────── */
-@keyframes collapsible-down {
-  from { height: 0 }
-  to   { height: var(--radix-collapsible-content-height) }
-}
-@keyframes collapsible-up {
-  from { height: var(--radix-collapsible-content-height) }
-  to   { height: 0 }
-}
-
-.animate-collapsible-down {
-  animation: collapsible-down 150ms ease-out;
-}
-.animate-collapsible-up {
-  animation: collapsible-up 150ms ease-out;
 }
 
 /* ─── ReactFlow theme overrides ─────────────────────────────────────────────
@@ -278,18 +317,25 @@ body::before {
    outright, the same fix in spirit as the ReactFlow block's nesting trick. */
 
 .dashboard-panel {
-  transition: box-shadow var(--duration-slow) var(--ease-standard),
-              border-color var(--duration-slow) var(--ease-standard);
+  transition:
+    box-shadow var(--duration-slow) var(--ease-standard),
+    border-color var(--duration-slow) var(--ease-standard);
 }
 
 .dashboard-panel:hover {
-  box-shadow: 0 0 0 1px var(--color-brand), 0 8px 24px oklch(from var(--glow-shadow) l c h / 0.4);
+  box-shadow:
+    0 0 0 1px var(--color-brand),
+    0 8px 24px oklch(from var(--glow-shadow) l c h / 0.4);
   border-color: var(--color-brand);
 }
 
-.dashboard-grid-canvas .react-grid-item.react-draggable-dragging .dashboard-panel,
+.dashboard-grid-canvas
+  .react-grid-item.react-draggable-dragging
+  .dashboard-panel,
 .dashboard-grid-canvas .react-grid-item.resizing .dashboard-panel {
-  box-shadow: 0 0 0 1px var(--color-brand), 0 8px 24px oklch(from var(--glow-shadow) l c h / 0.4);
+  box-shadow:
+    0 0 0 1px var(--color-brand),
+    0 8px 24px oklch(from var(--glow-shadow) l c h / 0.4);
   border-color: var(--color-brand);
 }
 
@@ -310,7 +356,9 @@ body::before {
   border-bottom: 2px solid var(--color-text-muted);
   border-radius: 0 0 2px 0;
   opacity: 0;
-  transition: opacity var(--duration-fast) var(--ease-standard), border-color var(--duration-fast) var(--ease-standard);
+  transition:
+    opacity var(--duration-fast) var(--ease-standard),
+    border-color var(--duration-fast) var(--ease-standard);
 }
 
 .react-grid-item:hover .dashboard-resize-handle {
@@ -332,11 +380,31 @@ body::before {
 
 /* ─── Agent node hover glow ─────────────────────────────────────────────── */
 .agent-node {
-  transition: box-shadow var(--duration-slow) var(--ease-standard),
-              border-color var(--duration-slow) var(--ease-standard);
+  transition:
+    box-shadow var(--duration-slow) var(--ease-standard),
+    border-color var(--duration-slow) var(--ease-standard);
 }
 
 .agent-node:hover {
-  box-shadow: 0 0 0 1px var(--agent-accent, var(--color-brand)), 0 8px 24px oklch(from var(--glow-shadow) l c h / 0.4);
+  box-shadow:
+    0 0 0 1px var(--agent-accent, var(--color-brand)),
+    0 8px 24px oklch(from var(--glow-shadow) l c h / 0.4);
   border-color: var(--agent-accent, var(--color-brand));
+}
+
+/* No .dark override block: this app has a single fixed dark theme (no
+   next-themes/ThemeProvider, no .dark class ever applied), so shadcn's
+   generated light/dark pair would be dead code — omitted rather than
+   left unused. */
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+  html {
+    @apply font-sans;
+  }
 }

@@ -1,9 +1,11 @@
 'use client'
 
-import * as Dialog from '@radix-ui/react-dialog'
-import * as Form from '@radix-ui/react-form'
-import * as Select from '@radix-ui/react-select'
-import { ChevronDown, Check, X } from 'lucide-react'
+import { Button } from '@/components/ui/button'
+
+import { Dialog, DialogContent, DialogTitle, DialogDescription } from '@/components/ui/dialog'
+import { Field, FieldLabel, FieldError } from '@/components/ui/field'
+import { Input } from '@/components/ui/input'
+import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select'
 import { useEffect, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import {
@@ -13,7 +15,7 @@ import {
 } from '@/api/generated/workspaces/workspaces'
 import { WorkspaceStatus } from '@/api/generated/model'
 import type { WorkspaceResponse } from '@/api/generated/model'
-import { useToastStore } from '@/stores/toast'
+import { toast } from 'sonner'
 
 interface EditWorkspaceDialogProps {
   workspace: WorkspaceResponse
@@ -21,11 +23,17 @@ interface EditWorkspaceDialogProps {
   onOpenChange: (open: boolean) => void
 }
 
+const STATUS_ITEMS = WorkspaceStatus.options.map((s) => ({
+  label: s.charAt(0).toUpperCase() + s.slice(1),
+  value: s,
+}))
+
 export function EditWorkspaceDialog({ workspace, open, onOpenChange }: EditWorkspaceDialogProps) {
   const [name, setName] = useState(workspace.name)
   const [status, setStatus] = useState<WorkspaceStatus>(workspace.status)
+  const [submitted, setSubmitted] = useState(false)
   const queryClient = useQueryClient()
-  const { toast } = useToastStore()
+  const nameMissing = submitted && name.trim().length === 0
 
   // Sync local state from the (potentially cache-refreshed) workspace prop each time the dialog opens.
   useEffect(() => {
@@ -45,117 +53,85 @@ export function EditWorkspaceDialog({ workspace, open, onOpenChange }: EditWorks
         onOpenChange(false)
       },
       onError: () => {
-        toast({ title: 'Failed to update workspace', description: workspace.name, variant: 'error' })
+        toast.error('Failed to update workspace', { description: workspace.name })
       },
     },
   })
 
   return (
-    <Dialog.Root open={open} onOpenChange={onOpenChange}>
-      <Dialog.Portal>
-        <Dialog.Overlay className="dialog-overlay fixed inset-0 bg-background/60 backdrop-blur-sm" />
-        <Dialog.Content className="dialog-content fixed left-1/2 top-1/2 w-full max-w-md -translate-x-1/2 -translate-y-1/2 rounded-xl border border-border bg-surface p-6 shadow-xl focus:outline-none">
-          <Dialog.Title className="text-title font-semibold text-foreground">
-            Edit workspace
-          </Dialog.Title>
-          <Dialog.Description className="mt-1 text-body text-muted">
-            Update the workspace name or status.
-          </Dialog.Description>
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="fixed left-1/2 top-1/2 w-full max-w-md -translate-x-1/2 -translate-y-1/2 rounded-xl border border-border bg-surface p-6 shadow-xl focus:outline-none">
+        <DialogTitle className="text-title font-semibold text-foreground">
+          Edit workspace
+        </DialogTitle>
+        <DialogDescription className="mt-1 text-body text-muted">
+          Update the workspace name or status.
+        </DialogDescription>
 
-          <Form.Root
-            className="mt-5 space-y-4"
-            onSubmit={(e) => {
-              e.preventDefault()
-              mutate({ workspaceId: workspace.id, data: { name: name.trim(), status } })
-            }}
-          >
-            <Form.Field name="name" className="space-y-1.5">
-              <Form.Label className="text-label font-medium text-secondary">Name</Form.Label>
-              <Form.Control asChild>
-                <input
-                  autoFocus
-                  type="text"
-                  required
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  className="w-full rounded-lg border border-border bg-elevated px-3 py-2 text-body text-foreground placeholder:text-muted focus:border-brand-primary focus:outline-none focus:ring-1 focus:ring-brand-primary"
-                />
-              </Form.Control>
-              <Form.Message match="valueMissing" className="text-caption text-error">
-                Name is required.
-              </Form.Message>
-            </Form.Field>
+        <form
+          className="mt-5 space-y-4"
+          onSubmit={(e) => {
+            e.preventDefault()
+            setSubmitted(true)
+            if (name.trim().length === 0) return
+            mutate({ workspaceId: workspace.id, data: { name: name.trim(), status } })
+          }}
+        >
+          <Field data-invalid={nameMissing || undefined}>
+            <FieldLabel htmlFor="edit-workspace-name" className="text-label font-medium text-secondary">
+              Name
+            </FieldLabel>
+            <Input
+              id="edit-workspace-name"
+              autoFocus
+              type="text"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              aria-invalid={nameMissing}
+              className="rounded-lg border-border bg-elevated px-3 py-2 text-body text-foreground placeholder:text-muted focus-visible:border-brand-primary focus-visible:ring-brand-primary"
+            />
+            {nameMissing && <FieldError>Name is required.</FieldError>}
+          </Field>
 
-            <Form.Field name="status" className="space-y-1.5">
-              <Form.Label className="text-label font-medium text-secondary">Status</Form.Label>
-              {/* Hidden input so Radix Form sees the value — Select.Root manages visual state */}
-              <input type="hidden" name="status" value={status} />
-              <Select.Root
-                value={status}
-                onValueChange={(v) => setStatus(v as WorkspaceStatus)}
+          <Field>
+            <FieldLabel htmlFor="edit-workspace-status" className="text-label font-medium text-secondary">
+              Status
+            </FieldLabel>
+            <Select items={STATUS_ITEMS} value={status} onValueChange={(v) => setStatus(v as WorkspaceStatus)}>
+              <SelectTrigger
+                id="edit-workspace-status"
+                className="w-full justify-between rounded-lg border-border bg-elevated px-3 py-2 text-body text-foreground hover:border-brand-primary focus-visible:border-brand-primary focus-visible:ring-brand-primary"
               >
-                <Select.Trigger className="flex w-full items-center justify-between rounded-lg border border-border bg-elevated px-3 py-2 text-body text-foreground transition-colors hover:border-brand-primary focus:border-brand-primary focus:outline-none focus:ring-1 focus:ring-brand-primary data-[placeholder]:text-muted">
-                  <Select.Value />
-                  <Select.Icon>
-                    <ChevronDown size={14} className="text-muted" />
-                  </Select.Icon>
-                </Select.Trigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent className="w-(--anchor-width) rounded-lg border-border bg-elevated shadow-xl">
+                {STATUS_ITEMS.map((item) => (
+                  <SelectItem key={item.value} value={item.value} className="text-body">
+                    {item.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </Field>
 
-                <Select.Portal>
-                  <Select.Content
-                    position="popper"
-                    sideOffset={4}
-                    className="z-50 w-[var(--radix-select-trigger-width)] overflow-hidden rounded-lg border border-border bg-elevated shadow-xl"
-                  >
-                    <Select.Viewport className="p-1">
-                      {WorkspaceStatus.options.map((s) => (
-                        <Select.Item
-                          key={s}
-                          value={s}
-                          className="flex cursor-pointer items-center justify-between rounded-md px-3 py-1.5 text-body text-foreground outline-none transition-colors hover:bg-hover data-[highlighted]:bg-hover data-[state=checked]:text-brand-primary"
-                        >
-                          <Select.ItemText>{s.charAt(0).toUpperCase() + s.slice(1)}</Select.ItemText>
-                          <Select.ItemIndicator>
-                            <Check size={13} className="text-brand-primary" />
-                          </Select.ItemIndicator>
-                        </Select.Item>
-                      ))}
-                    </Select.Viewport>
-                  </Select.Content>
-                </Select.Portal>
-              </Select.Root>
-            </Form.Field>
-
-            <div className="flex justify-end gap-2 pt-1">
-              <Dialog.Close asChild>
-                <button
-                  type="button"
-                  className="rounded-lg px-4 py-2 text-body text-muted transition-colors hover:text-foreground"
-                >
-                  Cancel
-                </button>
-              </Dialog.Close>
-              <Form.Submit asChild>
-                <button
-                  disabled={isPending}
-                  className="rounded-lg bg-brand-primary px-4 py-2 text-body font-medium text-background transition-colors hover:bg-brand-hover disabled:opacity-50"
-                >
-                  {isPending ? 'Saving…' : 'Save'}
-                </button>
-              </Form.Submit>
-            </div>
-          </Form.Root>
-
-          <Dialog.Close asChild>
-            <button
-              className="absolute right-4 top-4 text-muted transition-colors hover:text-foreground"
-              aria-label="Close"
+          <div className="flex justify-end gap-2 pt-1">
+            <Button
+              type="button"
+              onClick={() => onOpenChange(false)}
+              className="rounded-lg px-4 py-2 text-body text-muted transition-colors hover:text-foreground"
             >
-              <X size={16} />
-            </button>
-          </Dialog.Close>
-        </Dialog.Content>
-      </Dialog.Portal>
-    </Dialog.Root>
+              Cancel
+            </Button>
+            <Button
+              type="submit"
+              disabled={isPending}
+              className="rounded-lg bg-brand-primary px-4 py-2 text-body font-medium text-background transition-colors hover:bg-brand-hover disabled:opacity-50"
+            >
+              {isPending ? 'Saving…' : 'Save'}
+            </Button>
+          </div>
+        </form>
+      </DialogContent>
+    </Dialog>
   )
 }

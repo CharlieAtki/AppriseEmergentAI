@@ -1,17 +1,19 @@
 'use client'
 
-import * as Tooltip from '@radix-ui/react-tooltip'
+import { Tooltip, TooltipProvider, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
+import { Button } from '@/components/ui/button'
+import { Sidebar, SidebarContent, SidebarFooter, SidebarGroup, SidebarGroupContent, SidebarGroupLabel, SidebarHeader, SidebarMenu, SidebarMenuButton, SidebarMenuItem } from '@/components/ui/sidebar'
 import { OrganizationSwitcher, useClerk, useOrganization, useUser } from '@clerk/nextjs'
 import {
-  Activity,
-  BarChart2,
-  BookOpen,
-  CheckSquare,
-  LayoutDashboard,
-  LogOut,
-  ScrollText,
-  Settings,
-} from 'lucide-react'
+  IconActivity,
+  IconAnalytics,
+  IconDocs,
+  IconTasks,
+  IconDashboard,
+  IconLogout,
+  IconLogs,
+  IconSettings,
+} from '@/lib/icons'
 import Link from 'next/link'
 import { useParams, usePathname } from 'next/navigation'
 import { useState } from 'react'
@@ -26,12 +28,12 @@ interface NavItem {
 }
 
 const PLATFORM_NAV: NavItem[] = [
-  { label: 'Overview', Icon: LayoutDashboard, segment: null },
-  { label: 'Agents',   Icon: Activity,        segment: 'agents' },
-  { label: 'Tasks',    Icon: CheckSquare,     segment: 'tasks' },
-  { label: 'Skills',   Icon: BookOpen,        segment: 'skills',   disabled: true },
-  { label: 'Runs',     Icon: BarChart2,       segment: 'runs',     disabled: true },
-  { label: 'Logs',     Icon: ScrollText,      segment: 'logs',     disabled: true },
+  { label: 'Overview', Icon: IconDashboard, segment: null },
+  { label: 'Agents',   Icon: IconActivity,  segment: 'agents' },
+  { label: 'Tasks',    Icon: IconTasks,     segment: 'tasks' },
+  { label: 'Skills',   Icon: IconDocs,      segment: 'skills',   disabled: true },
+  { label: 'Runs',     Icon: IconAnalytics, segment: 'runs',     disabled: true },
+  { label: 'Logs',     Icon: IconLogs,      segment: 'logs',     disabled: true },
 ]
 
 function UserStrip() {
@@ -55,13 +57,9 @@ function UserStrip() {
         <p className="truncate text-body font-medium leading-tight text-foreground">{displayName}</p>
         <p className="text-caption leading-tight text-muted">{roleLabel}</p>
       </div>
-      <button
-        onClick={() => void signOut()}
-        aria-label="Sign out"
-        className="shrink-0 rounded-md p-1 text-muted transition-colors hover:bg-error/10 hover:text-error"
-      >
-        <LogOut size={14} />
-      </button>
+      <Button type="button" variant="ghost" size="icon-xs" onClick={() => void signOut()} aria-label="Sign out" className="shrink-0 hover:bg-error/10 hover:text-error">
+        <IconLogout data-icon="inline-start" />
+      </Button>
     </div>
   )
 }
@@ -85,8 +83,9 @@ export function AppSidebar({ orgId }: AppSidebarProps) {
   }
 
   return (
-    <Tooltip.Provider delayDuration={300}>
-      <aside className="flex w-56 shrink-0 flex-col border-r border-border bg-sidebar">
+    <TooltipProvider delay={300}>
+      <Sidebar collapsible="offcanvas" className="border-r border-border">
+        <SidebarHeader className="p-0">
         {/* Org switcher — no bottom border, tighter appearance */}
         <div className="flex items-center gap-1.5 px-3 py-3">
           <div className="min-w-0 flex-1">
@@ -104,41 +103,34 @@ export function AppSidebar({ orgId }: AppSidebarProps) {
               }}
             />
           </div>
-          <Tooltip.Root>
-            <Tooltip.Trigger asChild>
-              <button
-                onClick={() => setOrgSettingsOpen(true)}
-                aria-label="Organisation settings"
-                className="shrink-0 rounded-md p-2 text-muted transition-colors hover:bg-elevated hover:text-foreground"
-              >
-                <Settings size={16} />
-              </button>
-            </Tooltip.Trigger>
-            <Tooltip.Portal>
-              <Tooltip.Content
-                side="bottom"
-                sideOffset={8}
-                className="rounded bg-elevated px-2 py-1 text-caption text-muted shadow-md"
-              >
-                Organisation settings
-                <Tooltip.Arrow className="fill-elevated" />
-              </Tooltip.Content>
-            </Tooltip.Portal>
-          </Tooltip.Root>
+          <Tooltip>
+            <TooltipTrigger
+              render={
+                <Button type="button" variant="ghost" size="icon-sm" onClick={() => setOrgSettingsOpen(true)} aria-label="Organisation settings" className="shrink-0" />
+              }
+            >
+              <IconSettings data-icon="inline-start" />
+            </TooltipTrigger>
+            <TooltipContent side="bottom" sideOffset={8}>
+              Organisation settings
+            </TooltipContent>
+          </Tooltip>
         </div>
+
+        </SidebarHeader>
 
         <OrgSettingsModal orgId={orgId} open={orgSettingsOpen} onOpenChange={setOrgSettingsOpen} />
 
-        <nav className="flex-1 overflow-y-auto px-2 py-2 space-y-4">
+        <SidebarContent className="px-2 py-2">
+        <nav className="flex flex-col gap-4">
           {/* Workspaces */}
           <WorkspaceSidebarSection orgId={orgId} />
 
           {/* Platform */}
-          <div>
-            <p className="mb-1 px-2 text-label font-semibold uppercase tracking-architectural text-muted">
-              Platform
-            </p>
-            <ul className="space-y-0.5">
+          <SidebarGroup>
+            <SidebarGroupLabel>Platform</SidebarGroupLabel>
+            <SidebarGroupContent>
+              <SidebarMenu>
               {PLATFORM_NAV.map(({ label, Icon, segment, disabled }) => {
                 const active = !disabled && isActive(segment)
                 const href = base
@@ -165,43 +157,38 @@ export function AppSidebar({ orgId }: AppSidebarProps) {
 
                 if (!href || disabled) {
                   return (
-                    <li key={label}>
-                      <Tooltip.Root>
-                        <Tooltip.Trigger asChild>
-                          <span className={cls}>{inner}</span>
-                        </Tooltip.Trigger>
-                        <Tooltip.Portal>
-                          <Tooltip.Content
-                            side="right"
-                            sideOffset={8}
-                            className="rounded bg-elevated px-2 py-1 text-caption text-muted shadow-md"
-                          >
-                            {disabled ? 'Coming soon' : 'Select a workspace'}
-                            <Tooltip.Arrow className="fill-elevated" />
-                          </Tooltip.Content>
-                        </Tooltip.Portal>
-                      </Tooltip.Root>
-                    </li>
+                    <SidebarMenuItem key={label}>
+                      <Tooltip>
+                        <TooltipTrigger render={<span className={cls} />}>
+                          {inner}
+                        </TooltipTrigger>
+                        <TooltipContent side="right" sideOffset={8}>
+                          {disabled ? 'Coming soon' : 'Select a workspace'}
+                        </TooltipContent>
+                      </Tooltip>
+                    </SidebarMenuItem>
                   )
                 }
 
                 return (
-                  <li key={label}>
-                    <Link href={href} className={cls}>
+                  <SidebarMenuItem key={label}>
+                    <SidebarMenuButton render={<Link href={href} />} isActive={active} className={cls}>
                       {inner}
-                    </Link>
-                  </li>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
                 )
               })}
-            </ul>
-          </div>
+            </SidebarMenu>
+            </SidebarGroupContent>
+          </SidebarGroup>
         </nav>
+        </SidebarContent>
 
         {/* User strip */}
-        <div className="border-t border-border px-3 py-3">
+        <SidebarFooter className="border-t border-border px-3 py-3">
           <UserStrip />
-        </div>
-      </aside>
-    </Tooltip.Provider>
+        </SidebarFooter>
+      </Sidebar>
+    </TooltipProvider>
   )
 }

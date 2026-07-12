@@ -5,7 +5,7 @@ import {
   getListWorkspacesWorkspacesGetQueryKey,
 } from '@/api/generated/workspaces/workspaces'
 import type { WorkspaceResponse } from '@/api/generated/model'
-import { useToastStore } from '@/stores/toast'
+import { toast } from 'sonner'
 
 export const DELETE_UNDO_DURATION_MS = 5000
 
@@ -17,7 +17,6 @@ function insertAt<T>(list: T[], item: T, index: number): T[] {
 
 export function useWorkspaceDelete() {
   const queryClient = useQueryClient()
-  const { toast, dismiss } = useToastStore()
   const { mutateAsync } = useDeleteWorkspaceWorkspacesWorkspaceIdDelete()
 
   const deleteWorkspace = useCallback(
@@ -42,28 +41,29 @@ export function useWorkspaceDelete() {
           queryClient.setQueryData<WorkspaceResponse[]>(queryKey, (current) =>
             current ? insertAt(current, workspace, originalIndex) : snapshot
           )
-          toast({ title: 'Failed to delete workspace', description: workspace.name, variant: 'error' })
+          toast.error('Failed to delete workspace', { description: workspace.name })
         } finally {
-          dismiss(toastId)
+          toast.dismiss(toastId)
         }
       }, DELETE_UNDO_DURATION_MS)
 
-      toast({
+      toast.success('Workspace deleted', {
         id: toastId,
-        title: 'Workspace deleted',
         description: workspace.name,
-        variant: 'success',
         duration: DELETE_UNDO_DURATION_MS,
-        undoAction: () => {
-          clearTimeout(timeoutId)
-          queryClient.setQueryData<WorkspaceResponse[]>(queryKey, (current) =>
-            current ? insertAt(current, workspace, originalIndex) : snapshot
-          )
-          dismiss(toastId)
+        action: {
+          label: 'Undo',
+          onClick: () => {
+            clearTimeout(timeoutId)
+            queryClient.setQueryData<WorkspaceResponse[]>(queryKey, (current) =>
+              current ? insertAt(current, workspace, originalIndex) : snapshot
+            )
+            toast.dismiss(toastId)
+          },
         },
       })
     },
-    [queryClient, mutateAsync, toast, dismiss]
+    [queryClient, mutateAsync]
   )
 
   return { deleteWorkspace }

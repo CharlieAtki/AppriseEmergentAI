@@ -1,5 +1,7 @@
 'use client'
 
+import { Button } from '@/components/ui/button'
+
 import { useCallback } from 'react'
 import type { Layout } from 'react-grid-layout'
 import { DashboardCanvas } from './DashboardCanvas'
@@ -73,7 +75,7 @@ export function DashboardGrid({ workspaceId }: DashboardGridProps) {
           <p className="mt-0.5 text-body text-muted">Build your own view into what the agent pool is doing.</p>
         </div>
         <div className="flex items-center gap-2">
-          <button
+          <Button
             onClick={toggleDevMode}
             aria-pressed={devModeEnabled}
             title="Preview panels with seeded mock data instead of real history"
@@ -85,7 +87,7 @@ export function DashboardGrid({ workspaceId }: DashboardGridProps) {
           >
             <IconActivity size={14} />
             Dev data
-          </button>
+          </Button>
           {!isEmpty && <AddPanelDialog />}
         </div>
       </header>

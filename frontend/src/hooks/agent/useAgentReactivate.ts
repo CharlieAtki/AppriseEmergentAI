@@ -5,13 +5,12 @@ import {
   getListAgentsWorkspacesWorkspaceIdAgentsGetQueryKey,
 } from '@/api/generated/agents/agents'
 import type { AgentResponse } from '@/api/generated/model'
-import { useAutoDismissToast } from '@/hooks/useAutoDismissToast'
+import { toast } from 'sonner'
 
 const REACTIVATE_TOAST_DURATION_MS = 4000
 
 export function useAgentReactivate(workspaceId: string) {
   const queryClient = useQueryClient()
-  const showToast = useAutoDismissToast()
 
   const { mutate, isPending } = useUpdateAgentWorkspacesWorkspaceIdAgentsAgentIdPatch({
     mutation: {
@@ -20,12 +19,7 @@ export function useAgentReactivate(workspaceId: string) {
         queryClient.setQueryData<AgentResponse[]>(queryKey, (old) =>
           old ? old.map((a) => a.id === response.id ? { ...a, status: response.status } : a) : old
         )
-        showToast({
-          title: 'Agent reactivated',
-          description: response.name,
-          variant: 'success',
-          duration: REACTIVATE_TOAST_DURATION_MS,
-        })
+        toast.success('Agent reactivated', { description: response.name, duration: REACTIVATE_TOAST_DURATION_MS })
       },
     },
   })

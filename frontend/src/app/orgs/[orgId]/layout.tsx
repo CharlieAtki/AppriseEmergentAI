@@ -3,6 +3,7 @@
 import { use } from 'react'
 import { AppSidebar } from '@/components/layout/AppSidebar'
 import { AppHeader } from '@/components/layout/AppHeader'
+import { SidebarInset, SidebarProvider } from '@/components/ui/sidebar'
 
 export default function OrgLayout({
   children,
@@ -14,12 +15,12 @@ export default function OrgLayout({
   const { orgId } = use(params)
 
   return (
-    <div className="flex min-h-screen">
+    <SidebarProvider defaultOpen>
       <AppSidebar orgId={orgId} />
-      <div className="flex flex-1 flex-col overflow-hidden">
+      <SidebarInset>
         <AppHeader orgId={orgId} />
         <main className="flex-1 overflow-auto">{children}</main>
-      </div>
-    </div>
+      </SidebarInset>
+    </SidebarProvider>
   )
 }

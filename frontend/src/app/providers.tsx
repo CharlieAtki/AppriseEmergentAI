@@ -3,10 +3,12 @@
 import { useAuth } from '@clerk/nextjs'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { ReactQueryDevtools } from '@tanstack/react-query-devtools'
+import { IconContext } from '@phosphor-icons/react'
 import { useEffect, useState } from 'react'
 
 import { setAuthTokenGetter } from '@/api/client'
-import { Toaster } from '@/components/ui/Toaster'
+import { ICON_WEIGHT } from '@/lib/iconConfig'
+import { Toaster } from '@/components/ui/sonner'
 
 function AxiosAuthSync() {
   const { getToken } = useAuth()
@@ -34,10 +36,12 @@ export function Providers({ children }: { children: React.ReactNode }) {
 
   return (
     <QueryClientProvider client={queryClient}>
-      <AxiosAuthSync />
-      {children}
-      <Toaster />
-      <ReactQueryDevtools initialIsOpen={false} />
+      <IconContext.Provider value={{ weight: ICON_WEIGHT }}>
+        <AxiosAuthSync />
+        {children}
+        <Toaster />
+        <ReactQueryDevtools initialIsOpen={false} />
+      </IconContext.Provider>
     </QueryClientProvider>
   )
 }
