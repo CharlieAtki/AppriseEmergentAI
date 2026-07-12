@@ -15,6 +15,7 @@ from core.repositories.api_key_repository import ApiKeyRepository
 from core.repositories.emergence_event_repository import EmergenceEventRepository
 from core.repositories.influence_snapshot_repository import InfluenceSnapshotRepository
 from core.repositories.org_repository import OrganisationRepository
+from core.repositories.personal_dashboard_repository import PersonalDashboardRepository
 from core.repositories.task_execution_repository import TaskExecutionRepository
 from core.repositories.task_repository import TaskRepository
 from core.repositories.tool_repository import ToolRepository
@@ -30,6 +31,7 @@ from api.services.api_key_service import ApiKeyService
 from api.services.bidding_config_service import BiddingConfigService
 from api.services.centrifugo_proxy_service import CentrifugoProxyService
 from api.services.coordination_config_service import CoordinationConfigService
+from api.services.personal_dashboard_service import PersonalDashboardService
 from api.services.task_service import TaskService
 from api.services.workspace_observability_service import WorkspaceObservabilityService
 from api.services.workspace_service import WorkspaceService
@@ -196,6 +198,32 @@ def require_organisation(permission: str = "write") -> Callable[..., Awaitable[O
 
 def get_user_repo(session: AsyncSession = Depends(get_db)) -> UserRepository:
     return UserRepository(session)
+
+
+def get_personal_dashboard_repo(
+    session: AsyncSession = Depends(get_db),
+) -> PersonalDashboardRepository:
+    return PersonalDashboardRepository(session)
+
+
+def get_personal_dashboard_service(
+    repo: PersonalDashboardRepository = Depends(get_personal_dashboard_repo),
+) -> PersonalDashboardService:
+    return PersonalDashboardService(repo)
+
+
+def require_user_session(request: Request) -> uuid.UUID:
+    """Returns the authenticated human user ID; API keys cannot own preferences."""
+    auth = request.state.auth
+    if getattr(auth, "auth_type", None) == "api_key":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Personal dashboards require a user session",
+        )
+    user_id = getattr(auth, "user_id", None)
+    if user_id is None:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Unauthorised")
+    return user_id
 
 
 def get_centrifugo_proxy_service(

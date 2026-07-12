@@ -8,8 +8,9 @@ import { type PointerEvent as ReactPointerEvent, type Ref, useMemo } from 'react
 import { AnimatePresence, motion, useDragControls, useReducedMotion } from 'framer-motion'
 import { DashboardPanel } from './DashboardPanel'
 import { useContainerSize } from '@/hooks/useContainerSize'
+import { pageSwipeSpring } from '@/lib/motion'
 import { COMPACT_BREAKPOINT, COMPACT_ROW_HEIGHT, GRID_COLS, GRID_MARGIN, GRID_ROWS, toCompactLayout } from '@/lib/dashboardGrid'
-import type { DashboardPanelInstance } from '@/stores/dashboardLayout'
+import type { DashboardPanelInstance } from '@/lib/personalDashboard'
 
 const RESIZE_HANDLES: ResizeHandleAxis[] = ['se']
 const SWIPE_THRESHOLD = 80
@@ -90,7 +91,7 @@ export function DashboardCanvas({
             initial="enter"
             animate="center"
             exit="exit"
-            transition={shouldReduceMotion ? { duration: 0 } : { type: 'spring', damping: 32, stiffness: 340 }}
+            transition={shouldReduceMotion ? { duration: 0 } : pageSwipeSpring}
             drag={shouldReduceMotion ? false : 'x'}
             dragControls={dragControls}
             dragListener={false}
@@ -124,11 +125,12 @@ export function DashboardCanvas({
                   if (!isCompact) onLayoutChange(layout)
                 }}
               >
-                {displayPanels.map((panel) => (
+                {displayPanels.map((panel, index) => (
                   <div key={panel.i}>
                     <DashboardPanel
                       workspaceId={workspaceId}
                       panel={panel}
+                      index={index}
                       onRemove={onRemovePanel}
                       onMove={onMovePanel}
                       onUpdateConfig={onUpdateConfig}

@@ -73,6 +73,8 @@ class AuthMiddleware(BaseHTTPMiddleware):
                     payload = await validate_api_key(api_key, redis, ApiKeyRepository(session))
             except Exception:
                 return JSONResponse({"error": "Unauthorised"}, status_code=401)
+            if payload is None:
+                return JSONResponse({"error": "Unauthorised"}, status_code=401)
             request.state.auth = payload
             return await call_next(request)
 
@@ -97,6 +99,8 @@ class AuthMiddleware(BaseHTTPMiddleware):
                         UserRepository(session),
                     )
             except Exception:
+                return JSONResponse({"error": "Unauthorised"}, status_code=401)
+            if payload is None:
                 return JSONResponse({"error": "Unauthorised"}, status_code=401)
             request.state.auth = payload
             return await call_next(request)

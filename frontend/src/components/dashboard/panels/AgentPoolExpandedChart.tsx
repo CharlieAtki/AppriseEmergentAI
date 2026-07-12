@@ -11,6 +11,7 @@ import {
   type ChartConfig,
 } from "@/components/ui/chart";
 import { getChartColor } from "@/lib/chartColors";
+import { panelExpandSpring } from "@/lib/motion";
 import { IconClose } from "@/lib/icons";
 import type {
   AgentResponse,
@@ -40,11 +41,7 @@ export const AgentPoolExpandedChart = forwardRef<HTMLButtonElement, Props>(
     return (
       <motion.div
         layoutId={`agent-pool-${panelId}-${agent.id}`}
-        transition={
-          shouldReduceMotion
-            ? { duration: 0 }
-            : { type: "spring", damping: 30, stiffness: 300 }
-        }
+        transition={shouldReduceMotion ? { duration: 0 } : panelExpandSpring}
         className="flex h-full flex-col gap-2 p-3"
       >
         <div className="flex shrink-0 items-center justify-between gap-2">

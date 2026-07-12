@@ -40,7 +40,7 @@ Every structural question resolves from this. If you are writing an LLM call ins
 - Serving, validating, or querying data for a customer → `api/`
 - Needed by multiple worker handlers but is worker-specific (calls `arq_queue`) → `worker/coordination/`
 
-### Intelligence layer — seven files, seven jobs
+### Intelligence layer
 
 | File | Single job |
 |---|---|
@@ -51,6 +51,10 @@ Every structural question resolves from this. If you are writing an LLM call ins
 | `call_types.py` | Enum of call types. No logic. |
 | `prompts/` | One file per call type. Returns a prompt string. No dispatch, no response parsing. |
 | `structured_call.py` | Calls the LLM for a call type via `LLMRouter`, parses the response, retries once on `ValidationError`. `call_and_parse` re-raises if the retry also fails; `run` falls back to a caller-provided default instead. No dispatch logic of its own, no prompt text. |
+| `context.py` | Frozen dataclasses (`AgentContext`, `TaskEvaluationContext`) describing the inputs a prompt reasons about. No logic. |
+| `signals.py` | Pure classification helpers (e.g. `classify_influence` → `InfluenceTier`) shared by prompts and non-LLM code (`sample_metrics.py`'s hub detection) so the same thresholds mean the same thing everywhere. |
+| `enrichment.py` | Task-enrichment pipeline: calls the LLM via `structured_call`, honours caller-supplied `EnrichmentOverrides` to skip fields already known. No prompt text, no dispatch of its own. |
+| `reflection/` | `types.py` — frozen `ReflectContext`/`PipelineResult` dataclasses built from ORM state before the session closes. `pipeline.py` — declarative `PipelineStage` entries (the reflection cascade), no LLM calls or execution logic of its own. |
 
 ---
 
@@ -507,7 +511,7 @@ Every `customInstance` call in the generated hooks passes the Zod schema as a th
 
 ### Icons
 
-Lucide React only. No other icon library. No inline SVGs for UI icons.
+Phosphor icons only (`@phosphor-icons/react`, `components.json`'s `iconLibrary: "phosphor"`). No other icon library, no inline SVGs for UI icons. All icons are re-exported through `frontend/src/lib/icons.ts` using an `Icon*` naming convention (e.g. `Robot as IconAgent`) — import from that barrel, not directly from the package. See ADR: shadcn/ui on Base UI primitives, Phosphor icons.
 
 ### Framer Motion
 

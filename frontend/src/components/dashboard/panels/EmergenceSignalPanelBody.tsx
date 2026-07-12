@@ -9,10 +9,12 @@ import {
   ChartTooltipContent,
   type ChartConfig,
 } from "@/components/ui/chart";
+import { Skeleton } from "@/components/ui/skeleton";
 import { mockEmergenceEvents } from "@/lib/devMockData";
+import { CHART_CATEGORICAL_COLORS } from "@/lib/chartColors";
 import { useTimeWindow } from "@/hooks/dashboard/useTimeWindow";
 import { useDashboardDevModeStore } from "@/stores/dashboardDevMode";
-import type { DashboardPanelInstance } from "@/stores/dashboardLayout";
+import type { DashboardPanelInstance } from "@/lib/personalDashboard";
 import { PanelEmptyState } from "./PanelEmptyState";
 
 export interface EmergenceSignalConfig {
@@ -26,7 +28,7 @@ const RANGE_HOURS: Record<
 const chartConfig = {
   gini_coefficient: {
     label: "Gini coefficient",
-    color: "var(--color-text-primary)",
+    color: CHART_CATEGORICAL_COLORS[0],
   },
 } satisfies ChartConfig;
 interface Props {
@@ -34,12 +36,21 @@ interface Props {
   panel: DashboardPanelInstance;
 }
 
+function ChartAreaSkeleton() {
+  return (
+    <div className="flex h-full flex-col gap-2 p-3" aria-hidden="true">
+      <Skeleton className="h-3 w-24 bg-elevated motion-reduce:animate-none" />
+      <Skeleton className="flex-1 bg-elevated motion-reduce:animate-none" />
+    </div>
+  );
+}
+
 export function EmergenceSignalPanelBody({ workspaceId, panel }: Props) {
   const config = panel.config as EmergenceSignalConfig;
   const timeRange = config.timeRange ?? "24h";
   const devMode = useDashboardDevModeStore((state) => state.enabled);
   const timeWindow = useTimeWindow(RANGE_HOURS[timeRange]);
-  const { data: fetchedEvents } =
+  const { data: fetchedEvents, isError: isEventsError } =
     useGetWorkspaceEmergenceWorkspacesWorkspaceIdEmergenceGet(
       workspaceId,
       { since: timeWindow?.since, limit: 200 },
@@ -70,6 +81,10 @@ export function EmergenceSignalPanelBody({ workspaceId, panel }: Props) {
         : [],
     [config.showHubMarkers, series],
   );
+  if (isEventsError) {
+    return <PanelEmptyState message="Couldn't load the emergence signal. Try again shortly." />;
+  }
+  if (events === undefined) return <ChartAreaSkeleton />;
   if (series.length < 2)
     return (
       <PanelEmptyState message="Not enough activity yet to chart the emergence signal." />

@@ -9,10 +9,8 @@ from __future__ import annotations
 
 from unittest.mock import AsyncMock, patch
 
-import pytest
 from api.services.auth_service import verify_clerk_session_token
 from clerk_backend_api.security.types import TokenVerificationError, TokenVerificationErrorReason
-from fastapi import HTTPException
 
 
 async def test_verify_clerk_session_token_returns_claims_on_success():
@@ -63,14 +61,13 @@ async def test_verify_clerk_session_token_does_not_flatten_non_v2_token():
     assert "org_id" not in claims
 
 
-async def test_verify_clerk_session_token_raises_http_401_on_invalid_token():
+async def test_verify_clerk_session_token_returns_none_on_invalid_token():
     with patch(
         "api.services.auth_service.verify_token_async",
         new=AsyncMock(
             side_effect=TokenVerificationError(TokenVerificationErrorReason.TOKEN_INVALID)
         ),
     ):
-        with pytest.raises(HTTPException) as exc_info:
-            await verify_clerk_session_token("bad", "sk")
+        claims = await verify_clerk_session_token("bad", "sk")
 
-    assert exc_info.value.status_code == 401
+    assert claims is None

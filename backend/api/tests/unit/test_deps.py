@@ -154,3 +154,25 @@ async def test_require_workspace_active_workspace_always_allowed():
         result = await dep(workspace_id, request, AsyncMock())
 
     assert result is ws
+
+
+async def test_require_user_session_rejects_api_keys():
+    from api.deps import require_user_session
+
+    request = MagicMock()
+    request.state.auth = MagicMock(auth_type="api_key", user_id=None)
+
+    with pytest.raises(HTTPException) as exc_info:
+        require_user_session(request)
+
+    assert exc_info.value.status_code == 403
+
+
+def test_require_user_session_returns_authenticated_user_id():
+    from api.deps import require_user_session
+
+    user_id = uuid.uuid4()
+    request = MagicMock()
+    request.state.auth = MagicMock(auth_type="user", user_id=user_id)
+
+    assert require_user_session(request) == user_id

@@ -20,7 +20,6 @@ from api.services.centrifugo_proxy_service import (
     SubscribeCommand,
 )
 from api.services.workspace_stream_service import WorkspaceStreamSnapshotData
-from fastapi import HTTPException
 
 
 def _make_service(workspace_active=True, snapshot=None):
@@ -61,14 +60,14 @@ async def test_authenticate_connect_returns_user_and_org_on_success():
 
 async def test_authenticate_connect_returns_none_on_invalid_token():
     """verify_clerk_session_token (auth_service.py) is the sole owner of Clerk
-    token verification — it converts a TokenVerificationError into an
-    HTTPException(401) internally, so this service only ever needs to catch
-    HTTPException, never a Clerk-SDK-specific exception type."""
+    token verification — it returns None on a TokenVerificationError internally,
+    so this service only ever needs a None check, never a Clerk-SDK-specific
+    exception type or HTTPException."""
     service, _, _ = _make_service()
 
     with patch(
         "api.services.centrifugo_proxy_service.verify_clerk_session_token",
-        new=AsyncMock(side_effect=HTTPException(status_code=401, detail="Unauthorised")),
+        new=AsyncMock(return_value=None),
     ):
         result = await service.authenticate_connect(
             ConnectCommand(clerk_token="bad", clerk_secret_key="sk")
@@ -78,9 +77,9 @@ async def test_authenticate_connect_returns_none_on_invalid_token():
 
 
 async def test_authenticate_connect_returns_none_when_clerk_token_valid_but_user_unknown():
-    """validate_clerk_token raises HTTPException(401) when org/user lookup misses —
-    the service must swallow that into None, never let it propagate (services
-    never raise HTTPException)."""
+    """validate_clerk_token returns None when org/user lookup misses — the
+    service must propagate that into its own None, never raise HTTPException
+    (services never raise HTTPException)."""
     service, _, _ = _make_service()
 
     with (
@@ -90,7 +89,7 @@ async def test_authenticate_connect_returns_none_when_clerk_token_valid_but_user
         ),
         patch(
             "api.services.centrifugo_proxy_service.validate_clerk_token",
-            new=AsyncMock(side_effect=HTTPException(status_code=401, detail="Unauthorised")),
+            new=AsyncMock(return_value=None),
         ),
     ):
         result = await service.authenticate_connect(

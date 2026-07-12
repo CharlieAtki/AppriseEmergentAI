@@ -11,6 +11,7 @@ from core.models.observability import (
     SkillSnapshot,
     WorkspaceMetricsSnapshot,
 )
+from core.models.personal_dashboard import UserWorkspaceDashboardLayout
 from core.models.tasks import Task, TaskExecution, WebhookDelivery
 from core.models.tenant import Organisation, OrganisationMember, User, Workspace
 from core.models.tools import Tool, WorkspaceTool
@@ -38,6 +39,7 @@ __all__ = [
     "TimestampMixin",
     "Tool",
     "User",
+    "UserWorkspaceDashboardLayout",
     "WebhookDelivery",
     "Workspace",
     "WorkspaceMetricsSnapshot",

@@ -8,7 +8,6 @@ from typing import TYPE_CHECKING, Any, Literal
 import bcrypt as _bcrypt
 from clerk_backend_api.security import VerifyTokenOptions, verify_token_async
 from clerk_backend_api.security.types import TokenVerificationError
-from fastapi import HTTPException, status
 from pydantic import BaseModel
 
 if TYPE_CHECKING:
@@ -39,7 +38,7 @@ async def validate_api_key(
     raw_key: str,
     redis: Redis,
     api_key_repo: ApiKeyRepository,
-) -> ApiKeyPayload:
+) -> ApiKeyPayload | None:
     sha = _sha256(raw_key)
     cache_key = f"apikey_valid:{sha}"
 
@@ -61,10 +60,10 @@ async def validate_api_key(
             break
 
     if record is None:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid API key")
+        return None
 
     if record.expires_at and record.expires_at < datetime.now(UTC):
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="API key expired")
+        return None
 
     payload = ApiKeyPayload(
         workspace_id=record.workspace_id,
@@ -79,7 +78,7 @@ async def validate_api_key(
     return payload
 
 
-async def verify_clerk_session_token(token: str, secret_key: str) -> dict[str, Any]:
+async def verify_clerk_session_token(token: str, secret_key: str) -> dict[str, Any] | None:
     """Verifies a bare Clerk session token string (no Request object available —
     used by the Centrifugo connect proxy, which only receives a JSON token, not
     an HTTP request/cookie). AuthMiddleware's bearer-token path goes through
@@ -92,10 +91,8 @@ async def verify_clerk_session_token(token: str, secret_key: str) -> dict[str, A
         claims: dict[str, Any] = await verify_token_async(
             token, VerifyTokenOptions(secret_key=secret_key)
         )
-    except TokenVerificationError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED, detail="Unauthorised"
-        ) from exc
+    except TokenVerificationError:
+        return None
 
     if claims.get("v") == 2 and "org_id" not in claims:
         org_claims = claims.get("o") or {}
@@ -108,16 +105,16 @@ async def validate_clerk_token(
     claims: dict[str, Any],
     org_repo: OrganisationRepository,
     user_repo: UserRepository,
-) -> UserPayload:
+) -> UserPayload | None:
     clerk_org_id: str = claims.get("org_id", "")
     clerk_user_id: str = claims.get("sub", "")
 
     org = await org_repo.get_by_external_id("clerk", clerk_org_id)
     if org is None:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Unauthorised")
+        return None
 
     user = await user_repo.get_by_external_id("clerk", clerk_user_id)
     if user is None:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Unauthorised")
+        return None
 
     return UserPayload(org_id=org.id, user_id=user.id)

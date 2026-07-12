@@ -1,14 +1,18 @@
 import { Button } from '@/components/ui/button'
 import { memo, type KeyboardEvent, useState } from 'react'
+import { motion, useReducedMotion } from 'framer-motion'
 import { Popover, PopoverTrigger, PopoverContent, PopoverArrow } from '@/components/ui/popover'
 import { getPanelDefinition } from '@/lib/dashboardPanels'
+import { cardEntrance } from '@/lib/motion'
 import { IconClose, IconDragHandle, IconSettings } from '@/lib/icons'
-import type { DashboardPanelInstance } from '@/stores/dashboardLayout'
+import type { DashboardPanelInstance } from '@/lib/personalDashboard'
 import { PanelEmptyState } from './panels/PanelEmptyState'
 
 interface DashboardPanelProps {
   workspaceId: string
   panel: DashboardPanelInstance
+  /** Position within the current page's panel list — staggers the mount entrance. */
+  index: number
   onRemove: (id: string) => void
   onMove: (id: string, dx: number, dy: number) => void
   onUpdateConfig: (id: string, config: Record<string, unknown>) => void
@@ -30,6 +34,7 @@ const ARROW_MOVES: Record<string, [number, number]> = {
 export const DashboardPanel = memo(function DashboardPanel({
   workspaceId,
   panel,
+  index,
   onRemove,
   onMove,
   onUpdateConfig,
@@ -40,6 +45,7 @@ export const DashboardPanel = memo(function DashboardPanel({
   const [settingsOpen, setSettingsOpen] = useState(false)
   const Body = definition.Body
   const ConfigForm = definition.ConfigForm
+  const shouldReduceMotion = useReducedMotion()
 
   // Keyboard-only path for repositioning, alongside pointer drag — required
   // per the design brief since the drag handle alone excludes keyboard users.
@@ -57,7 +63,13 @@ export const DashboardPanel = memo(function DashboardPanel({
   }
 
   return (
-    <div className="dashboard-panel group flex h-full flex-col overflow-hidden rounded-lg border border-border bg-surface">
+    <motion.div
+      className="dashboard-panel group flex h-full flex-col overflow-hidden rounded-lg border border-border bg-surface"
+      variants={cardEntrance}
+      custom={index}
+      initial={shouldReduceMotion ? 'visible' : 'hidden'}
+      animate="visible"
+    >
       <div
         className={`dashboard-panel-drag-handle flex items-center justify-between gap-2 border-b border-border px-3 py-2 outline-none focus-visible:ring-1 focus-visible:ring-brand-primary ${
           moveDisabled ? '' : 'cursor-grab active:cursor-grabbing'
@@ -121,6 +133,6 @@ export const DashboardPanel = memo(function DashboardPanel({
       <div className="flex flex-1 flex-col overflow-hidden">
         {Body ? <Body workspaceId={workspaceId} panel={panel} /> : <PanelEmptyState message="Coming soon." />}
       </div>
-    </div>
+    </motion.div>
   )
 })

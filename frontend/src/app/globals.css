@@ -197,9 +197,9 @@ body {
   background-color: var(--bg-page-base);
   background-image:
     radial-gradient(
-      ellipse 88% 88% at 0% 0%,
+      ellipse 108% 108% at 0% 0%,
       color-mix(in oklch, var(--glow-shadow) 82%, transparent) 0%,
-      oklch(20% 0.1 150 / 0%) 52%
+      oklch(20% 0.1 150 / 0%) 70%
     ),
     linear-gradient(
       90deg,
@@ -228,9 +228,58 @@ body::before {
   background-size: 200px 200px;
   background-repeat: repeat;
   background-attachment: fixed;
-  opacity: 0.06;
+  opacity: 0.09;
   pointer-events: none;
   z-index: -1;
+}
+
+.dashboard-panel-scrollbar {
+  scrollbar-color: color-mix(in srgb, var(--color-brand-primary) 55%, transparent)
+    color-mix(in srgb, var(--color-bg-elevated) 55%, transparent);
+  scrollbar-width: thin;
+}
+
+.dashboard-panel-scrollbar::-webkit-scrollbar {
+  width: 10px;
+}
+
+.dashboard-panel-scrollbar::-webkit-scrollbar-track {
+  background: color-mix(in srgb, var(--color-bg-elevated) 55%, transparent);
+}
+
+.dashboard-panel-scrollbar::-webkit-scrollbar-thumb {
+  background-color: color-mix(in srgb, var(--color-brand-primary) 55%, transparent);
+  border: 2px solid color-mix(in srgb, var(--color-bg-elevated) 70%, transparent);
+  border-radius: 9999px;
+}
+
+.dashboard-panel-scrollbar::-webkit-scrollbar-thumb:hover {
+  background-color: color-mix(in srgb, var(--color-brand-hover) 70%, transparent);
+}
+
+* {
+  scrollbar-color: color-mix(in srgb, var(--color-brand-primary) 55%, transparent)
+    color-mix(in srgb, var(--color-bg-elevated) 55%, transparent);
+  scrollbar-width: thin;
+}
+
+*::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+*::-webkit-scrollbar-track {
+  background: color-mix(in srgb, var(--color-bg-elevated) 55%, transparent);
+}
+
+*::-webkit-scrollbar-thumb {
+  background-color: color-mix(in srgb, var(--color-brand-primary) 55%, transparent);
+  border: 2px solid color-mix(in srgb, var(--color-bg-elevated) 70%, transparent);
+  border-radius: 9999px;
+}
+
+*::-webkit-scrollbar-thumb:hover {
+  background-color: color-mix(in srgb, var(--color-brand-hover) 70%, transparent);
 }
 
 /* ─── Tier 1c: Motion primitives ────────────────────────────────────────────
@@ -263,7 +312,7 @@ body::before {
   background-image: url("/crack-pattern.svg");
   background-size: 200px 200px;
   background-repeat: repeat;
-  opacity: 0.09;
+  opacity: 0.12;
   pointer-events: none;
   z-index: -1;
 }

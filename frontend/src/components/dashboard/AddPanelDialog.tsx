@@ -16,13 +16,16 @@ import {
   type DashboardPanelCategory,
 } from "@/lib/dashboardPanels";
 import { IconAdd } from "@/lib/icons";
-import { useDashboardLayoutStore } from "@/stores/dashboardLayout";
 import { usePagedIndex } from "@/hooks/dashboard/usePagedIndex";
 import { PanelFootprintPreview } from "./PanelFootprintPreview";
 import { DashboardPagerArrow } from "./DashboardPagerArrow";
 import { DashboardPagerDots } from "./DashboardPagerDots";
 
-export function AddPanelDialog() {
+interface AddPanelDialogProps {
+  onAddPanel: (panelType: string) => void;
+}
+
+export function AddPanelDialog({ onAddPanel }: AddPanelDialogProps) {
   const [open, setOpen] = useState(false);
   const {
     page: categoryIndex,
@@ -32,7 +35,6 @@ export function AddPanelDialog() {
     canGoPrev,
     canGoNext,
   } = usePagedIndex({ pageCount: DASHBOARD_PANEL_CATEGORIES.length });
-  const addPanel = useDashboardLayoutStore((state) => state.addPanel);
   const activeCategory: DashboardPanelCategory =
     DASHBOARD_PANEL_CATEGORIES[categoryIndex]!;
   const visibleDefinitions = DASHBOARD_PANEL_DEFINITIONS.filter(
@@ -40,7 +42,7 @@ export function AddPanelDialog() {
   );
 
   function handleAdd(type: string) {
-    addPanel(type);
+    onAddPanel(type);
     setOpen(false);
   }
 
@@ -94,7 +96,7 @@ export function AddPanelDialog() {
           <div className="mt-6 flex flex-row flex-wrap gap-4">
             {visibleDefinitions.map((definition) => {
               const Icon = definition.icon;
-              const sizeLabel = `${definition.defaultW} × ${definition.defaultH}`;
+              const sizeLabel = `${definition.defaultW} Ã— ${definition.defaultH}`;
               return (
                 <Button
                   key={definition.type}

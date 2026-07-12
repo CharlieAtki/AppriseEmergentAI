@@ -8,7 +8,7 @@ import { DashboardCanvas } from './DashboardCanvas'
 import { DashboardPagerArrow } from './DashboardPagerArrow'
 import { DashboardPagerDots } from './DashboardPagerDots'
 import { AddPanelDialog } from './AddPanelDialog'
-import { useDashboardLayoutStore } from '@/stores/dashboardLayout'
+import { usePersonalDashboard } from '@/hooks/dashboard/usePersonalDashboard'
 import { useDashboardDevModeStore } from '@/stores/dashboardDevMode'
 import { usePageDirection } from '@/hooks/dashboard/usePageDirection'
 import { GRID_COLS } from '@/lib/dashboardGrid'
@@ -22,13 +22,8 @@ interface DashboardGridProps {
 // canvas + pager + add-panel pieces. No grid math or animation logic lives
 // here — see DashboardCanvas for the grid and swipe transition.
 export function DashboardGrid({ workspaceId }: DashboardGridProps) {
-  const pages = useDashboardLayoutStore((state) => state.pages)
-  const activePage = useDashboardLayoutStore((state) => state.activePage)
-  const setActivePage = useDashboardLayoutStore((state) => state.setActivePage)
-  const setLayout = useDashboardLayoutStore((state) => state.setLayout)
-  const removePanel = useDashboardLayoutStore((state) => state.removePanel)
-  const movePanel = useDashboardLayoutStore((state) => state.movePanel)
-  const updatePanelConfig = useDashboardLayoutStore((state) => state.updatePanelConfig)
+  const { pages, activePage, setActivePage, setLayout, addPanel, removePanel, movePanel, updatePanelConfig } =
+    usePersonalDashboard(workspaceId)
   const devModeEnabled = useDashboardDevModeStore((state) => state.enabled)
   const toggleDevMode = useDashboardDevModeStore((state) => state.toggle)
 
@@ -88,7 +83,7 @@ export function DashboardGrid({ workspaceId }: DashboardGridProps) {
             <IconActivity size={14} />
             Dev data
           </Button>
-          {!isEmpty && <AddPanelDialog />}
+          {!isEmpty && <AddPanelDialog onAddPanel={addPanel} />}
         </div>
       </header>
 
@@ -102,7 +97,7 @@ export function DashboardGrid({ workspaceId }: DashboardGridProps) {
               <p className="text-title font-semibold text-foreground">No panels yet</p>
               <p className="mt-1 text-body text-muted">Add your first panel to start building this view.</p>
             </div>
-            <AddPanelDialog />
+            <AddPanelDialog onAddPanel={addPanel} />
           </div>
         ) : (
           <>

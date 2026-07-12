@@ -70,6 +70,19 @@ spacing:
   inline-md: "12px"
   component: "16px"
   section: "24px"
+motion:
+  duration-fast: "100ms"
+  duration-base: "150ms"
+  duration-slow: "250ms"
+  ease-standard: "cubic-bezier(0.4, 0, 0.2, 1)"
+  spring-panel-expand:
+    type: spring
+    damping: 30
+    stiffness: 300
+  spring-page-swipe:
+    type: spring
+    damping: 32
+    stiffness: 340
 components:
   button-primary:
     backgroundColor: "{colors.brand-forest-600}"
@@ -168,7 +181,28 @@ Apprise is flat by default and uses colored glow, not shadow darkness, to signal
 ### Named Rules
 **The Glow-Not-Shadow Rule.** Depth is never communicated by making a shadow darker or a surface lighter. It's communicated by a colored glow appearing where there wasn't one — the visual vocabulary of something lighting up, not something lifting off the page.
 
-## 5. Components
+## 5. Motion
+
+Motion is a signal of underlying state — skill bars filling, agent nodes entering, a panel's own data arriving — never decoration layered on top of static content. Two curves cover every case in the system; nothing else should be introduced without a reason tied to a specific state change.
+
+### Duration + Easing (`--duration-*`, `--ease-standard`)
+
+Plain CSS transitions on hover/focus states — button backgrounds, icon reveals, border color shifts — use one of three durations (`fast` 100ms, `base` 150ms, `slow` 250ms) with `ease-standard` (`cubic-bezier(0.4, 0, 0.2, 1)`). This is also the curve behind `cardEntrance` (`frontend/src/lib/motion.ts`), the staggered fade-and-rise-in used when a group of cards mounts together (dashboard panels, workspace list).
+
+### Springs (`panelExpandSpring`, `pageSwipeSpring`)
+
+Interactions that track a physical gesture or a shared-element layout change use a spring instead of a fixed duration, so the motion responds naturally to interruption:
+
+- **`panelExpandSpring`** (damping 30, stiffness 300) — every `layoutId` shared-element expand/collapse (Agent Pool sparkline↔chart, Live Task Feed row↔detail).
+- **`pageSwipeSpring`** (damping 32, stiffness 340) — the dashboard's page-swipe transition, slightly snappier since it's settling a drag gesture rather than a layout change.
+
+Both live as named exports in `frontend/src/lib/motion.ts` — never hand-copy `{ damping, stiffness }` inline.
+
+### Reduced Motion
+
+Every framer-motion element checks `useReducedMotion()` and collapses its transition to `{ duration: 0 }` (or skips straight to the `visible`/end state for variants). This is deliberately separate from the one global `prefers-reduced-motion` CSS media query, which only governs `react-grid-layout`'s own internal reflow transition — a library-owned animation with no framer-motion hook to attach to.
+
+## 6. Components
 
 ### Buttons
 - **Shape:** 8px radius (`rounded-md`) for primary/secondary actions; icon-only buttons in dense contexts (agent node action strip) use the same radius at smaller padding.

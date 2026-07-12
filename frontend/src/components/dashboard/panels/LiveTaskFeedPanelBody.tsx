@@ -6,15 +6,24 @@ import { formatDistanceToNow } from "date-fns";
 import { useListTasksWorkspacesWorkspaceIdTasksGet } from "@/api/generated/tasks/tasks";
 import { Badge } from "@/components/ui/Badge";
 import { Skeleton } from "@/components/ui/skeleton";
+import { panelExpandSpring } from "@/lib/motion";
 import { mockTaskFeed } from "@/lib/devMockData";
 import { useDashboardDevModeStore } from "@/stores/dashboardDevMode";
-import type { DashboardPanelInstance } from "@/stores/dashboardLayout";
+import type { DashboardPanelInstance } from "@/lib/personalDashboard";
 import { PanelEmptyState } from "./PanelEmptyState";
 import { TaskDetailExpanded } from "./TaskDetailExpanded";
 
 interface LiveTaskFeedPanelBodyProps {
   workspaceId: string;
   panel: DashboardPanelInstance;
+}
+
+export interface LiveTaskFeedConfig {
+  agentIds?: string[];
+  statuses?: string[];
+  taskTypes?: string[];
+  priorities?: string[];
+  maxVisible?: number;
 }
 
 // Recent-first, bounded — a feed, not a full task archive. useWorkspaceStream
@@ -33,6 +42,7 @@ function TaskRowSkeleton() {
 
 export function LiveTaskFeedPanelBody({ workspaceId, panel }: LiveTaskFeedPanelBodyProps) {
   const devMode = useDashboardDevModeStore((s) => s.enabled);
+  const config = panel.config as LiveTaskFeedConfig;
 
   // Date.now() is impure and must not be called during render (react-hooks/purity)
   // — computed in an effect, same pattern as useTimeWindow. Only needed for the
@@ -42,12 +52,18 @@ export function LiveTaskFeedPanelBody({ workspaceId, panel }: LiveTaskFeedPanelB
     setNowMs(Date.now());
   }, []);
 
-  const { data: fetchedTasks } = useListTasksWorkspacesWorkspaceIdTasksGet(
+  const { data: fetchedTasks, isError: isTasksError } = useListTasksWorkspacesWorkspaceIdTasksGet(
     workspaceId,
     { limit: FEED_LIMIT },
     { query: { enabled: !devMode } },
   );
-  const tasks = devMode && nowMs !== undefined ? mockTaskFeed(nowMs, FEED_LIMIT) : fetchedTasks;
+  const allTasks = devMode && nowMs !== undefined ? mockTaskFeed(nowMs, FEED_LIMIT) : fetchedTasks;
+  const tasks = allTasks
+    ?.filter((task) => !config.agentIds?.length || (task.agent_id && config.agentIds.includes(task.agent_id)))
+    .filter((task) => !config.statuses?.length || config.statuses.includes(task.status))
+    .filter((task) => !config.taskTypes?.length || (task.task_type && config.taskTypes.includes(task.task_type)))
+    .filter((task) => !config.priorities?.length || (task.priority && config.priorities.includes(task.priority)))
+    .slice(0, config.maxVisible ?? FEED_LIMIT);
   const shouldReduceMotion = useReducedMotion();
   const [expandedTaskId, setExpandedTaskId] = useState<string | null>(null);
   const triggerRefs = useRef<Record<string, HTMLButtonElement | null>>({});
@@ -71,6 +87,10 @@ export function LiveTaskFeedPanelBody({ workspaceId, panel }: LiveTaskFeedPanelB
     (returnFocusTo ?? containerRef.current)?.focus();
   }
 
+  if (isTasksError) {
+    return <PanelEmptyState message="Couldn't load tasks. Try again shortly." />;
+  }
+
   if (tasks === undefined) {
     return (
       <div className="flex h-full flex-col divide-y divide-border-subtle overflow-hidden">
@@ -82,7 +102,13 @@ export function LiveTaskFeedPanelBody({ workspaceId, panel }: LiveTaskFeedPanelB
   }
 
   if (tasks.length === 0) {
-    return <PanelEmptyState message="No tasks in this workspace yet." />;
+    const hasActiveFilters =
+      !!config.agentIds?.length || !!config.statuses?.length || !!config.taskTypes?.length || !!config.priorities?.length;
+    return (
+      <PanelEmptyState
+        message={hasActiveFilters ? "No tasks match the current filters." : "No tasks in this workspace yet."}
+      />
+    );
   }
 
   const expandedTask = expandedTaskId
@@ -103,17 +129,13 @@ export function LiveTaskFeedPanelBody({ workspaceId, panel }: LiveTaskFeedPanelB
         ) : (
           <motion.div
             key="list"
-            className="flex-1 divide-y divide-border-subtle overflow-y-auto"
+            className="dashboard-panel-scrollbar flex-1 divide-y divide-border-subtle overflow-y-auto"
           >
             {tasks.map((task) => (
               <motion.button
                 key={task.id}
                 layoutId={`live-task-feed-${panel.i}-${task.id}`}
-                transition={
-                  shouldReduceMotion
-                    ? { duration: 0 }
-                    : { type: "spring", damping: 30, stiffness: 300 }
-                }
+                transition={shouldReduceMotion ? { duration: 0 } : panelExpandSpring}
                 ref={(el) => {
                   triggerRefs.current[task.id] = el;
                 }}

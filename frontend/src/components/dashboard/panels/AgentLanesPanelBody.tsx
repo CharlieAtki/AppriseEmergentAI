@@ -10,12 +10,12 @@ import {
   getTaskChartColor,
   STATUS_CHART_LEGEND,
 } from "@/lib/chartColors";
-import { mockTaskTimeline } from "@/lib/devMockData";
+import { mockAgents, mockTaskTimeline } from "@/lib/devMockData";
 import { useTimeWindow } from "@/hooks/dashboard/useTimeWindow";
 import { useDashboardDevModeStore } from "@/stores/dashboardDevMode";
 import { AgentAvatar } from "@/components/agents/AgentAvatar";
 import type { TaskTimelineEntryResponse } from "@/api/generated/model";
-import type { DashboardPanelInstance } from "@/stores/dashboardLayout";
+import type { DashboardPanelInstance } from "@/lib/personalDashboard";
 import { PanelEmptyState } from "./PanelEmptyState";
 import { ChartTooltipCard } from "./ChartTooltipCard";
 
@@ -85,9 +85,13 @@ export function AgentLanesPanelBody({
   const config = panel.config as AgentLanesConfig;
   const windowKey = config.window ?? "24h";
   const groupBy = config.groupBy ?? "status";
+  const devMode = useDashboardDevModeStore((s) => s.enabled);
 
-  const { data: agents } =
-    useListAgentsWorkspacesWorkspaceIdAgentsGet(workspaceId);
+  const { data: fetchedAgents, isError: isAgentsError } =
+    useListAgentsWorkspacesWorkspaceIdAgentsGet(workspaceId, {
+      query: { enabled: !devMode },
+    });
+  const agents = devMode ? mockAgents(workspaceId, config.agentIds) : fetchedAgents;
 
   const selectedAgents = useMemo(() => {
     const pool = agents ?? [];
@@ -99,11 +103,10 @@ export function AgentLanesPanelBody({
     () => selectedAgents.map((a) => a.id),
     [selectedAgents],
   );
-  const devMode = useDashboardDevModeStore((s) => s.enabled);
 
   const timeWindow = useTimeWindow(WINDOW_HOURS[windowKey]);
 
-  const { data: fetchedExecutions } =
+  const { data: fetchedExecutions, isError: isExecutionsError } =
     useGetAgentsTaskTimelineWorkspacesWorkspaceIdAgentsTaskTimelineGet(
       workspaceId,
       { agent_id: agentIds, since: timeWindow?.since },
@@ -122,6 +125,9 @@ export function AgentLanesPanelBody({
         )
       : fetchedExecutions;
 
+  if (isAgentsError && !devMode) {
+    return <PanelEmptyState message="Couldn't load agents. Try again shortly." />;
+  }
   if (agents === undefined) {
     return (
       <div className="flex h-full flex-col gap-1 overflow-y-auto p-3">
@@ -133,6 +139,9 @@ export function AgentLanesPanelBody({
   }
   if (selectedAgents.length === 0) {
     return <PanelEmptyState message="No agents in this workspace yet." />;
+  }
+  if (isExecutionsError) {
+    return <PanelEmptyState message="Couldn't load task timeline. Try again shortly." />;
   }
   if (timeWindow === undefined || executions === undefined) {
     return (

@@ -6,7 +6,6 @@ from dataclasses import dataclass
 from core.eventing.activity.workspace_channels import workspace_id_from_events_channel
 from core.repositories.org_repository import OrganisationRepository
 from core.repositories.user_repository import UserRepository
-from fastapi import HTTPException
 
 from api.services.auth_service import validate_clerk_token, verify_clerk_session_token
 from api.services.workspace_service import WorkspaceService
@@ -70,10 +69,12 @@ class CentrifugoProxyService:
         self._stream_service = stream_service
 
     async def authenticate_connect(self, cmd: ConnectCommand) -> ConnectResult | None:
-        try:
-            claims = await verify_clerk_session_token(cmd.clerk_token, cmd.clerk_secret_key)
-            payload = await validate_clerk_token(claims, self._org_repo, self._user_repo)
-        except HTTPException:
+        claims = await verify_clerk_session_token(cmd.clerk_token, cmd.clerk_secret_key)
+        if claims is None:
+            return None
+
+        payload = await validate_clerk_token(claims, self._org_repo, self._user_repo)
+        if payload is None:
             return None
 
         return ConnectResult(user_id=payload.user_id, org_id=payload.org_id)

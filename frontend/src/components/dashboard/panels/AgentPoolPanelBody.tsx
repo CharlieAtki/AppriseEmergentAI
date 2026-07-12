@@ -9,12 +9,13 @@ import { Line, LineChart, ResponsiveContainer } from "recharts";
 import { useListAgentsWorkspacesWorkspaceIdAgentsGet } from "@/api/generated/agents/agents";
 import { useGetAgentsInfluenceHistoryWorkspacesWorkspaceIdAgentsInfluenceHistoryGet } from "@/api/generated/agents/agents";
 import { getChartColor } from "@/lib/chartColors";
-import { mockInfluenceHistory } from "@/lib/devMockData";
+import { panelExpandSpring } from "@/lib/motion";
+import { mockAgents, mockInfluenceHistory } from "@/lib/devMockData";
 import { useTimeWindow } from "@/hooks/dashboard/useTimeWindow";
 import { usePagedIndex } from "@/hooks/dashboard/usePagedIndex";
 import { useDashboardDevModeStore } from "@/stores/dashboardDevMode";
 import { IconExpand } from "@/lib/icons";
-import type { DashboardPanelInstance } from "@/stores/dashboardLayout";
+import type { DashboardPanelInstance } from "@/lib/personalDashboard";
 import { PanelEmptyState } from "./PanelEmptyState";
 import { AgentPoolExpandedChart } from "./AgentPoolExpandedChart";
 import { DashboardPagerArrow } from "../DashboardPagerArrow";
@@ -49,12 +50,9 @@ function sparklineCount(w: number, h: number): number {
 
 function SparklineCardSkeleton() {
   return (
-    <div
-      className="flex flex-col gap-1 rounded-md bg-elevated p-2"
-      aria-hidden="true"
-    >
-      <Skeleton className="h-3 w-16 bg-hover motion-reduce:animate-none" />
-      <Skeleton className="mt-1 h-6 flex-1 bg-hover motion-reduce:animate-none" />
+    <div className="flex flex-col gap-1 rounded-md p-2" aria-hidden="true">
+      <Skeleton className="h-3 w-16 bg-elevated motion-reduce:animate-none" />
+      <Skeleton className="mt-1 h-6 flex-1 bg-elevated motion-reduce:animate-none" />
     </div>
   );
 }
@@ -73,9 +71,13 @@ export function AgentPoolPanelBody({
   const windowMode = config.windowMode ?? "calendar";
   const calendarRange = config.calendarRange ?? "24h";
   const lastN = config.lastN ?? 5;
+  const devMode = useDashboardDevModeStore((s) => s.enabled);
 
-  const { data: agents } =
-    useListAgentsWorkspacesWorkspaceIdAgentsGet(workspaceId);
+  const { data: fetchedAgents, isError: isAgentsError } =
+    useListAgentsWorkspacesWorkspaceIdAgentsGet(workspaceId, {
+      query: { enabled: !devMode },
+    });
+  const agents = devMode ? mockAgents(workspaceId, config.agentIds) : fetchedAgents;
 
   const allSelectedAgents = useMemo(() => {
     const pool = agents ?? [];
@@ -105,13 +107,12 @@ export function AgentPoolPanelBody({
     () => selectedAgents.map((a) => a.id),
     [selectedAgents],
   );
-  const devMode = useDashboardDevModeStore((s) => s.enabled);
 
   const timeWindow = useTimeWindow(CALENDAR_HOURS[calendarRange]);
   const since = windowMode === "calendar" ? timeWindow?.since : undefined;
   const ready = windowMode === "last-n" || timeWindow !== undefined;
 
-  const { data: fetchedPoints } =
+  const { data: fetchedPoints, isError: isPointsError } =
     useGetAgentsInfluenceHistoryWorkspacesWorkspaceIdAgentsInfluenceHistoryGet(
       workspaceId,
       {
@@ -157,6 +158,9 @@ export function AgentPoolPanelBody({
     (returnFocusTo ?? containerRef.current)?.focus();
   }
 
+  if (isAgentsError && !devMode) {
+    return <PanelEmptyState message="Couldn't load agents. Try again shortly." />;
+  }
   if (agents === undefined) {
     return (
       <div
@@ -176,6 +180,9 @@ export function AgentPoolPanelBody({
   }
   if (allSelectedAgents.length === 0) {
     return <PanelEmptyState message="No agents in this workspace yet." />;
+  }
+  if (isPointsError) {
+    return <PanelEmptyState message="Couldn't load influence history. Try again shortly." />;
   }
   if (points === undefined) {
     return (
@@ -247,11 +254,7 @@ export function AgentPoolPanelBody({
                     </div>
                     <motion.div
                       layoutId={`agent-pool-${panel.i}-${agent.id}`}
-                      transition={
-                        shouldReduceMotion
-                          ? { duration: 0 }
-                          : { type: "spring", damping: 30, stiffness: 300 }
-                      }
+                      transition={shouldReduceMotion ? { duration: 0 } : panelExpandSpring}
                       className="min-h-0 flex-1"
                     >
                       {series.length < 2 ? (

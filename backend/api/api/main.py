@@ -28,6 +28,7 @@ from api.routers import api_keys as api_keys_router
 from api.routers import bidding_config as bidding_config_router
 from api.routers import centrifugo_proxy as centrifugo_proxy_router
 from api.routers import coordination_config as coordination_config_router
+from api.routers import personal_dashboard as personal_dashboard_router
 from api.routers import tasks as tasks_router
 from api.routers import workspace_tools as workspace_tools_router
 from api.routers import workspaces as workspaces_router
@@ -102,7 +103,7 @@ if api_settings.cors_origins:
         CORSMiddleware,
         allow_origins=api_settings.cors_origins,
         allow_credentials=True,
-        allow_methods=["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
+        allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
         allow_headers=["Authorization", "X-API-Key", "Content-Type"],
     )
 
@@ -143,6 +144,11 @@ app.include_router(
     workspaces_router.router,
     prefix="/workspaces",
     tags=["workspaces"],
+)
+app.include_router(
+    personal_dashboard_router.router,
+    prefix="/workspaces",
+    tags=["personal-dashboard"],
 )
 app.include_router(
     agents_router.router,

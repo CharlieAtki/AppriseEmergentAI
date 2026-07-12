@@ -6,6 +6,7 @@ import { motion, useReducedMotion } from "framer-motion";
 import { forwardRef } from "react";
 import { formatDistanceToNow } from "date-fns";
 import { IconClose } from "@/lib/icons";
+import { panelExpandSpring } from "@/lib/motion";
 import type { TaskResponse } from "@/api/generated/model";
 
 interface Props {
@@ -26,11 +27,7 @@ export const TaskDetailExpanded = forwardRef<HTMLButtonElement, Props>(
     return (
       <motion.div
         layoutId={`live-task-feed-${panelId}-${task.id}`}
-        transition={
-          shouldReduceMotion
-            ? { duration: 0 }
-            : { type: "spring", damping: 30, stiffness: 300 }
-        }
+        transition={shouldReduceMotion ? { duration: 0 } : panelExpandSpring}
         className="flex h-full flex-col gap-3 overflow-y-auto p-3"
       >
         <div className="flex shrink-0 items-start justify-between gap-2">
