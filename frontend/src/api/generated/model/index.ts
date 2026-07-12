@@ -29,6 +29,7 @@ export * from "./getAgentsTaskTimelineWorkspacesWorkspaceIdAgentsTaskTimelineGet
 export * from "./getWorkspaceEmergenceWorkspacesWorkspaceIdEmergenceGetParams.zod";
 export * from "./hTTPValidationError.zod";
 export * from "./influenceHistoryPointResponse.zod";
+export * from "./listTasksWorkspacesWorkspaceIdTasksGetParams.zod";
 export * from "./taskCreatedResponse.zod";
 export * from "./taskOverrides.zod";
 export * from "./taskPriority.zod";

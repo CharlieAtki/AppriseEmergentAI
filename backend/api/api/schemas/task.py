@@ -71,3 +71,4 @@ class TaskResponse(BaseModel):
     difficulty: float | None
     domain_tags: dict[str, Any] | None
     created_at: datetime | None
+    agent_id: uuid.UUID | None

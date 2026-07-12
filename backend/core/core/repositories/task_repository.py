@@ -8,7 +8,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from core.models.tasks import Task
+from core.models.tasks import Task, TaskExecution
 
 
 class TaskRepository:
@@ -99,11 +99,35 @@ class TaskRepository:
         """
         return await self._session.get(Task, task_id, options=[selectinload(Task.subtasks)])
 
-    async def list_all(self, workspace_id: uuid.UUID) -> list[Task]:
-        result = await self._session.execute(
-            select(Task).where(Task.workspace_id == workspace_id).order_by(Task.created_at.desc())
+    async def list_all(
+        self,
+        workspace_id: uuid.UUID,
+        since: datetime | None = None,
+        limit: int | None = None,
+    ) -> list[tuple[Task, uuid.UUID | None]]:
+        """List tasks newest-first, paired with the agent_id of their latest execution.
+
+        agent_id comes from a correlated subquery over task_executions (a task can
+        have zero or more executions; only the most recent one's agent matters for
+        a feed row) rather than a JOIN, since a task with no executions yet
+        (pending/enriching/open/reserved) must still appear with agent_id=None.
+        """
+        latest_execution_agent = (
+            select(TaskExecution.agent_id)
+            .where(TaskExecution.task_id == Task.id)
+            .order_by(TaskExecution.started_at.desc().nulls_last())
+            .limit(1)
+            .correlate(Task)
+            .scalar_subquery()
         )
-        return list(result.scalars().all())
+        stmt = select(Task, latest_execution_agent).where(Task.workspace_id == workspace_id)
+        if since is not None:
+            stmt = stmt.where(Task.created_at >= since)
+        stmt = stmt.order_by(Task.created_at.desc())
+        if limit is not None:
+            stmt = stmt.limit(limit)
+        result = await self._session.execute(stmt)
+        return [(task, agent_id) for task, agent_id in result.all()]
 
     async def get_siblings(self, parent_task_id: uuid.UUID, workspace_id: uuid.UUID) -> list[Task]:
         """Fetch all subtasks sharing the same parent within a workspace."""

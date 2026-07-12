@@ -409,6 +409,9 @@ async def execute_task(
                             "message": str(exc),
                         }
                         await execution_repo.save(execution)
+                        await span.stream.task_failed(
+                            task.workspace_id, task.id, agent.id, error_message=str(exc)
+                        )
                     if not TaskStateMachine.is_terminal(committed_task_status):
                         task.status = (
                             committed_task_status  # reset in-memory to last committed value

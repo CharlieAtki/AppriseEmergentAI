@@ -48,9 +48,13 @@ class TaskData:
     difficulty: float | None
     domain_tags: Mapping[str, Any] | None
     created_at: datetime | None
+    # Latest execution's agent, when one exists — None for tasks with no execution
+    # yet (pending/enriching/open/reserved). Only list() currently joins this; get()
+    # leaves it None (see TaskService.get's docstring).
+    agent_id: uuid.UUID | None = None
 
     @classmethod
-    def from_domain(cls, task: Task) -> TaskData:
+    def from_domain(cls, task: Task, agent_id: uuid.UUID | None = None) -> TaskData:
         # Explicit field mapping — mirrors TaskContext.from_task(); no hidden ORM introspection.
         return cls(
             id=task.id,
@@ -70,6 +74,7 @@ class TaskData:
             difficulty=task.difficulty,
             domain_tags=dict(task.domain_tags) if task.domain_tags is not None else None,
             created_at=task.created_at,
+            agent_id=agent_id,
         )
 
 
@@ -96,9 +101,21 @@ class TaskService:
         return TaskData.from_domain(task)
 
     async def get(self, task_id: uuid.UUID, workspace_id: uuid.UUID) -> TaskData | None:
+        """Fetch one task's detail.
+
+        agent_id is always None here — unlike list(), this path doesn't join the
+        latest TaskExecution. Known gap for a future pass: extend this endpoint with
+        execution/bid history, tool trace, and failure reasoning once a detail view
+        needs to fetch that on demand (rather than joining it here up front).
+        """
         task = await self._repo.get(task_id, workspace_id)
         return TaskData.from_domain(task) if task is not None else None
 
-    async def list(self, workspace_id: uuid.UUID) -> list[TaskData]:
-        tasks = await self._repo.list_all(workspace_id)
-        return [TaskData.from_domain(t) for t in tasks]
+    async def list(
+        self,
+        workspace_id: uuid.UUID,
+        since: datetime | None = None,
+        limit: int | None = None,
+    ) -> list[TaskData]:
+        rows = await self._repo.list_all(workspace_id, since=since, limit=limit)
+        return [TaskData.from_domain(t, agent_id=agent_id) for t, agent_id in rows]

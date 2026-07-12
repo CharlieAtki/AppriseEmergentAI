@@ -37,6 +37,7 @@ export const TaskResponse = zod.object({
   difficulty: zod.union([zod.number(), zod.null()]),
   domain_tags: zod.union([zod.record(zod.string(), zod.unknown()), zod.null()]),
   created_at: zod.union([zod.iso.datetime({ offset: true }), zod.null()]),
+  agent_id: zod.union([zod.uuid(), zod.null()]),
 });
 
 export type TaskResponse = zod.input<typeof TaskResponse>;

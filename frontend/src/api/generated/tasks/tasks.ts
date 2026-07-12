@@ -23,7 +23,11 @@ import type {
 } from "@tanstack/react-query";
 
 import type { CreateTaskRequest, HTTPValidationError } from "../model";
-import { TaskCreatedResponse, TaskResponse } from "../model";
+import {
+  ListTasksWorkspacesWorkspaceIdTasksGetParams,
+  TaskCreatedResponse,
+  TaskResponse,
+} from "../model";
 
 import { customInstance } from "../../client";
 
@@ -158,13 +162,18 @@ export const useCreateTaskWorkspacesWorkspaceIdTasksPost = <
  */
 export const listTasksWorkspacesWorkspaceIdTasksGet = (
   workspaceId: string,
+  params?: ListTasksWorkspacesWorkspaceIdTasksGetParams,
   options?: SecondParameter<typeof customInstance>,
   signal?: AbortSignal,
 ) => {
+  const validatedParams = params
+    ? ListTasksWorkspacesWorkspaceIdTasksGetParams.parse(params)
+    : undefined;
   return customInstance<TaskResponse[]>(
     {
       url: `/workspaces/${workspaceId}/tasks`,
       method: "GET",
+      params: validatedParams,
       ...(signal ? { signal } : {}),
     },
     options,
@@ -174,8 +183,12 @@ export const listTasksWorkspacesWorkspaceIdTasksGet = (
 
 export const getListTasksWorkspacesWorkspaceIdTasksGetQueryKey = (
   workspaceId: string,
+  params?: ListTasksWorkspacesWorkspaceIdTasksGetParams,
 ) => {
-  return [`/workspaces/${workspaceId}/tasks`] as const;
+  return [
+    `/workspaces/${workspaceId}/tasks`,
+    ...(params ? [params] : []),
+  ] as const;
 };
 
 export const getListTasksWorkspacesWorkspaceIdTasksGetQueryOptions = <
@@ -183,6 +196,7 @@ export const getListTasksWorkspacesWorkspaceIdTasksGetQueryOptions = <
   TError = HTTPValidationError,
 >(
   workspaceId: string,
+  params?: ListTasksWorkspacesWorkspaceIdTasksGetParams,
   options?: {
     query?: Partial<
       UseQueryOptions<
@@ -198,12 +212,17 @@ export const getListTasksWorkspacesWorkspaceIdTasksGetQueryOptions = <
 
   const queryKey =
     queryOptions?.queryKey ??
-    getListTasksWorkspacesWorkspaceIdTasksGetQueryKey(workspaceId);
+    getListTasksWorkspacesWorkspaceIdTasksGetQueryKey(workspaceId, params);
 
   const queryFn: QueryFunction<
     Awaited<ReturnType<typeof listTasksWorkspacesWorkspaceIdTasksGet>>
   > = ({ signal }) =>
-    listTasksWorkspacesWorkspaceIdTasksGet(workspaceId, requestOptions, signal);
+    listTasksWorkspacesWorkspaceIdTasksGet(
+      workspaceId,
+      params,
+      requestOptions,
+      signal,
+    );
 
   return {
     queryKey,
@@ -228,6 +247,7 @@ export function useListTasksWorkspacesWorkspaceIdTasksGet<
   TError = HTTPValidationError,
 >(
   workspaceId: string,
+  params: undefined | ListTasksWorkspacesWorkspaceIdTasksGetParams,
   options: {
     query: Partial<
       UseQueryOptions<
@@ -255,6 +275,7 @@ export function useListTasksWorkspacesWorkspaceIdTasksGet<
   TError = HTTPValidationError,
 >(
   workspaceId: string,
+  params?: ListTasksWorkspacesWorkspaceIdTasksGetParams,
   options?: {
     query?: Partial<
       UseQueryOptions<
@@ -282,6 +303,7 @@ export function useListTasksWorkspacesWorkspaceIdTasksGet<
   TError = HTTPValidationError,
 >(
   workspaceId: string,
+  params?: ListTasksWorkspacesWorkspaceIdTasksGetParams,
   options?: {
     query?: Partial<
       UseQueryOptions<
@@ -305,6 +327,7 @@ export function useListTasksWorkspacesWorkspaceIdTasksGet<
   TError = HTTPValidationError,
 >(
   workspaceId: string,
+  params?: ListTasksWorkspacesWorkspaceIdTasksGetParams,
   options?: {
     query?: Partial<
       UseQueryOptions<
@@ -321,6 +344,7 @@ export function useListTasksWorkspacesWorkspaceIdTasksGet<
 } {
   const queryOptions = getListTasksWorkspacesWorkspaceIdTasksGetQueryOptions(
     workspaceId,
+    params,
     options,
   );
 
@@ -338,11 +362,15 @@ export function useListTasksWorkspacesWorkspaceIdTasksGet<
 export const invalidateListTasksWorkspacesWorkspaceIdTasksGet = async (
   queryClient: QueryClient,
   workspaceId: string,
+  params?: ListTasksWorkspacesWorkspaceIdTasksGetParams,
   options?: InvalidateOptions,
 ): Promise<QueryClient> => {
   await queryClient.invalidateQueries(
     {
-      queryKey: getListTasksWorkspacesWorkspaceIdTasksGetQueryKey(workspaceId),
+      queryKey: getListTasksWorkspacesWorkspaceIdTasksGetQueryKey(
+        workspaceId,
+        params,
+      ),
     },
     options,
   );
@@ -357,6 +385,7 @@ export const useSetListTasksWorkspacesWorkspaceIdTasksGetQueryData = () => {
   const queryClient = useQueryClient();
   return (
     workspaceId: string,
+    params: ListTasksWorkspacesWorkspaceIdTasksGetParams | undefined,
     updater:
       | Awaited<ReturnType<typeof listTasksWorkspacesWorkspaceIdTasksGet>>
       | undefined
@@ -372,8 +401,10 @@ export const useSetListTasksWorkspacesWorkspaceIdTasksGetQueryData = () => {
       Awaited<ReturnType<typeof listTasksWorkspacesWorkspaceIdTasksGet>>
     >(
       {
-        queryKey:
-          getListTasksWorkspacesWorkspaceIdTasksGetQueryKey(workspaceId),
+        queryKey: getListTasksWorkspacesWorkspaceIdTasksGetQueryKey(
+          workspaceId,
+          params,
+        ),
       },
       updater,
     );
@@ -385,13 +416,23 @@ export const useSetListTasksWorkspacesWorkspaceIdTasksGetQueryData = () => {
  */
 export const useGetListTasksWorkspacesWorkspaceIdTasksGetQueryData = () => {
   const queryClient = useQueryClient();
-  return (workspaceId: string) =>
+  return (
+    workspaceId: string,
+    params?: ListTasksWorkspacesWorkspaceIdTasksGetParams,
+  ) =>
     queryClient.getQueryData<
       Awaited<ReturnType<typeof listTasksWorkspacesWorkspaceIdTasksGet>>
-    >(getListTasksWorkspacesWorkspaceIdTasksGetQueryKey(workspaceId));
+    >(getListTasksWorkspacesWorkspaceIdTasksGetQueryKey(workspaceId, params));
 };
 
 /**
+ * Fetch one task's detail.
+ *
+ * Known gap: agent_id is always null here (unlike list_tasks, this path doesn't
+ * join the latest TaskExecution) and the response carries no execution/bid
+ * history, tool trace, or failure reasoning. Extend this endpoint with that once
+ * a detail view needs to fetch it on demand — the live task feed panel's expand
+ * interaction is the first caller that will want it.
  * @summary Get Task
  */
 export const getTaskWorkspacesWorkspaceIdTasksTaskIdGet = (

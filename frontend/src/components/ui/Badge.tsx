@@ -9,6 +9,16 @@ const statusStyles: Record<string, string> = {
   platform:  'bg-muted/10 text-muted',
   org:       'bg-info/10 text-info',
   workspace: 'bg-brand-primary/10 text-brand-primary',
+  // Task lifecycle (core.models.enums.TaskStatus) — reused for the live task
+  // feed panel's per-row status pill.
+  pending:   'bg-muted/10 text-muted',
+  enriching: 'bg-muted/10 text-muted',
+  open:      'bg-info/10 text-info',
+  reserved:  'bg-warning/10 text-warning',
+  executing: 'bg-info/10 text-info',
+  completed: 'bg-success/10 text-success',
+  failed:    'bg-error/10 text-error',
+  expired:   'bg-muted/10 text-muted',
 }
 
 const fallback = 'bg-info/10 text-info'

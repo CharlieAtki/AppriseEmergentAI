@@ -7,6 +7,7 @@ from typing import Any
 from core.coordination.task_state import TaskStateMachine
 from core.database import get_session
 from core.eventing.activity.task_stream_logger import TaskStreamLogger
+from core.eventing.activity.workspace_stream_logger import WorkspaceStreamLogger
 from core.intelligence.enrichment import EnrichmentOverrides, enrich
 from core.repositories.task_repository import TaskRepository
 
@@ -58,6 +59,15 @@ async def enrich_task(
 
         title = task.title
         description = task.description
+        initial_status = task.status
+
+    dashboard_logger = WorkspaceStreamLogger(wctx.centrifugo_publish)
+    await dashboard_logger.task_created(
+        workspace_id=uuid.UUID(workspace_id),
+        task_id=uuid.UUID(task_id),
+        title=title,
+        status=initial_status,
+    )
 
     result = await enrich(title, description, wctx.llm_router, overrides_obj)
 

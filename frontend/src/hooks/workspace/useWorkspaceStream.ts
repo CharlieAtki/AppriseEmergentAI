@@ -27,6 +27,20 @@ const TaskExecutingEvent = z.object({
   agent_id: z.string(),
 })
 
+const TaskCreatedEvent = z.object({
+  type: z.literal('task.created'),
+  task_id: z.string(),
+  title: z.string(),
+  status: z.string(),
+})
+
+const TaskFailedEvent = z.object({
+  type: z.literal('task.failed'),
+  task_id: z.string(),
+  agent_id: z.string(),
+  error_message: z.string(),
+})
+
 const AgentSkillUpdatedEvent = z.object({
   type: z.literal('agent.skill_updated'),
   agent_id: z.string(),
@@ -56,6 +70,8 @@ const WorkspaceInitEvent = z.object({
 export const WorkspaceEvent = z.discriminatedUnion('type', [
   TaskCompletedEvent,
   TaskExecutingEvent,
+  TaskCreatedEvent,
+  TaskFailedEvent,
   AgentSkillUpdatedEvent,
   EmergenceDetectedEvent,
   WorkspaceInitEvent,
@@ -129,6 +145,8 @@ export function useWorkspaceStream(workspaceId: string): { connected: boolean } 
       switch (e.type) {
         case 'task.completed':
         case 'task.executing':
+        case 'task.created':
+        case 'task.failed':
           void queryClient.invalidateQueries({
             queryKey: getListTasksWorkspacesWorkspaceIdTasksGetQueryKey(workspaceId),
           })

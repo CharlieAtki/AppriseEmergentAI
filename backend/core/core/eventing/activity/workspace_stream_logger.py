@@ -33,7 +33,9 @@ from core.eventing.events.workspace_stream_events import (
     AgentSkillUpdatedEvent,
     EmergenceDetectedEvent,
     TaskCompletedEvent,
+    TaskCreatedEvent,
     TaskExecutingEvent,
+    TaskFailedEvent,
     WorkspaceStreamEvent,
 )
 
@@ -72,6 +74,25 @@ class WorkspaceStreamLogger:
                 type(event).__name__,
                 workspace_id,
             )
+
+    async def task_created(
+        self, workspace_id: uuid.UUID, task_id: uuid.UUID, title: str, status: str
+    ) -> None:
+        await self._emit(
+            workspace_id, TaskCreatedEvent(task_id=task_id, title=title, status=status)
+        )
+
+    async def task_failed(
+        self,
+        workspace_id: uuid.UUID,
+        task_id: uuid.UUID,
+        agent_id: uuid.UUID,
+        error_message: str,
+    ) -> None:
+        await self._emit(
+            workspace_id,
+            TaskFailedEvent(task_id=task_id, agent_id=agent_id, error_message=error_message),
+        )
 
     async def task_executing(
         self, workspace_id: uuid.UUID, task_id: uuid.UUID, agent_id: uuid.UUID

@@ -45,6 +45,36 @@ class TaskExecutingEvent:
 
 
 @dataclass(frozen=True, kw_only=True)
+class TaskCreatedEvent:
+    task_id: uuid.UUID
+    title: str
+    status: str
+
+    def to_payload(self) -> dict[str, object]:
+        return {
+            "type": "task.created",
+            "task_id": str(self.task_id),
+            "title": self.title,
+            "status": self.status,
+        }
+
+
+@dataclass(frozen=True, kw_only=True)
+class TaskFailedEvent:
+    task_id: uuid.UUID
+    agent_id: uuid.UUID
+    error_message: str
+
+    def to_payload(self) -> dict[str, object]:
+        return {
+            "type": "task.failed",
+            "task_id": str(self.task_id),
+            "agent_id": str(self.agent_id),
+            "error_message": self.error_message,
+        }
+
+
+@dataclass(frozen=True, kw_only=True)
 class TaskCompletedEvent:
     task_id: uuid.UUID
     agent_id: uuid.UUID

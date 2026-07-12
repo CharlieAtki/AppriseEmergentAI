@@ -2,11 +2,12 @@ from __future__ import annotations
 
 import dataclasses
 import uuid
+from datetime import datetime
 
 from arq import ArqRedis
 from core.intelligence.enrichment import EnrichmentOverrides
 from core.models.tenant import Workspace
-from fastapi import APIRouter, Depends, Header, HTTPException, status
+from fastapi import APIRouter, Depends, Header, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.deps import get_arq_queue, get_db, get_task_service, require_workspace
@@ -70,6 +71,14 @@ async def get_task(
     workspace: Workspace = Depends(require_workspace("read")),
     service: TaskService = Depends(get_task_service),
 ) -> TaskResponse:
+    """Fetch one task's detail.
+
+    Known gap: agent_id is always null here (unlike list_tasks, this path doesn't
+    join the latest TaskExecution) and the response carries no execution/bid
+    history, tool trace, or failure reasoning. Extend this endpoint with that once
+    a detail view needs to fetch it on demand — the live task feed panel's expand
+    interaction is the first caller that will want it.
+    """
     task = await service.get(task_id, workspace.id)
     if task is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Task not found")
@@ -78,8 +87,10 @@ async def get_task(
 
 @router.get("", response_model=list[TaskResponse])
 async def list_tasks(
+    since: datetime | None = Query(None),
+    limit: int | None = Query(None, ge=1, le=500),
     workspace: Workspace = Depends(require_workspace("read")),
     service: TaskService = Depends(get_task_service),
 ) -> list[TaskResponse]:
-    tasks = await service.list(workspace.id)
+    tasks = await service.list(workspace.id, since=since, limit=limit)
     return [TaskResponse.model_validate(t) for t in tasks]

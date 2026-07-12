@@ -55,7 +55,7 @@ export function AddPanelDialog() {
         Add panel
       </DialogTrigger>
 
-      <DialogContent className="fixed left-1/2 top-1/2 w-full max-w-3xl -translate-x-1/2 -translate-y-1/2 rounded-xl border border-border bg-surface p-6 shadow-xl focus:outline-none">
+      <DialogContent className="fixed left-1/2 top-1/2 max-h-[85vh] w-full max-w-3xl -translate-x-1/2 -translate-y-1/2 overflow-y-auto rounded-xl border border-border bg-surface p-6 shadow-xl focus:outline-none sm:max-w-3xl">
           <DialogTitle className="text-title font-semibold text-foreground">
             Add panel
           </DialogTitle>
@@ -64,7 +64,7 @@ export function AddPanelDialog() {
             afterward.
           </DialogDescription>
 
-          <div className="mt-4 flex items-center justify-between gap-3 rounded-lg border border-border bg-elevated/40 px-3 py-2">
+          <div className="mt-4 flex flex-col items-center gap-1">
             <div className="flex items-center gap-1.5">
               <DashboardPagerArrow
                 direction="prev"
@@ -82,12 +82,16 @@ export function AddPanelDialog() {
                 onClick={goNext}
               />
             </div>
-            <span className="text-label font-semibold uppercase tracking-architectural text-foreground">
+            <span className="text-caption font-semibold uppercase tracking-architectural text-muted">
               {activeCategory}
             </span>
           </div>
 
-          <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
+          {/* One row per category page when there's room — every category
+              currently has 2 panel types. flex-wrap (not nowrap+scroll) means
+              a narrow viewport drops cards to a second row instead of ever
+              showing a horizontal scrollbar. */}
+          <div className="mt-6 flex flex-row flex-wrap gap-4">
             {visibleDefinitions.map((definition) => {
               const Icon = definition.icon;
               const sizeLabel = `${definition.defaultW} × ${definition.defaultH}`;
@@ -95,27 +99,24 @@ export function AddPanelDialog() {
                 <Button
                   key={definition.type}
                   onClick={() => handleAdd(definition.type)}
-                  className="group flex h-full w-full min-h-52 flex-col items-stretch justify-start gap-3 whitespace-normal rounded-lg border border-border bg-elevated p-4 text-left outline-none transition-colors hover:border-brand-primary hover:bg-hover focus-visible:ring-1 focus-visible:ring-brand-primary"
+                  className="group flex min-h-56 w-64 flex-1 flex-col items-stretch justify-start gap-3 whitespace-normal rounded-lg border border-border bg-elevated p-4 text-left outline-none transition-colors hover:border-brand-primary hover:bg-hover focus-visible:ring-1 focus-visible:ring-brand-primary"
                 >
-                  <div className="h-20 w-full shrink-0">
+                  <div className="h-24 w-full shrink-0">
                     <PanelFootprintPreview
                       w={definition.defaultW}
                       h={definition.defaultH}
+                      icon={Icon}
+                      sizeLabel={sizeLabel}
                     />
                   </div>
-                  <div className="min-w-0 space-y-2">
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="flex min-w-0 items-center gap-1.5">
-                        <Icon size={13} className="shrink-0 text-muted" />
-                        <span className="truncate text-label font-semibold text-foreground">
-                          {definition.label}
-                        </span>
-                      </div>
-                      <span className="shrink-0 rounded-full border border-border bg-background px-2 py-0.5 text-[10px] font-semibold uppercase tracking-architectural text-muted">
-                        {sizeLabel}
+                  <div className="min-w-0 space-y-1.5">
+                    <div className="flex min-w-0 items-center gap-1.5">
+                      <Icon size={15} className="shrink-0 text-muted" />
+                      <span className="truncate text-label font-semibold text-foreground">
+                        {definition.label}
                       </span>
                     </div>
-                    <p className="text-caption leading-relaxed text-secondary line-clamp-3">
+                    <p className="text-caption leading-relaxed text-secondary">
                       {definition.description}
                     </p>
                   </div>
