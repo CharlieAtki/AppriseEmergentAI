@@ -21,10 +21,8 @@ class Settings(BaseSettings):
     # ContractNet constants remain flat and uppercase for backward compatibility.
     RESERVATION_TTL_SECONDS: int = 30
     BID_W_SKILL: float = 0.80
-    BID_W_INFLUENCE: float = 0.15
-    BID_W_PERSONALITY: float = 0.05
+    BID_W_INFLUENCE: float = 0.20
     BID_INFLUENCE_K: float = 2.0
-    BID_ADD_JITTER: bool = True
     SKILL_DECAY_RATE: float = (
         0.02  # per task completion in execute_task Phase 6 — recalibrate for target throughput
     )

@@ -8,9 +8,6 @@ import { z as zod } from "zod";
 
 export const CreateAgentRequest = zod.object({
   name: zod.string(),
-  personality: zod
-    .union([zod.record(zod.string(), zod.number()), zod.null()])
-    .optional(),
   skills: zod
     .union([zod.record(zod.string(), zod.number()), zod.null()])
     .optional(),

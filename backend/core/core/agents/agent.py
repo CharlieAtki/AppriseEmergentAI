@@ -31,7 +31,6 @@ def build_initial_state(agent: Agent, task: Task) -> GraphState:
             "",
             f"Current skill profile: {json.dumps(agent.skills or {})}",
             f"Influence score: {agent.influence or 0.0:.3f}",
-            f"Personality: {json.dumps(agent.personality or {})}",
             "",
             "Use available tools when they will improve the outcome.",
             "When you have finished, your final message should contain the complete output for the task.",

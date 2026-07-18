@@ -4,7 +4,7 @@ import uuid
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from datetime import datetime
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 from core.repositories.agent_repository import AgentRepository
 from core.repositories.influence_snapshot_repository import InfluenceSnapshotRepository
@@ -24,7 +24,6 @@ class CreateAgentCommand:
     organisation_id: uuid.UUID
     name: str
     skills: Mapping[str, float] | None
-    personality: Mapping[str, Any] | None
 
 
 @dataclass(frozen=True)
@@ -125,7 +124,6 @@ class AgentService:
             organisation_id=cmd.organisation_id,
             name=cmd.name,
             skills=cmd.skills,
-            personality=cmd.personality,
         )
         return AgentData.from_domain(agent)
 

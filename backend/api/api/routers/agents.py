@@ -58,7 +58,6 @@ async def create_agent(
         organisation_id=workspace.organisation_id,
         name=body.name,
         skills=body.skills,
-        personality=body.personality,
     )
     agent = await service.create(cmd)
     return AgentResponse.model_validate(agent)

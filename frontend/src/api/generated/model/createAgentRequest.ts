@@ -4,11 +4,9 @@
  * FastAPI
  * OpenAPI spec version: 0.1.0
  */
-import type { CreateAgentRequestPersonality } from "./createAgentRequestPersonality";
 import type { CreateAgentRequestSkills } from "./createAgentRequestSkills";
 
 export interface CreateAgentRequest {
   name: string;
-  personality?: CreateAgentRequestPersonality;
   skills?: CreateAgentRequestSkills;
 }

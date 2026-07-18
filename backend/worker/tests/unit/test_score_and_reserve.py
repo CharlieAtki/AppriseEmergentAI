@@ -27,7 +27,6 @@ def _agent(skills: Mapping[str, float], influence: float = 0.6) -> MagicMock:
     a.id = uuid.uuid4()
     a.skills = skills
     a.influence = influence
-    a.personality = {}
     return a
 
 
@@ -58,7 +57,6 @@ async def test_no_agents_returns_silently():
         task_id=uuid.uuid4(),
         workspace_id=uuid.uuid4(),
         required_skills={},
-        domain_tags=None,
         redis=redis,
         arq_queue=arq_queue,
     )
@@ -90,7 +88,6 @@ async def test_low_scoring_agent_still_wins_no_minimum_score(make_task):
         task_id=task_id,
         workspace_id=ws_id,
         required_skills={"exotic_ml_skill": 1.0},
-        domain_tags=None,
         redis=redis,
         arq_queue=arq_queue,
     )
@@ -126,7 +123,6 @@ async def test_setnx_win_task_open_enqueues_job(make_task):
         task_id=task_id,
         workspace_id=ws_id,
         required_skills={"python": 1.0},
-        domain_tags=None,
         redis=redis,
         arq_queue=arq_queue,
     )
@@ -170,7 +166,6 @@ async def test_setnx_win_task_not_open_releases_reservation(make_task):
         task_id=task_id,
         workspace_id=ws_id,
         required_skills={"python": 1.0},
-        domain_tags=None,
         redis=redis,
         arq_queue=arq_queue,
     )
@@ -200,7 +195,6 @@ async def test_setnx_win_task_missing_releases_reservation():
         task_id=task_id,
         workspace_id=ws_id,
         required_skills={"python": 1.0},
-        domain_tags=None,
         redis=redis,
         arq_queue=arq_queue,
     )
@@ -229,7 +223,6 @@ async def test_setnx_loss_all_agents_no_enqueue():
         task_id=uuid.uuid4(),
         workspace_id=uuid.uuid4(),
         required_skills={"python": 1.0},
-        domain_tags=None,
         redis=redis,
         arq_queue=arq_queue,
     )
@@ -261,7 +254,6 @@ async def test_setnx_loss_on_first_win_on_second(make_task):
         task_id=task_id,
         workspace_id=ws_id,
         required_skills={"python": 1.0},
-        domain_tags=None,
         redis=redis,
         arq_queue=arq_queue,
     )
@@ -303,7 +295,6 @@ async def test_commit_failure_after_setnx_win_releases_reservation(make_task):
             task_id=task_id,
             workspace_id=ws_id,
             required_skills={"python": 1.0},
-            domain_tags=None,
             redis=redis,
             arq_queue=arq_queue,
         )
@@ -335,7 +326,6 @@ async def test_enqueue_success_is_never_undone_by_a_later_step(make_task):
         task_id=task_id,
         workspace_id=ws_id,
         required_skills={"python": 1.0},
-        domain_tags=None,
         redis=redis,
         arq_queue=arq_queue,
     )
@@ -369,7 +359,6 @@ async def test_enqueue_failure_releases_reservation(make_task):
             task_id=task_id,
             workspace_id=ws_id,
             required_skills={"python": 1.0},
-            domain_tags=None,
             redis=redis,
             arq_queue=arq_queue,
         )
@@ -405,7 +394,6 @@ async def test_enqueue_failure_after_commit_reverts_task_to_open(make_task):
             task_id=task_id,
             workspace_id=ws_id,
             required_skills={"python": 1.0},
-            domain_tags=None,
             redis=redis,
             arq_queue=arq_queue,
         )
@@ -438,7 +426,6 @@ async def test_commit_failure_does_not_attempt_a_revert(make_task):
             task_id=task_id,
             workspace_id=ws_id,
             required_skills={"python": 1.0},
-            domain_tags=None,
             redis=redis,
             arq_queue=arq_queue,
         )

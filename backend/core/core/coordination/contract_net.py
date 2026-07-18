@@ -1,12 +1,20 @@
 from __future__ import annotations
 
 import math
-from collections.abc import Mapping
-from typing import Any
+import random
+from collections.abc import Mapping, MutableSequence
+from typing import TYPE_CHECKING, Any, Protocol
 
 from redis.asyncio import Redis
 
 from core.config import settings
+
+if TYPE_CHECKING:
+    from core.models.agents import Agent
+
+
+class _Shuffler(Protocol):
+    def shuffle(self, x: MutableSequence[Any]) -> None: ...
 
 
 def _clamp01(x: float) -> float:
@@ -35,55 +43,14 @@ def _influence_factor(influence: float, k: float) -> float:
     return 1.0 - math.exp(-k * _clamp01(influence))
 
 
-def _cosine_similarity(a: Mapping[str, float], b: Mapping[str, float]) -> float:
-    keys = set(a) & set(b)
-    if not keys:
-        return 0.0
-    dot = sum(a[k] * b[k] for k in keys)
-    mag_a = math.sqrt(sum(v * v for v in a.values()))
-    mag_b = math.sqrt(sum(v * v for v in b.values()))
-    if mag_a == 0.0 or mag_b == 0.0:
-        return 0.0
-    return dot / (mag_a * mag_b)
-
-
-def _personality_fit(
-    agent_personality: Mapping[str, Any] | None,
-    task_domain_tags: Mapping[str, Any] | None,
-) -> float:
-    if not agent_personality or not task_domain_tags:
-        return 0.5  # neutral when either side is absent
-    # Cast values to float for cosine similarity; non-numeric keys are skipped.
-    try:
-        a = {k: float(v) for k, v in agent_personality.items()}
-        b = {k: float(v) for k, v in task_domain_tags.items()}
-    except TypeError, ValueError:
-        return 0.5
-    sim = _cosine_similarity(a, b)  # [-1, 1]
-    return (sim + 1.0) / 2.0  # [0, 1]
-
-
-def _seeded_jitter(task_id: str, agent_id: str) -> float:
-    # Deterministic ±0.01 tiebreaker keyed on the (task, agent) pair.
-    # Same inputs always produce the same jitter — reproducible, not random.
-    raw = hash(f"{task_id}:{agent_id}") % 201  # 0..200
-    return (raw - 100) / 10_000.0  # -0.01 .. +0.01
-
-
 def compute_bid_score(
     agent_skills: Mapping[str, float],
     agent_influence: float,
     required_skills: Mapping[str, float],
-    agent_personality: Mapping[str, Any] | None = None,
-    task_domain_tags: Mapping[str, Any] | None = None,
     *,
-    task_id: str | None = None,
-    agent_id: str | None = None,
     w_skill: float = settings.BID_W_SKILL,
     w_influence: float = settings.BID_W_INFLUENCE,
-    w_personality: float = settings.BID_W_PERSONALITY,
     influence_k: float = settings.BID_INFLUENCE_K,
-    add_jitter: bool = settings.BID_ADD_JITTER,
 ) -> float:
     """Return a bid score in [0, 1] for an agent competing for a task.
 
@@ -95,19 +62,41 @@ def compute_bid_score(
 
     Components (default weights):
         skill_match      0.80 — how well agent skills cover required_skills
-        influence_factor 0.15 — soft bias towards high-influence agents
-        personality_fit  0.05 — alignment between agent personality and task domain
+        influence_factor 0.20 — soft bias towards high-influence agents
     """
     skill = _skill_match(agent_skills, required_skills)
     influence = _influence_factor(agent_influence, influence_k)
-    personality = _personality_fit(agent_personality, task_domain_tags)
 
-    base = w_skill * skill + w_influence * influence + w_personality * personality
-
-    if add_jitter and task_id is not None and agent_id is not None:
-        base += _seeded_jitter(task_id, agent_id)
+    base = w_skill * skill + w_influence * influence
 
     return _clamp01(base)
+
+
+def break_ties(
+    scored: list[tuple[Agent, float]],
+    rng: _Shuffler = random,
+) -> list[tuple[Agent, float]]:
+    """Sort scored agents descending, randomly shuffling agents tied for a score.
+
+    Same top score → genuinely random pick, not a fixed hash-based tiebreak, so
+    ties don't always resolve the same way for the same task/agent pair. Pure
+    given rng — does not mutate the input list. rng defaults to the stdlib
+    random module (same .shuffle() interface as random.Random) so callers can
+    inject a seeded random.Random(n) for deterministic tests.
+    """
+    ranked = sorted(scored, key=lambda x: x[1], reverse=True)
+    result = list(ranked)
+    i = 0
+    while i < len(ranked):
+        j = i + 1
+        while j < len(ranked) and ranked[j][1] == ranked[i][1]:
+            j += 1
+        if j - i > 1:
+            group = result[i:j]
+            rng.shuffle(group)
+            result[i:j] = group
+        i = j
+    return result
 
 
 async def attempt_reservation(

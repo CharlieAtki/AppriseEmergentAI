@@ -11,7 +11,6 @@ __all__ = ["AgentResponse", "AgentStatus", "CreateAgentRequest", "UpdateAgentReq
 
 class CreateAgentRequest(BaseModel):
     name: str
-    personality: dict[str, float] | None = None
     skills: dict[str, float] | None = None
 
 

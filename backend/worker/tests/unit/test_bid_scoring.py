@@ -16,8 +16,6 @@ from __future__ import annotations
 import pytest
 from core.coordination.contract_net import (
     _influence_factor,
-    _personality_fit,
-    _seeded_jitter,
     _skill_match,
     compute_bid_score,
 )
@@ -105,60 +103,6 @@ def test_influence_factor_monotone():
     assert _influence_factor(0.5, 2.0) < _influence_factor(0.9, 2.0)
 
 
-# ── _personality_fit ──────────────────────────────────────────────────────────
-
-
-def test_personality_fit_no_personality():
-    """No agent personality → neutral 0.5."""
-    assert _personality_fit(agent_personality=None, task_domain_tags={"research": 1.0}) == 0.5
-
-
-def test_personality_fit_no_tags():
-    """No task domain tags → neutral 0.5."""
-    assert _personality_fit(agent_personality={"research": 1.0}, task_domain_tags=None) == 0.5
-
-
-def test_personality_fit_perfect_match():
-    """Identical personality and domain → cosine similarity = 1.0 → fit = 1.0."""
-    fit = _personality_fit(
-        agent_personality={"research": 1.0},
-        task_domain_tags={"research": 1.0},
-    )
-    assert fit == pytest.approx(1.0)
-
-
-def test_personality_fit_orthogonal():
-    """Completely different keys → cosine similarity = 0.0 → fit = 0.5."""
-    fit = _personality_fit(
-        agent_personality={"research": 1.0},
-        task_domain_tags={"coding": 1.0},
-    )
-    assert fit == pytest.approx(0.5)
-
-
-# ── _seeded_jitter ────────────────────────────────────────────────────────────
-
-
-def test_seeded_jitter_deterministic():
-    """Same (task_id, agent_id) always produces the same jitter."""
-    j1 = _seeded_jitter("task-abc", "agent-xyz")
-    j2 = _seeded_jitter("task-abc", "agent-xyz")
-    assert j1 == j2
-
-
-def test_seeded_jitter_in_range():
-    """Jitter value is always within ±0.01."""
-    for i in range(20):
-        j = _seeded_jitter(f"task-{i}", f"agent-{i}")
-        assert -0.01 <= j <= 0.01
-
-
-def test_seeded_jitter_varies_by_input():
-    """Different inputs should (typically) produce different jitter values."""
-    values = {_seeded_jitter(f"task-{i}", "agent-0") for i in range(10)}
-    assert len(values) > 1
-
-
 # ── compute_bid_score (integration of sub-functions) ─────────────────────────
 
 
@@ -168,7 +112,6 @@ def test_compute_bid_score_above_zero():
         agent_skills={"python": 0.9},
         agent_influence=0.7,
         required_skills={"python": 1.0},
-        add_jitter=False,
     )
     assert score > 0.5
 
@@ -179,33 +122,29 @@ def test_compute_bid_score_clamped():
         agent_skills={"python": 10.0},
         agent_influence=100.0,
         required_skills={"python": 1.0},
-        add_jitter=False,
     )
     assert 0.0 <= score <= 1.0
 
 
 def test_compute_bid_score_no_matching_skills():
-    """Agent with none of the required skills scores very low."""
+    """Agent with none of the required skills and no influence scores zero."""
     score = compute_bid_score(
         agent_skills={},
         agent_influence=0.0,
         required_skills={"python": 1.0},
-        add_jitter=False,
     )
-    # skill=0, influence=0, personality=0.5 → w_personality * 0.5 = 0.025
-    assert score < 0.1
+    assert score == pytest.approx(0.0)
 
 
 def test_compute_bid_score_weighted_sum():
-    """Manual calculation matches output with known inputs and no jitter."""
-    # With defaults: w_skill=0.80, w_influence=0.15, w_personality=0.05
-    # skill_match=1.0, influence_factor=0 (influence=0), personality=0.5
-    expected = 0.80 * 1.0 + 0.15 * 0.0 + 0.05 * 0.5
+    """Manual calculation matches output with known inputs."""
+    # With defaults: w_skill=0.80, w_influence=0.20
+    # skill_match=1.0, influence_factor=0 (influence=0)
+    expected = 0.80 * 1.0 + 0.20 * 0.0
     score = compute_bid_score(
         agent_skills={"python": 1.0},
         agent_influence=0.0,
         required_skills={"python": 1.0},
-        add_jitter=False,
         influence_k=2.0,
     )
     assert score == pytest.approx(expected)

@@ -21,13 +21,6 @@ Event types the hook already handles:
 
 ## Agent canvas — deferred items
 
-### Personality is a system field — never expose in UI
-
-`Agent.personality: dict[str, float]` is a ContractNet jitter mechanism. Each key is a
-domain tag (e.g. `"research"`, `"coding"`), each value a weighting float. The jitter
-prevents all agents bidding identically on every task. It is set and updated by the system;
-it must never appear in the spawn dialog, the agent detail panel, or any other UI surface.
-
 ### Agent detail panel
 
 Clicking a node should slide open a right-side panel showing agent skills, influence

@@ -83,7 +83,6 @@ class AgentRepositoryProtocol(Protocol):
         organisation_id: uuid.UUID,
         name: str,
         skills: Mapping[str, Any] | None,
-        personality: Mapping[str, Any] | None,
     ) -> Agent: ...
 
     async def get(self, agent_id: uuid.UUID, workspace_id: uuid.UUID) -> Agent | None: ...

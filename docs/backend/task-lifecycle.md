@@ -84,13 +84,14 @@ The `TaskBiddingHandler` is bound to `TaskCreatedStreamEvent` on the in-process 
 1. **Load agents**: all active agents in the workspace, with their current task executions
    pre-loaded (`selectinload`) to compute capacity.
 2. **Score each agent**: `compute_bid_score()` — pure function, no I/O:
-   - `skill_match` (0.60 weight): weighted coverage of `task.required_skills` by `agent.skills`
-   - `capacity_factor` (0.20): how much headroom the agent has before hitting `max_parallel`
-   - `influence_factor` (0.15): saturating exponential curve over `agent.influence`
-   - `personality_fit` (0.05): cosine similarity between agent personality vector and task domain tags
-   - Deterministic seeded jitter (±0.01 keyed on `task_id:agent_id`) breaks ties reproducibly
-3. **Filter**: agents below `BID_SCORE_THRESHOLD` (default 0.3) are excluded.
-4. **Reserve**: agents above threshold attempt `attempt_reservation()` in score order. This
+   - `skill_match` (0.80 weight): weighted coverage of `task.required_skills` by `agent.skills`
+   - `influence_factor` (0.20): saturating exponential curve over `agent.influence`
+3. **Break ties**: `break_ties()` sorts descending by score and, for agents tied on the
+   same top score, does a genuine random shuffle within that tie group (not a fixed
+   hash-based tiebreak) — ties don't resolve the same way for the same task/agent pair
+   every time, preserving the bidding system's emergent unpredictability. There is no
+   minimum score to clear.
+4. **Reserve**: agents attempt `attempt_reservation()` in the resulting order. This
    is an atomic Redis `SET NX EX` on key `reservation:{workspace_id}:{task_id}`. Exactly one
    agent gets `True` — the first to land the atomic write wins.
 5. **Transition**: winner transitions task to `status="reserved"` and enqueues `execute_task`.
@@ -98,7 +99,7 @@ The `TaskBiddingHandler` is bound to `TaskCreatedStreamEvent` on the in-process 
 ```
 stream:task → TaskStreamSubscriber → EventBus → TaskBiddingHandler
   → compute_bid_score() × N agents
-  → filter < threshold
+  → break_ties() — sort descending, random shuffle within tied top scores
   → attempt_reservation() — Redis SETNX — exactly one winner
   → Task(status="reserved") → DB
   → arq_queue.enqueue_job("execute_task", agent_id, task_id, workspace_id)

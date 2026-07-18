@@ -36,7 +36,6 @@ class Agent(Base, TimestampMixin):
     status: Mapped[str] = mapped_column(sa.Text, nullable=False, server_default=sa.text("'active'"))
     skills: Mapped[dict[str, Any] | None] = mapped_column(JSONB, nullable=True)
     influence: Mapped[float | None] = mapped_column(sa.Float, nullable=True)
-    personality: Mapped[dict[str, Any] | None] = mapped_column(JSONB, nullable=True)
 
     __table_args__ = (sa.Index("ix_agents_workspace_id_status", "workspace_id", "status"),)
 

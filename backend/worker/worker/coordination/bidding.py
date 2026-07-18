@@ -3,9 +3,9 @@ from __future__ import annotations
 import logging
 import uuid
 from collections.abc import Mapping
-from typing import TYPE_CHECKING, Any, Protocol
+from typing import TYPE_CHECKING, Protocol
 
-from core.coordination.contract_net import attempt_reservation, compute_bid_score
+from core.coordination.contract_net import attempt_reservation, break_ties, compute_bid_score
 from core.coordination.task_state import TaskStateMachine
 
 if TYPE_CHECKING:
@@ -32,7 +32,6 @@ async def score_and_reserve(
     task_id: uuid.UUID,
     workspace_id: uuid.UUID,
     required_skills: Mapping[str, float] | None,
-    domain_tags: Mapping[str, Any] | None,
     redis: Redis,
     arq_queue: ArqRedis,
 ) -> int:
@@ -59,10 +58,6 @@ async def score_and_reserve(
                 agent_skills=agent.skills or {},
                 agent_influence=agent.influence or 0.0,
                 required_skills=required_skills,
-                agent_personality=agent.personality,
-                task_domain_tags=domain_tags,
-                task_id=task_id_str,
-                agent_id=str(agent.id),
             ),
         )
         for agent in agents
@@ -71,7 +66,7 @@ async def score_and_reserve(
     if not scored:
         return 0
 
-    scored.sort(key=lambda x: x[1], reverse=True)
+    scored = break_ties(scored)
     for agent, score in scored:
         agent_id_str = str(agent.id)
         won = await attempt_reservation(redis, workspace_id_str, task_id_str, agent_id_str)

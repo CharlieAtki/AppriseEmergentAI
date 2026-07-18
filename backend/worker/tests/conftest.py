@@ -60,7 +60,6 @@ def make_agent():
         a.status = "active"
         a.skills = skills or {}
         a.influence = influence
-        a.personality = {}
         a.task_executions = []
         for k, v in kwargs.items():
             setattr(a, k, v)

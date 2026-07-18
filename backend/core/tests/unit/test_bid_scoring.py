@@ -1,7 +1,10 @@
 from __future__ import annotations
 
+import random
+from dataclasses import dataclass
+
 import pytest
-from core.coordination.contract_net import compute_bid_score
+from core.coordination.contract_net import break_ties, compute_bid_score
 
 
 class TestComputeBidScore:
@@ -14,15 +17,13 @@ class TestComputeBidScore:
         assert 0.0 <= score <= 1.0
 
     def test_skill_only_path(self) -> None:
-        # With influence/personality weights at zero, score = skill_match
+        # With influence weight at zero, score = skill_match
         score = compute_bid_score(
             agent_skills={"python": 1.0},
             agent_influence=0.0,
             required_skills={"python": 1.0},
             w_skill=1.0,
             w_influence=0.0,
-            w_personality=0.0,
-            add_jitter=False,
         )
         assert score == pytest.approx(1.0)
 
@@ -33,38 +34,9 @@ class TestComputeBidScore:
             required_skills={},
             w_skill=1.0,
             w_influence=0.0,
-            w_personality=0.0,
-            add_jitter=False,
         )
         # _skill_match returns 0.5 neutral when no skills required
         assert score == pytest.approx(0.5)
-
-    def test_jitter_is_deterministic(self) -> None:
-        kwargs = dict(
-            agent_skills={"python": 0.5},
-            agent_influence=0.3,
-            required_skills={"python": 1.0},
-            task_id="task-abc",
-            agent_id="agent-xyz",
-            add_jitter=True,
-        )
-        assert compute_bid_score(**kwargs) == compute_bid_score(**kwargs)
-
-    def test_jitter_differs_across_agent_pairs(self) -> None:
-        base = dict(
-            agent_skills={},
-            agent_influence=0.0,
-            required_skills={},
-            w_skill=0.0,
-            w_influence=0.0,
-            w_personality=0.0,
-            add_jitter=True,
-        )
-        s1 = compute_bid_score(**base, task_id="t1", agent_id="a1")
-        s2 = compute_bid_score(**base, task_id="t1", agent_id="a2")
-        # Jitter envelope is ±0.01; verify both values fall within range
-        assert -0.01 <= s1 <= 0.01
-        assert -0.01 <= s2 <= 0.01
 
     def test_missing_skill_treated_as_zero(self) -> None:
         score_no_skill = compute_bid_score(
@@ -73,8 +45,6 @@ class TestComputeBidScore:
             required_skills={"python": 1.0},
             w_skill=1.0,
             w_influence=0.0,
-            w_personality=0.0,
-            add_jitter=False,
         )
         score_zero_skill = compute_bid_score(
             agent_skills={"python": 0.0},
@@ -82,8 +52,6 @@ class TestComputeBidScore:
             required_skills={"python": 1.0},
             w_skill=1.0,
             w_influence=0.0,
-            w_personality=0.0,
-            add_jitter=False,
         )
         assert score_no_skill == pytest.approx(score_zero_skill)
 
@@ -95,7 +63,67 @@ class TestComputeBidScore:
             required_skills={"a": 1.0},
             w_skill=1.0,
             w_influence=1.0,
-            w_personality=1.0,
-            add_jitter=False,
         )
         assert score <= 1.0
+
+    def test_default_weights_sum_to_one(self) -> None:
+        # Perfect skill, influence weight isolated to zero — score should approach
+        # w_skill (0.80) exactly, confirming the personality term is gone rather
+        # than silently capping scores below what the weights imply.
+        score = compute_bid_score(
+            agent_skills={"python": 1.0},
+            agent_influence=0.0,
+            required_skills={"python": 1.0},
+        )
+        assert score == pytest.approx(0.80, abs=1e-3)
+
+
+@dataclass(frozen=True)
+class _FakeAgent:
+    id: str
+
+
+class TestBreakTies:
+    def test_empty_list_is_noop(self) -> None:
+        assert break_ties([]) == []
+
+    def test_single_element_is_noop(self) -> None:
+        a = _FakeAgent("a1")
+        assert break_ties([(a, 0.5)]) == [(a, 0.5)]
+
+    def test_distinct_scores_sorted_descending_and_untouched_by_rng(self) -> None:
+        a, b, c = _FakeAgent("a"), _FakeAgent("b"), _FakeAgent("c")
+        scored = [(a, 0.2), (b, 0.9), (c, 0.5)]
+        result = break_ties(scored, rng=random.Random(0))
+        assert result == [(b, 0.9), (c, 0.5), (a, 0.2)]
+
+    def test_does_not_mutate_input_list(self) -> None:
+        a, b = _FakeAgent("a"), _FakeAgent("b")
+        scored = [(a, 0.2), (b, 0.9)]
+        original = list(scored)
+        break_ties(scored, rng=random.Random(0))
+        assert scored == original
+
+    def test_tied_top_scores_shuffled_deterministically_with_seeded_rng(self) -> None:
+        a, b, c = _FakeAgent("a"), _FakeAgent("b"), _FakeAgent("c")
+        scored = [(a, 0.5), (b, 0.5), (c, 0.5)]
+
+        result_seed_1 = break_ties(scored, rng=random.Random(1))
+        result_seed_1_again = break_ties(scored, rng=random.Random(1))
+        assert result_seed_1 == result_seed_1_again
+
+        # Same seed reproduces the same order every time; a different seed can
+        # reorder the tied group (not guaranteed, but overwhelmingly likely for
+        # a 3-element permutation — this asserts the rng is actually consulted).
+        orders = {
+            tuple(agent.id for agent, _ in break_ties(scored, rng=random.Random(seed)))
+            for seed in range(10)
+        }
+        assert len(orders) > 1
+
+    def test_tie_group_only_contains_original_members(self) -> None:
+        a, b, c, d = _FakeAgent("a"), _FakeAgent("b"), _FakeAgent("c"), _FakeAgent("d")
+        scored = [(a, 0.5), (b, 0.9), (c, 0.5), (d, 0.5)]
+        result = break_ties(scored, rng=random.Random(3))
+        assert result[0] == (b, 0.9)
+        assert {agent.id for agent, _ in result[1:]} == {"a", "c", "d"}

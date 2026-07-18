@@ -32,7 +32,6 @@ class AgentRepository:
         organisation_id: uuid.UUID,
         name: str,
         skills: Mapping[str, Any] | None,
-        personality: Mapping[str, Any] | None,
     ) -> Agent:
         """Create and stage a new Agent, flushing to populate agent.id before returning.
 
@@ -45,7 +44,6 @@ class AgentRepository:
             name=name,
             status="active",
             skills=skills,
-            personality=personality,
         )
         self._session.add(agent)
         await self._session.flush()

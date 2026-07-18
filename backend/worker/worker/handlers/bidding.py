@@ -56,7 +56,6 @@ class TaskBiddingHandler(EventHandler[TaskCreatedStreamEvent]):
                 event.task_id,
                 event.workspace_id,
                 event.required_skills,
-                event.domain_tags,
                 self.redis,
                 self.arq_queue,
             )

@@ -7,7 +7,9 @@ that must hold across the whole input space (bounds, monotonicity, determinism).
 
 from __future__ import annotations
 
-from core.coordination.contract_net import compute_bid_score
+import random
+
+from core.coordination.contract_net import break_ties, compute_bid_score
 from core.coordination.influence import compute_influence_ema
 from core.coordination.skills import apply_skill_delta, compute_delta_magnitude
 from hypothesis import given
@@ -25,10 +27,9 @@ class TestComputeBidScoreProperties:
         required_skills=skill_map,
         w_skill=weight,
         w_influence=weight,
-        w_personality=weight,
     )
     def test_score_always_within_unit_interval(
-        self, agent_skills, agent_influence, required_skills, w_skill, w_influence, w_personality
+        self, agent_skills, agent_influence, required_skills, w_skill, w_influence
     ) -> None:
         score = compute_bid_score(
             agent_skills=agent_skills,
@@ -36,8 +37,6 @@ class TestComputeBidScoreProperties:
             required_skills=required_skills,
             w_skill=w_skill,
             w_influence=w_influence,
-            w_personality=w_personality,
-            add_jitter=False,
         )
         assert 0.0 <= score <= 1.0
 
@@ -45,21 +44,48 @@ class TestComputeBidScoreProperties:
         agent_skills=skill_map,
         agent_influence=unit_float,
         required_skills=skill_map,
-        task_id=st.text(min_size=1, max_size=16),
-        agent_id=st.text(min_size=1, max_size=16),
     )
     def test_deterministic_for_identical_inputs(
-        self, agent_skills, agent_influence, required_skills, task_id, agent_id
+        self, agent_skills, agent_influence, required_skills
     ) -> None:
         kwargs = dict(
             agent_skills=agent_skills,
             agent_influence=agent_influence,
             required_skills=required_skills,
-            task_id=task_id,
-            agent_id=agent_id,
-            add_jitter=True,
         )
         assert compute_bid_score(**kwargs) == compute_bid_score(**kwargs)
+
+
+class TestBreakTiesProperties:
+    @given(
+        scores=st.lists(unit_float, min_size=0, max_size=8),
+        seed=st.integers(min_value=0, max_value=10_000),
+    )
+    def test_deterministic_for_same_seed(self, scores, seed) -> None:
+        scored = [(i, score) for i, score in enumerate(scores)]
+        result_1 = break_ties(list(scored), rng=random.Random(seed))
+        result_2 = break_ties(list(scored), rng=random.Random(seed))
+        assert result_1 == result_2
+
+    @given(
+        scores=st.lists(unit_float, min_size=0, max_size=8),
+        seed=st.integers(min_value=0, max_value=10_000),
+    )
+    def test_result_is_descending_by_score(self, scores, seed) -> None:
+        scored = [(i, score) for i, score in enumerate(scores)]
+        result = break_ties(list(scored), rng=random.Random(seed))
+        result_scores = [score for _, score in result]
+        assert result_scores == sorted(result_scores, reverse=True)
+
+    @given(
+        scores=st.lists(unit_float, min_size=0, max_size=8),
+        seed=st.integers(min_value=0, max_value=10_000),
+    )
+    def test_does_not_mutate_input(self, scores, seed) -> None:
+        scored = [(i, score) for i, score in enumerate(scores)]
+        original = list(scored)
+        break_ties(scored, rng=random.Random(seed))
+        assert scored == original
 
 
 class TestComputeInfluenceEmaProperties:
