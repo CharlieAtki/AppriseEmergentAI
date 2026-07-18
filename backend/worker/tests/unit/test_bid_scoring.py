@@ -3,13 +3,18 @@
 All functions under test are pure (no I/O, no async). A regression here
 silently routes tasks to the wrong agent — the functions are highest risk for
 invisible logic drift.
+
+There is no capacity/concurrency term here: compute_bid_score is only ever
+called against agents already known to be idle (AgentRepository.get_active_for_bidding
+excludes busy agents at the query level, and contract_net.attempt_reservation's
+agent-level Redis lock is the actual correctness guarantee) — an agent with any
+active task is never a scoring candidate in the first place.
 """
 
 from __future__ import annotations
 
 import pytest
 from core.coordination.contract_net import (
-    _capacity_factor,
     _influence_factor,
     _personality_fit,
     _seeded_jitter,
@@ -65,34 +70,6 @@ def test_skill_match_clamped_above_one():
         required_skills={"python": 1.0},
     )
     assert score == pytest.approx(1.0)
-
-
-# ── _capacity_factor ─────────────────────────────────────────────────────────
-
-
-def test_capacity_factor_idle():
-    """Zero active tasks → full capacity (1.0)."""
-    assert _capacity_factor(active_tasks=0, max_parallel=3) == pytest.approx(1.0)
-
-
-def test_capacity_factor_full():
-    """Active tasks == max_parallel → zero capacity."""
-    assert _capacity_factor(active_tasks=3, max_parallel=3) == pytest.approx(0.0)
-
-
-def test_capacity_factor_clamped_at_zero():
-    """Active tasks > max_parallel → clamped to 0.0, not negative."""
-    assert _capacity_factor(active_tasks=5, max_parallel=3) == pytest.approx(0.0)
-
-
-def test_capacity_factor_zero_max():
-    """max_parallel=0 → always 0.0 (guard against division by zero)."""
-    assert _capacity_factor(active_tasks=0, max_parallel=0) == pytest.approx(0.0)
-
-
-def test_capacity_factor_partial():
-    """1 of 3 active → 2/3 capacity."""
-    assert _capacity_factor(active_tasks=1, max_parallel=3) == pytest.approx(2 / 3)
 
 
 # ── _influence_factor ─────────────────────────────────────────────────────────
@@ -190,7 +167,6 @@ def test_compute_bid_score_above_zero():
     score = compute_bid_score(
         agent_skills={"python": 0.9},
         agent_influence=0.7,
-        agent_active_tasks=0,
         required_skills={"python": 1.0},
         add_jitter=False,
     )
@@ -202,39 +178,34 @@ def test_compute_bid_score_clamped():
     score = compute_bid_score(
         agent_skills={"python": 10.0},
         agent_influence=100.0,
-        agent_active_tasks=0,
         required_skills={"python": 1.0},
         add_jitter=False,
     )
     assert 0.0 <= score <= 1.0
 
 
-def test_compute_bid_score_no_skills_no_capacity():
-    """Agent with no matching skills and full queue scores very low."""
+def test_compute_bid_score_no_matching_skills():
+    """Agent with none of the required skills scores very low."""
     score = compute_bid_score(
         agent_skills={},
         agent_influence=0.0,
-        agent_active_tasks=3,  # BID_MAX_PARALLEL_TASKS default = 3
         required_skills={"python": 1.0},
         add_jitter=False,
-        max_parallel=3,
     )
-    # skill=0, capacity=0, influence=0, personality=0.5 → w_personality * 0.5 = 0.025
+    # skill=0, influence=0, personality=0.5 → w_personality * 0.5 = 0.025
     assert score < 0.1
 
 
 def test_compute_bid_score_weighted_sum():
     """Manual calculation matches output with known inputs and no jitter."""
-    # With defaults: w_skill=0.6, w_capacity=0.2, w_influence=0.15, w_personality=0.05
-    # skill_match=1.0, capacity=1.0, influence_factor=0 (influence=0), personality=0.5
-    expected = 0.60 * 1.0 + 0.20 * 1.0 + 0.15 * 0.0 + 0.05 * 0.5
+    # With defaults: w_skill=0.80, w_influence=0.15, w_personality=0.05
+    # skill_match=1.0, influence_factor=0 (influence=0), personality=0.5
+    expected = 0.80 * 1.0 + 0.15 * 0.0 + 0.05 * 0.5
     score = compute_bid_score(
         agent_skills={"python": 1.0},
         agent_influence=0.0,
-        agent_active_tasks=0,
         required_skills={"python": 1.0},
         add_jitter=False,
         influence_k=2.0,
-        max_parallel=3,
     )
     assert score == pytest.approx(expected)

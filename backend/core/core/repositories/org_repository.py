@@ -36,6 +36,20 @@ class OrganisationRepository:
         """Unscoped PK lookup — caller already owns the ID (auth dep, worker path)."""
         return await self._session.get(Organisation, org_id)
 
+    async def get_for_update(self, org_id: uuid.UUID) -> Organisation | None:
+        """Fetch an Organisation with a row-level lock (SELECT ... FOR UPDATE).
+
+        Used before a config (JSONB) read-modify-write — e.g. CoordinationConfigService —
+        to prevent concurrent overwrites of unrelated keys. Mirrors
+        AgentRepository.get_for_update's role for agent.skills."""
+        return await self._session.get(Organisation, org_id, with_for_update=True)
+
+    async def get_member(
+        self, organisation_id: uuid.UUID, user_id: uuid.UUID
+    ) -> OrganisationMember | None:
+        """Composite-PK lookup — used by require_organisation() to read the caller's role."""
+        return await self._session.get(OrganisationMember, (organisation_id, user_id))
+
     async def save(self, org: Organisation) -> None:
         """Re-stage after field mutations. No flush — session commits on exit."""
         self._session.add(org)

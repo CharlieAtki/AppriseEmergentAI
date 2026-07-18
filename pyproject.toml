@@ -9,3 +9,60 @@ members = ["backend/core", "backend/api", "backend/worker"]
 
 [tool.uv.sources]
 apprise-core = { workspace = true }
+
+[dependency-groups]
+dev = [
+    "import-linter>=2.13",
+]
+
+# Encodes CLAUDE.md's "one rule that governs everything" and a few of its hard
+# rules as automated checks instead of code-review vigilance. Run via
+# `make arch` (see Makefile) or `lint-imports` from the repo root.
+[tool.importlinter]
+root_packages = ["api", "core", "worker"]
+include_external_packages = true
+
+[[tool.importlinter.contracts]]
+name = "Process boundaries: api and worker never import each other, both sit above core"
+type = "layers"
+layers = ["api | worker", "core"]
+
+[[tool.importlinter.contracts]]
+name = "api services never import api schemas (Command in, DTO out boundary)"
+type = "forbidden"
+source_modules = ["api.services"]
+forbidden_modules = ["api.schemas"]
+
+[[tool.importlinter.contracts]]
+name = "api routers/services never call the LLM router or LangGraph directly"
+type = "forbidden"
+source_modules = ["api.routers", "api.services"]
+forbidden_modules = ["core.intelligence.llm_router", "langgraph"]
+# These three edges import a frozen dataclass/type only (LLMRouter as a typed
+# accessor return value, EnrichmentOverrides as an input shape) — no LLM call
+# happens on either side of the edge. Verified by reading each file; a new
+# edge into llm_router/enrichment from api/ should not be added to this list
+# without the same check.
+ignore_imports = [
+    "api.deps -> core.intelligence.llm_router",
+    "api.routers.tasks -> core.intelligence.enrichment",
+    "api.services.task_service -> core.intelligence.enrichment",
+]
+
+[[tool.importlinter.contracts]]
+name = "worker never serves HTTP"
+type = "forbidden"
+source_modules = ["worker"]
+forbidden_modules = ["fastapi"]
+
+[[tool.importlinter.contracts]]
+name = "core.intelligence.registry stays dependency-free"
+type = "forbidden"
+source_modules = ["core.intelligence.registry"]
+forbidden_modules = ["core.database", "core.config", "anthropic", "openai", "boto3"]
+
+[[tool.importlinter.contracts]]
+name = "core.coordination stays deterministic — no LLM calls"
+type = "forbidden"
+source_modules = ["core.coordination"]
+forbidden_modules = ["core.intelligence.llm_router", "anthropic", "langgraph", "langchain_core"]

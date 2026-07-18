@@ -4,11 +4,12 @@ import uuid
 from collections.abc import Mapping
 from typing import Any
 
-from sqlalchemy import select
+from sqlalchemy import exists, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from core.models.agents import Agent
+from core.models.tasks import TaskExecution
 
 
 class AgentRepository:
@@ -92,17 +93,29 @@ class AgentRepository:
         workspace_id: uuid.UUID,
         exclude_id: uuid.UUID | None = None,
     ) -> list[Agent]:
-        """Fetch active agents with task_executions loaded for bid scoring.
+        """Fetch active, currently-idle agents as bidding candidates.
+
+        Excludes any agent with an in-flight ("executing") task_executions row —
+        an agent runs one task at a time by design. This is an optimization, not
+        the correctness guarantee: the actual invariant is enforced atomically by
+        the agent-level Redis lock in contract_net.attempt_reservation(). This
+        filter just avoids scoring and attempting reservation against agents
+        already known to be busy.
 
         exclude_id omits one agent — used by the CFP path to exclude the initiating
         agent from its own call-for-proposals round.
         """
-        conditions = [Agent.workspace_id == workspace_id, Agent.status == "active"]
+        conditions = [
+            Agent.workspace_id == workspace_id,
+            Agent.status == "active",
+            ~exists().where(
+                TaskExecution.agent_id == Agent.id,
+                TaskExecution.status == "executing",
+            ),
+        ]
         if exclude_id is not None:
             conditions.append(Agent.id != exclude_id)
-        result = await self._session.execute(
-            select(Agent).where(*conditions).options(selectinload(Agent.task_executions))
-        )
+        result = await self._session.execute(select(Agent).where(*conditions))
         return list(result.scalars().all())
 
     async def get_all_active(

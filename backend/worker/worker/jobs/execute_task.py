@@ -3,9 +3,10 @@ from __future__ import annotations
 import json
 import logging
 import uuid
+from contextlib import AbstractAsyncContextManager
 from dataclasses import asdict
 from datetime import UTC, datetime
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Protocol
 
 from core.agents.agent import build_initial_state
 from core.agents.graphs.state import GraphState
@@ -42,8 +43,6 @@ if TYPE_CHECKING:
     from core.models.tasks import Task, TaskExecution
     from redis.asyncio import Redis
 
-    from worker.context import WorkerContext
-
 
 logger = logging.getLogger(__name__)
 
@@ -53,28 +52,40 @@ logger = logging.getLogger(__name__)
 _COORDINATION_CONFIG_CACHE_TTL_SECONDS = 300
 
 
+class SessionProvider(Protocol):
+    """Opens the short-lived database session used for config resolution."""
+
+    def __call__(self) -> AbstractAsyncContextManager[Any]: ...
+
+
 async def _resolve_coordination_config(
-    wctx: WorkerContext, span: JobSpan, task: Task
+    redis: Redis,
+    session_provider: SessionProvider,
+    organisation_id: uuid.UUID,
+    workspace_id: uuid.UUID,
 ) -> CoordinationConfig:
     """Cache-then-DB resolution of this task's effective coordination guards.
 
     Never imports api/ — reads Organisation/Workspace directly via core/ repositories,
     since the worker must not depend on the HTTP layer.
     """
-    cache_key = f"coordination_config:{task.workspace_id}"
-    cached = await wctx.redis.get(cache_key)
+    cache_key = f"coordination_config:{workspace_id}"
+    cached = await redis.get(cache_key)
     if cached is not None:
-        return CoordinationConfig(**json.loads(cached))
+        try:
+            return CoordinationConfig(**json.loads(cached))
+        except TypeError, ValueError:
+            logger.warning("invalid cached coordination config for workspace=%s", workspace_id)
 
-    async with span.session() as session:
-        organisation = await OrganisationRepository(session).get_by_id(task.organisation_id)
-        workspace = await WorkspaceRepository(session).get_by_id(task.workspace_id)
+    async with session_provider() as session:
+        organisation = await OrganisationRepository(session).get_by_id(organisation_id)
+        workspace = await WorkspaceRepository(session).get_by_id(workspace_id)
 
     org_override = (organisation.config or {}).get("coordination") if organisation else None
     workspace_override = (workspace.config or {}).get("coordination") if workspace else None
     coord_cfg = resolve_coordination_config(settings.coordination, org_override, workspace_override)
 
-    await wctx.redis.set(
+    await redis.set(
         cache_key, json.dumps(asdict(coord_cfg)), ex=_COORDINATION_CONFIG_CACHE_TTL_SECONDS
     )
     return coord_cfg
@@ -132,6 +143,7 @@ async def execute_task(
                     agent_id,
                     task_id,
                 )
+                await wctx.redis.delete(f"agent_busy:{workspace_id}:{agent_id}")
                 return
 
         # Guard: if this is a retry and the previous attempt already wrote a terminal
@@ -142,12 +154,15 @@ async def execute_task(
                 task_id,
                 task.status,
             )
+            await wctx.redis.delete(f"agent_busy:{workspace_id}:{agent_id}")
             return
 
         # Build provenance context while task attributes are in-memory.
         # expire_on_commit=False on SessionLocal keeps scalar attrs after session close.
         provenance = TaskContext.from_task(task)
-        coord_cfg = await _resolve_coordination_config(wctx, span, task)
+        coord_cfg = await _resolve_coordination_config(
+            wctx.redis, span.session, task.organisation_id, task.workspace_id
+        )
         depth_exceeded = provenance.delegation_depth >= coord_cfg.max_delegation_depth
 
         # task_logger   — in-process EventBus; fires typed DomainEvents to same-process
@@ -279,26 +294,45 @@ async def execute_task(
                         decision="self_execute", reasoning="decompose parse fallback"
                     )
                 else:
-                    specs = [s.model_dump() for s in decompose_resp.subtasks]
-
                     async with span.session() as session:
                         task_repo = TaskRepository(session)
-                        subtasks = await decompose_subtasks(
-                            agent,
-                            task,
-                            specs,
-                            task_repo,
-                            task_ctx=provenance,
-                        )
+                        # Idempotency guard: if a prior attempt already committed
+                        # subtasks before crashing (e.g. between that commit and the
+                        # publish loop below), a retry re-entering this branch must not
+                        # create a second, duplicate batch — the first batch would stay
+                        # committed but never published, stuck at "open" forever with
+                        # nothing ever bidding on it. Mirrors the execution-row reuse
+                        # guard in Phase 2.
+                        existing_subtasks = await task_repo.get_siblings(task.id, task.workspace_id)
+                        if existing_subtasks:
+                            subtasks = existing_subtasks
+                        else:
+                            specs = [s.model_dump() for s in decompose_resp.subtasks]
+                            subtasks = await decompose_subtasks(
+                                agent,
+                                task,
+                                specs,
+                                task_repo,
+                                task_ctx=provenance,
+                            )
                     # Session committed — subtasks are now visible to all connections.
                     # Both publishes happen here, not inside decompose_subtasks, so
-                    # neither can fire for a subtask that failed to commit.
+                    # neither can fire for a subtask that failed to commit. Safe to
+                    # re-run for reused (retry) subtasks too: TaskBiddingHandler /
+                    # score_and_reserve only act on tasks still "open" and no-op
+                    # otherwise, so republishing an already-reserved subtask is harmless.
                     for subtask in subtasks:
                         await task_logger.created(subtask)
                         await stream_logger.task_created(subtask)
 
                     await _finalise_execution(
-                        span, execution, task, "completed", task_logger, execution_path="decompose"
+                        span,
+                        execution,
+                        task,
+                        "completed",
+                        task_logger,
+                        wctx.redis,
+                        execution_path="decompose",
                     )
                     return
 
@@ -383,6 +417,8 @@ async def execute_task(
 
             await span.stream.task_completed(task.workspace_id, task.id, agent.id, quality)
 
+            await wctx.redis.delete(f"agent_busy:{workspace_id}:{agent_id}")
+
             logger.info(
                 "execute_task: agent=%s task=%s quality=%.3f",
                 agent_id,
@@ -429,6 +465,14 @@ async def execute_task(
                     )
             except Exception:
                 logger.exception("execute_task: could not write failure state for task=%s", task_id)
+            try:
+                await wctx.redis.delete(f"agent_busy:{workspace_id}:{agent_id}")
+            except Exception:
+                logger.exception(
+                    "execute_task: could not release agent_busy lock for agent=%s task=%s",
+                    agent_id,
+                    task_id,
+                )
             raise
 
 
@@ -474,6 +518,7 @@ async def _release_to_pool(
     )
 
     await redis.delete(f"reservation:{task.workspace_id}:{task.id}")
+    await redis.delete(f"agent_busy:{task.workspace_id}:{execution.agent_id}")
 
     await stream_logger.task_created(task)
 
@@ -486,6 +531,7 @@ async def _finalise_execution(
     task: Task,
     status: str,
     task_logger: TaskActivityLogger,
+    redis: Redis,
     *,
     execution_path: str,
 ) -> None:
@@ -504,5 +550,7 @@ async def _finalise_execution(
     await task_logger.updated(
         before, task, executing_agent_id=execution.agent_id, execution_path=execution_path
     )
+
+    await redis.delete(f"agent_busy:{task.workspace_id}:{execution.agent_id}")
 
     await span.emit("job.completed", {"path": "delegated"})

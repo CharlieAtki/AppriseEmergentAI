@@ -28,14 +28,18 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = ["ruff>=0.15", "mypy>=2.1"]
-test = ["pytest>=9.1", "pytest-asyncio>=1.1"]
+test = [
+    "hypothesis>=6.156.6",
+    "pytest>=9.1",
+    "pytest-asyncio>=1.1",
+]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]
 
 [tool.mypy]
-python_version = "3.13"
+python_version = "3.14"
 ignore_missing_imports = true
 check_untyped_defs = false
 warn_return_any = false

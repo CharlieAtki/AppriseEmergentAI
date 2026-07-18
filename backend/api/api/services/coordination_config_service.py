@@ -1,13 +1,18 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from collections.abc import Mapping
+from dataclasses import dataclass, field
+from typing import TYPE_CHECKING, Any
 
 from core.config import settings
 from core.config.coordination import CoordinationPlatformDefaults
-from core.coordination.config import ConfigSource, resolve_coordination_config
-from core.models.tenant import Organisation, Workspace
+from core.coordination.config import resolve_coordination_config
 from core.repositories.org_repository import OrganisationRepository
 from core.repositories.workspace_repository import WorkspaceRepository
+
+if TYPE_CHECKING:
+    from core.coordination.config import ConfigSource
+    from core.models.tenant import Organisation, Workspace
 
 
 @dataclass(frozen=True)
@@ -21,6 +26,52 @@ class SetCoordinationOverrideCommand:
     max_delegation_depth_set: bool
     decompose_difficulty_threshold: float | None
     decompose_difficulty_threshold_set: bool
+
+
+@dataclass(frozen=True)
+class CoordinationOverride:
+    """Validated coordination values parsed from one persisted JSONB config."""
+
+    max_delegation_depth: int | None = None
+    decompose_difficulty_threshold: float | None = None
+    extra: Mapping[str, Any] = field(default_factory=dict)
+
+    @classmethod
+    def from_config(cls, config: object | None) -> CoordinationOverride:
+        if config is None:
+            return cls()
+        if not isinstance(config, Mapping):
+            raise ValueError("coordination config must be a mapping")
+        raw_override = config.get("coordination")
+        if raw_override is None:
+            return cls()
+        if not isinstance(raw_override, Mapping):
+            raise ValueError("coordination override must be a mapping")
+        depth = raw_override.get("max_delegation_depth")
+        if depth is not None and (type(depth) is not int or depth <= 0):
+            raise ValueError("max_delegation_depth must be a positive integer")
+        threshold = raw_override.get("decompose_difficulty_threshold")
+        if threshold is not None and (
+            isinstance(threshold, bool) or not isinstance(threshold, int | float) or threshold < 0
+        ):
+            raise ValueError("decompose_difficulty_threshold must be non-negative")
+        return cls(
+            max_delegation_depth=depth,
+            decompose_difficulty_threshold=float(threshold) if threshold is not None else None,
+            extra={
+                key: value
+                for key, value in raw_override.items()
+                if key not in {"max_delegation_depth", "decompose_difficulty_threshold"}
+            },
+        )
+
+    def to_mapping(self) -> dict[str, Any]:
+        override = dict(self.extra)
+        if self.max_delegation_depth is not None:
+            override["max_delegation_depth"] = self.max_delegation_depth
+        if self.decompose_difficulty_threshold is not None:
+            override["decompose_difficulty_threshold"] = self.decompose_difficulty_threshold
+        return override
 
 
 @dataclass(frozen=True)
@@ -45,14 +96,14 @@ class CoordinationConfigData:
     def from_overrides(
         cls,
         platform: CoordinationPlatformDefaults,
-        org_override: dict | None,
-        workspace_override: dict | None,
+        org_override: CoordinationOverride,
+        workspace_override: CoordinationOverride,
     ) -> CoordinationConfigData:
         """Resolve + assemble in one step — the DTO builds itself, matching the
         from_domain() convention every other service DTO in this codebase uses."""
-        resolved = resolve_coordination_config(platform, org_override, workspace_override)
-        org_override = org_override or {}
-        workspace_override = workspace_override or {}
+        resolved = resolve_coordination_config(
+            platform, org_override.to_mapping(), workspace_override.to_mapping()
+        )
         return cls(
             effective_max_delegation_depth=resolved.max_delegation_depth,
             effective_decompose_difficulty_threshold=resolved.decompose_difficulty_threshold,
@@ -64,19 +115,15 @@ class CoordinationConfigData:
             platform_decompose_difficulty_threshold_default=(
                 platform.decompose_difficulty_threshold_default
             ),
-            org_max_delegation_depth_override=org_override.get("max_delegation_depth"),
-            org_decompose_difficulty_threshold_override=org_override.get(
-                "decompose_difficulty_threshold"
-            ),
-            workspace_max_delegation_depth_override=workspace_override.get("max_delegation_depth"),
-            workspace_decompose_difficulty_threshold_override=workspace_override.get(
-                "decompose_difficulty_threshold"
-            ),
+            org_max_delegation_depth_override=org_override.max_delegation_depth,
+            org_decompose_difficulty_threshold_override=org_override.decompose_difficulty_threshold,
+            workspace_max_delegation_depth_override=workspace_override.max_delegation_depth,
+            workspace_decompose_difficulty_threshold_override=workspace_override.decompose_difficulty_threshold,
         )
 
 
-def _coordination_override(config: dict | None) -> dict | None:
-    return (config or {}).get("coordination")
+def _coordination_override(config: object | None) -> CoordinationOverride:
+    return CoordinationOverride.from_config(config)
 
 
 def _apply_override(
@@ -94,7 +141,7 @@ def _apply_override(
 
 
 def _merge_coordination_override(
-    existing_config: dict | None, cmd: SetCoordinationOverrideCommand
+    existing_config: Mapping[str, Any] | None, cmd: SetCoordinationOverrideCommand
 ) -> dict[str, int | float]:
     """Pure read-modify-write over just the "coordination" sub-key of a config
     dict — never touches any other key. Shared by both set_org_override() and
@@ -118,6 +165,34 @@ def _merge_coordination_override(
     return coordination
 
 
+def _serialize_coordination_config(
+    config: object | None, override: CoordinationOverride
+) -> dict[str, Any]:
+    if config is None:
+        config = {}
+    if not isinstance(config, Mapping):
+        raise ValueError("coordination config must be a mapping")
+    return {**config, "coordination": override.to_mapping()}
+
+
+def _merge_parsed_coordination_override(
+    existing_override: CoordinationOverride, cmd: SetCoordinationOverrideCommand
+) -> CoordinationOverride:
+    return CoordinationOverride(
+        max_delegation_depth=(
+            cmd.max_delegation_depth
+            if cmd.max_delegation_depth_set
+            else existing_override.max_delegation_depth
+        ),
+        decompose_difficulty_threshold=(
+            cmd.decompose_difficulty_threshold
+            if cmd.decompose_difficulty_threshold_set
+            else existing_override.decompose_difficulty_threshold
+        ),
+        extra=existing_override.extra,
+    )
+
+
 class CoordinationConfigService:
     """Resolves and writes ContractNet coordination guards (depth, difficulty
     threshold) across the platform/org/workspace tiers. One service for both
@@ -138,12 +213,12 @@ class CoordinationConfigService:
 
     async def get_for_org(self, org: Organisation) -> CoordinationConfigData:
         return CoordinationConfigData.from_overrides(
-            settings.coordination, _coordination_override(org.config), None
+            settings.coordination, _coordination_override(org.config), CoordinationOverride()
         )
 
     async def get_for_workspace(self, workspace: Workspace) -> CoordinationConfigData:
         org = await self._org_repo.get_by_id(workspace.organisation_id)
-        org_override = _coordination_override(org.config) if org else None
+        org_override = _coordination_override(org.config) if org else CoordinationOverride()
         workspace_override = _coordination_override(workspace.config)
         return CoordinationConfigData.from_overrides(
             settings.coordination, org_override, workspace_override
@@ -152,20 +227,35 @@ class CoordinationConfigService:
     async def set_org_override(
         self, org: Organisation, cmd: SetCoordinationOverrideCommand
     ) -> CoordinationConfigData:
-        coordination = _merge_coordination_override(org.config, cmd)
-        org.config = {**(org.config or {}), "coordination": coordination}
-        await self._org_repo.save(org)
-        return CoordinationConfigData.from_overrides(settings.coordination, coordination, None)
+        # Re-fetch under a row lock instead of trusting `org.config` as loaded by
+        # require_organisation() earlier in the request — otherwise a concurrent
+        # write to an unrelated config key between that load and this save would
+        # be silently clobbered by this read-modify-write. See
+        # AgentRepository.get_for_update for the same pattern applied to agent.skills.
+        locked_org = await self._org_repo.get_for_update(org.id)
+        assert locked_org is not None  # org already loaded earlier in this request
+        existing_override = _coordination_override(locked_org.config)
+        coordination = _merge_parsed_coordination_override(existing_override, cmd)
+        locked_org.config = _serialize_coordination_config(locked_org.config, coordination)
+        await self._org_repo.save(locked_org)
+        return CoordinationConfigData.from_overrides(
+            settings.coordination, coordination, CoordinationOverride()
+        )
 
     async def set_workspace_override(
         self, workspace: Workspace, cmd: SetCoordinationOverrideCommand
     ) -> CoordinationConfigData:
-        coordination = _merge_coordination_override(workspace.config, cmd)
-        workspace.config = {**(workspace.config or {}), "coordination": coordination}
-        await self._workspace_repo.save(workspace)
+        # See set_org_override for why this re-fetches under a row lock rather
+        # than mutating the `workspace.config` loaded earlier in the request.
+        locked_ws = await self._workspace_repo.get_for_update(workspace.id)
+        assert locked_ws is not None  # workspace already loaded earlier in this request
+        existing_override = _coordination_override(locked_ws.config)
+        coordination = _merge_parsed_coordination_override(existing_override, cmd)
+        locked_ws.config = _serialize_coordination_config(locked_ws.config, coordination)
+        await self._workspace_repo.save(locked_ws)
 
-        org = await self._org_repo.get_by_id(workspace.organisation_id)
-        org_override = _coordination_override(org.config) if org else None
+        org = await self._org_repo.get_by_id(locked_ws.organisation_id)
+        org_override = _coordination_override(org.config) if org else CoordinationOverride()
         return CoordinationConfigData.from_overrides(
             settings.coordination, org_override, coordination
         )

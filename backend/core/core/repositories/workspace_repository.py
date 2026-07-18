@@ -50,6 +50,14 @@ class WorkspaceRepository:
         Never call this from API routers — use get() instead."""
         return await self._session.get(Workspace, workspace_id)
 
+    async def get_for_update(self, workspace_id: uuid.UUID) -> Workspace | None:
+        """Fetch a Workspace with a row-level lock (SELECT ... FOR UPDATE).
+
+        Used before a config (JSONB) read-modify-write — e.g. CoordinationConfigService —
+        to prevent concurrent overwrites of unrelated keys. Mirrors
+        AgentRepository.get_for_update's role for agent.skills."""
+        return await self._session.get(Workspace, workspace_id, with_for_update=True)
+
     async def list_all(self, org_id: uuid.UUID) -> list[Workspace]:
         result = await self._session.execute(
             select(Workspace)

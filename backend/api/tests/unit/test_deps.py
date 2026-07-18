@@ -12,9 +12,9 @@ from api.deps import require_organisation, require_workspace
 from fastapi import HTTPException
 
 
-def _make_request(org_id: uuid.UUID, auth_type: str) -> MagicMock:
+def _make_request(org_id: uuid.UUID, auth_type: str, user_id: uuid.UUID | None = None) -> MagicMock:
     request = MagicMock()
-    request.state.auth = MagicMock(org_id=org_id, auth_type=auth_type)
+    request.state.auth = MagicMock(org_id=org_id, auth_type=auth_type, user_id=user_id)
     return request
 
 
@@ -34,18 +34,70 @@ async def test_require_organisation_rejects_api_key_auth():
     org_repo.get_by_id.assert_not_called()
 
 
-async def test_require_organisation_accepts_user_session_for_own_org():
+async def test_require_organisation_accepts_admin_member_for_own_org():
     org_id = uuid.uuid4()
-    request = _make_request(org_id, auth_type="user")
+    user_id = uuid.uuid4()
+    request = _make_request(org_id, auth_type="user", user_id=user_id)
     org = MagicMock()
     org_repo = AsyncMock()
     org_repo.get_by_id.return_value = org
+    org_repo.get_member.return_value = MagicMock(role="admin")
 
     dep = require_organisation("write")
     result = await dep("org_clerkid123", request, org_repo)
 
     assert result is org
     org_repo.get_by_id.assert_awaited_once_with(org_id)
+    org_repo.get_member.assert_awaited_once_with(org_id, user_id)
+
+
+async def test_require_organisation_rejects_non_admin_member_for_write():
+    """A member without a write-capable role must not be able to change
+    org-wide config, even though they belong to the organisation."""
+    org_id = uuid.uuid4()
+    user_id = uuid.uuid4()
+    request = _make_request(org_id, auth_type="user", user_id=user_id)
+    org_repo = AsyncMock()
+    org_repo.get_by_id.return_value = MagicMock()
+    org_repo.get_member.return_value = MagicMock(role="member")
+
+    dep = require_organisation("write")
+    with pytest.raises(HTTPException) as exc_info:
+        await dep("org_clerkid123", request, org_repo)
+
+    assert exc_info.value.status_code == 403
+
+
+async def test_require_organisation_allows_non_admin_member_for_read():
+    org_id = uuid.uuid4()
+    user_id = uuid.uuid4()
+    request = _make_request(org_id, auth_type="user", user_id=user_id)
+    org = MagicMock()
+    org_repo = AsyncMock()
+    org_repo.get_by_id.return_value = org
+    org_repo.get_member.return_value = MagicMock(role="member")
+
+    dep = require_organisation("read")
+    result = await dep("org_clerkid123", request, org_repo)
+
+    assert result is org
+
+
+async def test_require_organisation_rejects_non_member():
+    """The caller's org_id/token can be valid while the organisation_members
+    row is missing (e.g. Clerk webhook lag) — must not be treated as a member."""
+    org_id = uuid.uuid4()
+    user_id = uuid.uuid4()
+    request = _make_request(org_id, auth_type="user", user_id=user_id)
+    org_repo = AsyncMock()
+    org_repo.get_by_id.return_value = MagicMock()
+    org_repo.get_member.return_value = None
+
+    dep = require_organisation("write")
+    with pytest.raises(HTTPException) as exc_info:
+        await dep("org_clerkid123", request, org_repo)
+
+    assert exc_info.value.status_code == 403
 
 
 async def test_require_organisation_ignores_path_org_id():
@@ -54,10 +106,12 @@ async def test_require_organisation_ignores_path_org_id():
     request.state.auth.org_id, so an arbitrary/non-matching path value must
     not affect the outcome."""
     org_id = uuid.uuid4()
-    request = _make_request(org_id, auth_type="user")
+    user_id = uuid.uuid4()
+    request = _make_request(org_id, auth_type="user", user_id=user_id)
     org = MagicMock()
     org_repo = AsyncMock()
     org_repo.get_by_id.return_value = org
+    org_repo.get_member.return_value = MagicMock(role="admin")
 
     dep = require_organisation("write")
     result = await dep("org_totally_different_clerk_id", request, org_repo)

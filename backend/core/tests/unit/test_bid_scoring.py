@@ -9,20 +9,17 @@ class TestComputeBidScore:
         score = compute_bid_score(
             agent_skills={"python": 0.8},
             agent_influence=0.5,
-            agent_active_tasks=1,
             required_skills={"python": 1.0},
         )
         assert 0.0 <= score <= 1.0
 
     def test_skill_only_path(self) -> None:
-        # With capacity/influence/personality weights all zero, score = skill_match
+        # With influence/personality weights at zero, score = skill_match
         score = compute_bid_score(
             agent_skills={"python": 1.0},
             agent_influence=0.0,
-            agent_active_tasks=0,
             required_skills={"python": 1.0},
             w_skill=1.0,
-            w_capacity=0.0,
             w_influence=0.0,
             w_personality=0.0,
             add_jitter=False,
@@ -33,10 +30,8 @@ class TestComputeBidScore:
         score = compute_bid_score(
             agent_skills={"python": 0.9},
             agent_influence=0.5,
-            agent_active_tasks=0,
             required_skills={},
             w_skill=1.0,
-            w_capacity=0.0,
             w_influence=0.0,
             w_personality=0.0,
             add_jitter=False,
@@ -44,39 +39,10 @@ class TestComputeBidScore:
         # _skill_match returns 0.5 neutral when no skills required
         assert score == pytest.approx(0.5)
 
-    def test_max_parallel_reached_suppresses_score(self) -> None:
-        score_free = compute_bid_score(
-            agent_skills={},
-            agent_influence=0.0,
-            agent_active_tasks=0,
-            required_skills={},
-            w_skill=0.0,
-            w_capacity=1.0,
-            w_influence=0.0,
-            w_personality=0.0,
-            max_parallel=5,
-            add_jitter=False,
-        )
-        score_full = compute_bid_score(
-            agent_skills={},
-            agent_influence=0.0,
-            agent_active_tasks=5,
-            required_skills={},
-            w_skill=0.0,
-            w_capacity=1.0,
-            w_influence=0.0,
-            w_personality=0.0,
-            max_parallel=5,
-            add_jitter=False,
-        )
-        assert score_free == pytest.approx(1.0)
-        assert score_full == pytest.approx(0.0)
-
     def test_jitter_is_deterministic(self) -> None:
         kwargs = dict(
             agent_skills={"python": 0.5},
             agent_influence=0.3,
-            agent_active_tasks=1,
             required_skills={"python": 1.0},
             task_id="task-abc",
             agent_id="agent-xyz",
@@ -88,10 +54,8 @@ class TestComputeBidScore:
         base = dict(
             agent_skills={},
             agent_influence=0.0,
-            agent_active_tasks=0,
             required_skills={},
             w_skill=0.0,
-            w_capacity=0.0,
             w_influence=0.0,
             w_personality=0.0,
             add_jitter=True,
@@ -106,10 +70,8 @@ class TestComputeBidScore:
         score_no_skill = compute_bid_score(
             agent_skills={},
             agent_influence=0.0,
-            agent_active_tasks=0,
             required_skills={"python": 1.0},
             w_skill=1.0,
-            w_capacity=0.0,
             w_influence=0.0,
             w_personality=0.0,
             add_jitter=False,
@@ -117,10 +79,8 @@ class TestComputeBidScore:
         score_zero_skill = compute_bid_score(
             agent_skills={"python": 0.0},
             agent_influence=0.0,
-            agent_active_tasks=0,
             required_skills={"python": 1.0},
             w_skill=1.0,
-            w_capacity=0.0,
             w_influence=0.0,
             w_personality=0.0,
             add_jitter=False,
@@ -132,10 +92,8 @@ class TestComputeBidScore:
         score = compute_bid_score(
             agent_skills={"a": 1.0},
             agent_influence=1.0,
-            agent_active_tasks=0,
             required_skills={"a": 1.0},
             w_skill=1.0,
-            w_capacity=1.0,
             w_influence=1.0,
             w_personality=1.0,
             add_jitter=False,

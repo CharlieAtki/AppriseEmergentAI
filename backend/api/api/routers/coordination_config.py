@@ -1,15 +1,18 @@
 from __future__ import annotations
 
+import logging
+
 from core.models.tenant import Organisation, Workspace
 from core.repositories.workspace_repository import WorkspaceRepository
 from fastapi import APIRouter, Depends
-from redis.asyncio import Redis
+from redis.exceptions import RedisError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.deps import (
+    CacheInvalidator,
+    get_cache_invalidator,
     get_coordination_config_service,
     get_db,
-    get_redis,
     get_workspace_repo,
     require_organisation,
     require_workspace,
@@ -23,6 +26,7 @@ from api.services.coordination_config_service import (
     SetCoordinationOverrideCommand,
 )
 
+logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
@@ -49,7 +53,7 @@ async def update_org_coordination_config(
     # so the org-level write is durable before this handler returns.
     session: AsyncSession = Depends(get_db),
     workspace_repo: WorkspaceRepository = Depends(get_workspace_repo),
-    redis: Redis = Depends(get_redis),
+    cache: CacheInvalidator = Depends(get_cache_invalidator),
 ) -> CoordinationConfigResponse:
     fields_set = body.model_fields_set
     cmd = SetCoordinationOverrideCommand(
@@ -62,13 +66,16 @@ async def update_org_coordination_config(
     await session.commit()
     # An org override affects every workspace under it — the worker's cache key
     # is keyed per-workspace only (see execute_task.py's _resolve_coordination_config),
-    # so a single redis.delete(f"coordination_config:{org.id}") would invalidate
+    # so a single cache.delete(f"coordination_config:{org.id}") would invalidate
     # nothing real. Invalidate after commit, same ordering rationale as the
     # workspace-level PATCH below: invalidating before commit risks the worker
     # re-populating the cache from a session that hasn't actually persisted yet.
     workspaces = await workspace_repo.list_all(org.id)
     if workspaces:
-        await redis.delete(*(f"coordination_config:{ws.id}" for ws in workspaces))
+        try:
+            await cache.delete(*(f"coordination_config:{ws.id}" for ws in workspaces))
+        except RedisError:
+            logger.exception("coordination config: failed to invalidate workspace caches")
     return CoordinationConfigResponse.model_validate(data)
 
 
@@ -92,7 +99,7 @@ async def update_workspace_coordination_config(
     workspace: Workspace = Depends(require_workspace("write")),
     service: CoordinationConfigService = Depends(get_coordination_config_service),
     session: AsyncSession = Depends(get_db),
-    redis: Redis = Depends(get_redis),
+    cache: CacheInvalidator = Depends(get_cache_invalidator),
 ) -> CoordinationConfigResponse:
     fields_set = body.model_fields_set
     cmd = SetCoordinationOverrideCommand(
@@ -106,5 +113,8 @@ async def update_workspace_coordination_config(
     # Invalidate after commit, not inside the service (unlike ApiKeyService.revoke()) —
     # invalidating before commit risks the worker re-populating the cache from a
     # session that hasn't actually persisted yet.
-    await redis.delete(f"coordination_config:{workspace.id}")
+    try:
+        await cache.delete(f"coordination_config:{workspace.id}")
+    except RedisError:
+        logger.exception("coordination config: failed to invalidate workspace cache")
     return CoordinationConfigResponse.model_validate(data)

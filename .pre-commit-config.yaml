@@ -24,6 +24,15 @@ repos:
         files: ^backend/
         exclude: ^backend/.*/migrations/|^backend/.*/tests/
 
+  - repo: local
+    hooks:
+      - id: import-linter
+        name: import-linter (CLAUDE.md process/layer boundaries)
+        entry: uv run lint-imports
+        language: system
+        pass_filenames: false
+        files: ^backend/
+
   - repo: https://github.com/compilerla/conventional-pre-commit
     rev: v4.4.0
     hooks:

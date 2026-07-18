@@ -132,4 +132,10 @@ class StreamSubscriber(ExternalEventSubscriber):
                     "%s subscriber error on message %s: %r", self.name, msg_id, payload
                 )
             finally:
-                await self.bus.ack(self.stream, self.group, msg_id)
+                try:
+                    await self.bus.ack(self.stream, self.group, msg_id)
+                except Exception:
+                    # An ack failure (e.g. Redis connection drop) must not escape the
+                    # loop — the message stays in the PEL and is redelivered, same as
+                    # a handler/parse failure that never reached ack at all.
+                    logger.exception("%s subscriber failed to ack message %s", self.name, msg_id)

@@ -16,21 +16,15 @@ import { Input } from '@/components/ui/input'
 import { FieldLabel } from '@/components/ui/field'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import {
   useGetOrgCoordinationConfigOrganisationsOrgIdCoordinationConfigGet,
   useUpdateOrgCoordinationConfigOrganisationsOrgIdCoordinationConfigPatch,
   getGetOrgCoordinationConfigOrganisationsOrgIdCoordinationConfigGetQueryKey,
 } from '@/api/generated/coordination-config/coordination-config'
-import {
-  useGetOrgBiddingConfigOrganisationsOrgIdBiddingConfigGet,
-  useUpdateOrgBiddingConfigOrganisationsOrgIdBiddingConfigPatch,
-  getGetOrgBiddingConfigOrganisationsOrgIdBiddingConfigGetQueryKey,
-} from '@/api/generated/bidding-config/bidding-config'
 import type { CoordinationConfigResponse } from '@/api/generated/model'
 import { COORDINATION_CONFIG_FIELDS, type ConfigFieldMeta } from '@/config/coordinationConfigFields'
-import { BIDDING_CONFIG_FIELDS, type BiddingFieldMeta } from '@/config/biddingConfigFields'
 import { Badge } from '@/components/ui/Badge'
 import { toast } from 'sonner'
 
@@ -45,26 +39,45 @@ interface FieldState {
   value: string
 }
 
-function effectiveValueOf(data: CoordinationConfigResponse, key: string): number {
-  return key === 'max_delegation_depth'
-    ? data.effective_max_delegation_depth
-    : data.effective_decompose_difficulty_threshold
+type FieldKey = ConfigFieldMeta['key']
+
+interface FieldAccessors {
+  effectiveValue: (data: CoordinationConfigResponse) => number
+  source: (data: CoordinationConfigResponse) => string
+  orgOverride: (data: CoordinationConfigResponse) => number | null
+  // max_delegation_depth's real ceiling is dynamic (platform-configured), not a
+  // static field-schema value — see CoordinationConfigResponse.platform_max_delegation_depth_ceiling.
+  max?: (data: CoordinationConfigResponse) => number | undefined
 }
 
-function sourceOf(data: CoordinationConfigResponse, key: string): string {
-  return key === 'max_delegation_depth' ? data.max_delegation_depth_source : data.decompose_difficulty_threshold_source
+const FIELD_ACCESSORS: Record<FieldKey, FieldAccessors> = {
+  max_delegation_depth: {
+    effectiveValue: (data) => data.effective_max_delegation_depth,
+    source: (data) => data.max_delegation_depth_source,
+    orgOverride: (data) => data.org_max_delegation_depth_override,
+    max: (data) => data.platform_max_delegation_depth_ceiling,
+  },
+  decompose_difficulty_threshold: {
+    effectiveValue: (data) => data.effective_decompose_difficulty_threshold,
+    source: (data) => data.decompose_difficulty_threshold_source,
+    orgOverride: (data) => data.org_decompose_difficulty_threshold_override,
+  },
 }
 
-function orgOverrideOf(data: CoordinationConfigResponse, key: string): number | null {
-  return key === 'max_delegation_depth'
-    ? data.org_max_delegation_depth_override
-    : data.org_decompose_difficulty_threshold_override
+function effectiveValueOf(data: CoordinationConfigResponse, key: FieldKey): number {
+  return FIELD_ACCESSORS[key].effectiveValue(data)
 }
 
-// max_delegation_depth's real ceiling is dynamic (platform-configured), not a
-// static field-schema value — see CoordinationConfigResponse.platform_max_delegation_depth_ceiling.
-function maxOf(data: CoordinationConfigResponse, key: string): number | undefined {
-  return key === 'max_delegation_depth' ? data.platform_max_delegation_depth_ceiling : undefined
+function sourceOf(data: CoordinationConfigResponse, key: FieldKey): string {
+  return FIELD_ACCESSORS[key].source(data)
+}
+
+function orgOverrideOf(data: CoordinationConfigResponse, key: FieldKey): number | null {
+  return FIELD_ACCESSORS[key].orgOverride(data)
+}
+
+function maxOf(data: CoordinationConfigResponse, key: FieldKey): number | undefined {
+  return FIELD_ACCESSORS[key].max?.(data)
 }
 
 function fieldError(state: FieldState, field: { min?: number }, max: number | undefined): string | null {
@@ -80,24 +93,22 @@ function fieldError(state: FieldState, field: { min?: number }, max: number | un
 export function OrgSettingsModal({ orgId, open, onOpenChange }: OrgSettingsModalProps) {
   const [fields, setFields] = useState<Record<string, FieldState>>({})
   const [initialFields, setInitialFields] = useState<Record<string, FieldState>>({})
-  const [biddingFields, setBiddingFields] = useState<Record<string, FieldState>>({})
-  const [biddingInitialFields, setBiddingInitialFields] = useState<Record<string, FieldState>>({})
   const [confirmDiscardOpen, setConfirmDiscardOpen] = useState(false)
+  const initializedForOpenRef = useRef(false)
   const queryClient = useQueryClient()
 
   const { data, isLoading, isError, refetch } = useGetOrgCoordinationConfigOrganisationsOrgIdCoordinationConfigGet(
     orgId,
     { query: { enabled: open } },
   )
-  const {
-    data: biddingData,
-    isLoading: biddingIsLoading,
-    isError: biddingIsError,
-    refetch: refetchBidding,
-  } = useGetOrgBiddingConfigOrganisationsOrgIdBiddingConfigGet(orgId, { query: { enabled: open } })
 
   useEffect(() => {
-    if (!open || !data) return
+    if (!open) {
+      initializedForOpenRef.current = false
+      return
+    }
+    if (!data || initializedForOpenRef.current) return
+
     const next: Record<string, FieldState> = {}
     for (const field of COORDINATION_CONFIG_FIELDS) {
       const override = orgOverrideOf(data, field.key)
@@ -108,25 +119,13 @@ export function OrgSettingsModal({ orgId, open, onOpenChange }: OrgSettingsModal
     }
     setFields(next)
     setInitialFields(next)
+    initializedForOpenRef.current = true
   }, [open, data])
 
-  useEffect(() => {
-    if (!open || !biddingData) return
-    const next: Record<string, FieldState> = {
-      bid_score_threshold: {
-        overrideEnabled: biddingData.org_bid_score_threshold_override !== null,
-        value: String(biddingData.org_bid_score_threshold_override ?? biddingData.effective_bid_score_threshold),
-      },
-    }
-    setBiddingFields(next)
-    setBiddingInitialFields(next)
-  }, [open, biddingData])
-
   const isDirty = JSON.stringify(fields) !== JSON.stringify(initialFields)
-  const biddingIsDirty = JSON.stringify(biddingFields) !== JSON.stringify(biddingInitialFields)
 
   function handleOpenChange(next: boolean) {
-    if (!next && (isDirty || biddingIsDirty)) {
+    if (!next && isDirty) {
       setConfirmDiscardOpen(true)
       return
     }
@@ -147,21 +146,6 @@ export function OrgSettingsModal({ orgId, open, onOpenChange }: OrgSettingsModal
     },
   })
 
-  const { mutate: mutateBidding, isPending: biddingIsPending } =
-    useUpdateOrgBiddingConfigOrganisationsOrgIdBiddingConfigPatch({
-      mutation: {
-        onSuccess: () => {
-          void queryClient.invalidateQueries({
-            queryKey: getGetOrgBiddingConfigOrganisationsOrgIdBiddingConfigGetQueryKey(orgId),
-          })
-          toast('Bid scoring settings saved')
-        },
-        onError: () => {
-          toast.error('Failed to update bid scoring settings')
-        },
-      },
-    })
-
   function toggleOverride(field: ConfigFieldMeta, checked: boolean) {
     setFields((prev) => ({
       ...prev,
@@ -171,26 +155,10 @@ export function OrgSettingsModal({ orgId, open, onOpenChange }: OrgSettingsModal
     }))
   }
 
-  function toggleBiddingOverride(checked: boolean) {
-    setBiddingFields((prev) => ({
-      ...prev,
-      bid_score_threshold: checked
-        ? {
-            overrideEnabled: true,
-            value: prev.bid_score_threshold?.value ?? String(biddingData!.effective_bid_score_threshold),
-          }
-        : { overrideEnabled: false, value: prev.bid_score_threshold?.value ?? '' },
-    }))
-  }
-
   const hasErrors = COORDINATION_CONFIG_FIELDS.some((field) => {
     const state = fields[field.key]
     return state && data && fieldError(state, field, maxOf(data, field.key)) !== null
   })
-
-  const biddingState = biddingFields.bid_score_threshold
-  const biddingField = BIDDING_CONFIG_FIELDS[0] as BiddingFieldMeta
-  const biddingError = biddingState ? fieldError(biddingState, biddingField, biddingField.max) : null
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -203,16 +171,6 @@ export function OrgSettingsModal({ orgId, open, onOpenChange }: OrgSettingsModal
         decompose_difficulty_threshold: fields.decompose_difficulty_threshold?.overrideEnabled
           ? Number(fields.decompose_difficulty_threshold.value)
           : null,
-      },
-    })
-  }
-
-  function handleBiddingSubmit(e: React.FormEvent) {
-    e.preventDefault()
-    mutateBidding({
-      orgId,
-      data: {
-        bid_score_threshold: biddingState?.overrideEnabled ? Number(biddingState.value) : null,
       },
     })
   }
@@ -234,12 +192,6 @@ export function OrgSettingsModal({ orgId, open, onOpenChange }: OrgSettingsModal
                 className="justify-start rounded-lg px-3 py-2 text-label font-medium text-muted after:bg-brand-primary data-active:bg-elevated data-active:text-foreground hover:bg-elevated/50 hover:text-foreground"
               >
                 Coordination
-              </TabsTrigger>
-              <TabsTrigger
-                value="bidding"
-                className="justify-start rounded-lg px-3 py-2 text-label font-medium text-muted after:bg-brand-primary data-active:bg-elevated data-active:text-foreground hover:bg-elevated/50 hover:text-foreground"
-              >
-                Bid scoring
               </TabsTrigger>
             </TabsList>
 
@@ -280,7 +232,9 @@ export function OrgSettingsModal({ orgId, open, onOpenChange }: OrgSettingsModal
                       return (
                         <div key={field.key} className="space-y-1.5">
                           <div className="flex items-center justify-between gap-2">
-                            <FieldLabel className="text-label font-medium text-secondary">{field.label}</FieldLabel>
+                            <FieldLabel htmlFor={`org-config-${field.key}`} className="text-label font-medium text-secondary">
+                              {field.label}
+                            </FieldLabel>
                             <div className="flex items-center gap-2">
                               <Badge status={source} />
                               <div className="flex items-center gap-1.5 text-caption text-muted">
@@ -301,6 +255,7 @@ export function OrgSettingsModal({ orgId, open, onOpenChange }: OrgSettingsModal
                             </p>
                           )}
                           <Input
+                            id={`org-config-${field.key}`}
                             type="number"
                             inputMode={field.type === 'integer' ? 'numeric' : 'decimal'}
                             min={field.min}
@@ -332,87 +287,6 @@ export function OrgSettingsModal({ orgId, open, onOpenChange }: OrgSettingsModal
                       className="rounded-lg bg-brand-primary px-4 py-2 text-body font-medium text-background transition-colors hover:bg-brand-hover disabled:opacity-50"
                     >
                       {isPending ? 'Saving…' : 'Save'}
-                    </Button>
-                  </div>
-                </form>
-              </TabsContent>
-
-              <TabsContent value="bidding">
-                <form onSubmit={handleBiddingSubmit} className="space-y-4">
-                  {biddingIsLoading && (
-                    <div className="space-y-1.5">
-                      <Skeleton className="h-4 w-32 bg-elevated" />
-                      <Skeleton className="h-3 w-full bg-elevated" />
-                      <Skeleton className="h-9 w-full rounded-lg bg-elevated" />
-                    </div>
-                  )}
-
-                  {biddingIsError && (
-                    <div className="space-y-2 rounded-lg border border-error/30 bg-error/10 px-3 py-2.5">
-                      <p className="text-caption text-error">Couldn't load bid scoring settings.</p>
-                      <Button
-                        type="button"
-                        onClick={() => refetchBidding()}
-                        className="text-caption font-medium text-error underline underline-offset-2"
-                      >
-                        Try again
-                      </Button>
-                    </div>
-                  )}
-
-                  {biddingData && biddingState && (
-                    <div className="space-y-1.5">
-                      <div className="flex items-center justify-between gap-2">
-                        <FieldLabel className="text-label font-medium text-secondary">{biddingField.label}</FieldLabel>
-                        <div className="flex items-center gap-2">
-                          <Badge status={biddingData.bid_score_threshold_source} />
-                          <div className="flex items-center gap-1.5 text-caption text-muted">
-                            <Checkbox
-                              id="org-override-bid_score_threshold"
-                              checked={biddingState.overrideEnabled}
-                              onCheckedChange={(checked) => toggleBiddingOverride(checked)}
-                              className="h-4 w-4 rounded border-border bg-elevated data-checked:border-brand-primary data-checked:bg-brand-primary data-checked:text-background focus-visible:ring-brand-primary"
-                            />
-                            <FieldLabel htmlFor="org-override-bid_score_threshold">Override</FieldLabel>
-                          </div>
-                        </div>
-                      </div>
-                      <p className="text-caption text-muted">{biddingField.description}</p>
-                      <Input
-                        type="number"
-                        inputMode={biddingField.type === 'integer' ? 'numeric' : 'decimal'}
-                        min={biddingField.min}
-                        max={biddingField.max}
-                        step={biddingField.step}
-                        disabled={!biddingState.overrideEnabled || biddingIsPending}
-                        value={
-                          biddingState.overrideEnabled
-                            ? biddingState.value
-                            : String(biddingData.effective_bid_score_threshold)
-                        }
-                        onChange={(e) =>
-                          setBiddingFields((prev) => ({
-                            ...prev,
-                            bid_score_threshold: { overrideEnabled: true, value: e.target.value },
-                          }))
-                        }
-                        className={`w-full rounded-lg border bg-elevated px-3 py-2 text-body text-foreground disabled:opacity-50 focus:outline-none focus:ring-1 ${
-                          biddingError
-                            ? 'border-error focus:border-error focus:ring-error'
-                            : 'border-border focus:border-brand-primary focus:ring-brand-primary'
-                        }`}
-                      />
-                      {biddingError && <p className="text-caption text-error">{biddingError}</p>}
-                    </div>
-                  )}
-
-                  <div className="flex justify-end pt-1">
-                    <Button
-                      type="submit"
-                      disabled={biddingIsPending || !biddingData || biddingError !== null}
-                      className="rounded-lg bg-brand-primary px-4 py-2 text-body font-medium text-background transition-colors hover:bg-brand-hover disabled:opacity-50"
-                    >
-                      {biddingIsPending ? 'Saving…' : 'Save'}
                     </Button>
                   </div>
                 </form>

@@ -20,6 +20,7 @@ from api.routers.coordination_config import (
 )
 from api.schemas.coordination_config import UpdateCoordinationConfigRequest
 from api.services.coordination_config_service import CoordinationConfigData
+from redis.exceptions import RedisError
 
 
 def _make_org() -> MagicMock:
@@ -69,7 +70,7 @@ async def test_org_patch_invalidates_every_workspace_cache_key_under_the_org():
         service=service,
         session=session,
         workspace_repo=workspace_repo,
-        redis=redis,
+        cache=redis,
     )
 
     session.commit.assert_awaited_once()
@@ -93,10 +94,33 @@ async def test_org_patch_skips_redis_call_when_org_has_no_workspaces():
         service=service,
         session=session,
         workspace_repo=workspace_repo,
-        redis=redis,
+        cache=redis,
     )
 
     redis.delete.assert_not_called()
+
+
+async def test_org_patch_returns_committed_config_when_redis_invalidation_fails():
+    org = _make_org()
+    workspace_repo = AsyncMock()
+    workspace_repo.list_all.return_value = [_make_workspace(org.id)]
+    service = AsyncMock()
+    service.set_org_override.return_value = _make_data()
+    session = AsyncMock()
+    redis = AsyncMock()
+    redis.delete.side_effect = RedisError("unavailable")
+
+    response = await update_org_coordination_config(
+        body=UpdateCoordinationConfigRequest(max_delegation_depth=4),
+        org=org,
+        service=service,
+        session=session,
+        workspace_repo=workspace_repo,
+        cache=redis,
+    )
+
+    session.commit.assert_awaited_once()
+    assert response.effective_max_delegation_depth == 4
 
 
 async def test_workspace_patch_invalidates_only_its_own_cache_key():
@@ -113,8 +137,28 @@ async def test_workspace_patch_invalidates_only_its_own_cache_key():
         workspace=ws,
         service=service,
         session=session,
-        redis=redis,
+        cache=redis,
     )
 
     session.commit.assert_awaited_once()
     redis.delete.assert_awaited_once_with(f"coordination_config:{ws.id}")
+
+
+async def test_workspace_patch_returns_committed_config_when_redis_invalidation_fails():
+    ws = _make_workspace(uuid.uuid4())
+    service = AsyncMock()
+    service.set_workspace_override.return_value = _make_data()
+    session = AsyncMock()
+    redis = AsyncMock()
+    redis.delete.side_effect = RedisError("unavailable")
+
+    response = await update_workspace_coordination_config(
+        body=UpdateCoordinationConfigRequest(max_delegation_depth=4),
+        workspace=ws,
+        service=service,
+        session=session,
+        cache=redis,
+    )
+
+    session.commit.assert_awaited_once()
+    assert response.effective_max_delegation_depth == 4

@@ -3,7 +3,6 @@ from __future__ import annotations
 from pydantic import Field
 from pydantic_settings import BaseSettings
 
-from core.config.bidding import BiddingPlatformDefaults
 from core.config.coordination import CoordinationPlatformDefaults
 from core.config.database import DatabaseConfig
 from core.config.intelligence import IntelligenceConfig
@@ -19,19 +18,11 @@ from core.config.worker import WorkerConfig
 
 
 class Settings(BaseSettings):
-    # ------------------------------------------------------------------ #
-    # ContractNet bidding & scheduling constants — kept flat + uppercase   #
-    # for backward compatibility with existing coordination/ and memory/  #
-    # imports. Not to be confused with `coordination` below (the          #
-    # workspace-configurable depth/difficulty guards) — this block is     #
-    # unrelated bid-scoring math, the naming collision is historical.      #
-    # ------------------------------------------------------------------ #
+    # ContractNet constants remain flat and uppercase for backward compatibility.
     RESERVATION_TTL_SECONDS: int = 30
-    BID_W_SKILL: float = 0.60
-    BID_W_CAPACITY: float = 0.20
+    BID_W_SKILL: float = 0.80
     BID_W_INFLUENCE: float = 0.15
     BID_W_PERSONALITY: float = 0.05
-    BID_MAX_PARALLEL_TASKS: int = 3
     BID_INFLUENCE_K: float = 2.0
     BID_ADD_JITTER: bool = True
     SKILL_DECAY_RATE: float = (
@@ -53,7 +44,6 @@ class Settings(BaseSettings):
     memory: MemoryConfig = Field(default_factory=MemoryConfig)
     intelligence: IntelligenceConfig = Field(default_factory=IntelligenceConfig)
     coordination: CoordinationPlatformDefaults = Field(default_factory=CoordinationPlatformDefaults)
-    bidding: BiddingPlatformDefaults = Field(default_factory=BiddingPlatformDefaults)
     anthropic: AnthropicConfig = Field(default_factory=AnthropicConfig)
     azure: AzureConfig = Field(default_factory=AzureConfig)
     aws: AWSConfig = Field(default_factory=AWSConfig)

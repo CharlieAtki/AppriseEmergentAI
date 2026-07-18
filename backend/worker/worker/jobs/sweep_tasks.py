@@ -34,6 +34,16 @@ async def sweep_tasks(ctx: dict[str, Any]) -> None:
     3. Stale reservations: ``"reserved"`` tasks whose Redis TTL has long expired but whose
        Postgres row was never transitioned → ``"open"`` so they re-enter bidding.
 
+    Sweep 3 is a backstop, not the primary recovery path: score_and_reserve()
+    (worker/coordination/bidding.py) already reverts a task to "open" in-process
+    when enqueue_job fails right after the "reserved" commit, so the bus-level
+    Retry wrapper can re-win it within seconds. That in-process recovery only
+    runs if the code gets to execute at all — it can't help if the worker process
+    is killed outright (OOM, SIGKILL, a rolling deploy) or if the revert commit
+    itself fails. This sweep is what catches those cases (and any future/other
+    code path that reserves a task and never un-reserves it), independent of
+    whether anything downstream survived long enough to clean up after itself.
+
     No LLM calls. No JobSpan. Events fired after the DB commit so handlers see final state.
     """
     wctx = get_worker_context()

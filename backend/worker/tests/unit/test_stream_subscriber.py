@@ -194,6 +194,26 @@ async def test_handler_exception_still_acks():
     bus.ack.assert_awaited_once_with("stream:task", "worker-group", "1-0")
 
 
+async def test_ack_failure_does_not_crash_the_loop():
+    """An ack() failure (e.g. a Redis connection drop) must not escape the loop —
+    the message stays in the PEL and is redelivered, same as any other failure
+    mode this file guards. Regression test for the ack call being unguarded in
+    the finally block."""
+    bus = _ScriptedBus(
+        [
+            ("1-0", _task_created_payload()),
+            ("2-0", _task_created_payload()),
+        ]
+    )
+    bus.ack = AsyncMock(side_effect=[ConnectionError("redis down"), None])
+    publish = AsyncMock(return_value=[])
+    sub = _subscriber(bus, publish=publish)
+
+    await _run_to_completion(sub)  # must not raise
+
+    assert bus.ack.await_count == 2
+
+
 async def test_multiple_messages_each_acked_independently():
     bus = _ScriptedBus(
         [

@@ -61,6 +61,36 @@ async def _session_cm(session):
     yield session
 
 
+async def test_invalid_cached_coordination_config_falls_back_to_database(mocker):
+    task = MagicMock()
+    task.organisation_id = uuid.uuid4()
+    task.workspace_id = uuid.uuid4()
+    wctx = _wctx()
+    wctx.redis.get = AsyncMock(return_value="{invalid")
+    span = MagicMock()
+    span.session = lambda: _session_cm(AsyncMock())
+    org = MagicMock(config=None)
+    workspace = MagicMock(config=None)
+    org_repo = MagicMock()
+    org_repo.get_by_id = AsyncMock(return_value=org)
+    workspace_repo = MagicMock()
+    workspace_repo.get_by_id = AsyncMock(return_value=workspace)
+    mocker.patch.object(execute_task_module, "OrganisationRepository", return_value=org_repo)
+    mocker.patch.object(execute_task_module, "WorkspaceRepository", return_value=workspace_repo)
+    expected = execute_task_module.CoordinationConfig(**_DEFAULT_COORDINATION_CONFIG)
+    resolve = mocker.patch.object(
+        execute_task_module, "resolve_coordination_config", return_value=expected
+    )
+
+    result = await execute_task_module._resolve_coordination_config(
+        wctx.redis, span.session, task.organisation_id, task.workspace_id
+    )
+
+    assert result == expected
+    resolve.assert_called_once()
+    wctx.redis.set.assert_awaited_once()
+
+
 def _patch_infra(mocker, task, agent, *, session=None):
     """Patch worker_context, DB session, and the four repositories used by execute_task."""
     wctx = _wctx()
@@ -72,6 +102,10 @@ def _patch_infra(mocker, task, agent, *, session=None):
     task_repo = MagicMock()
     task_repo.get_for_execution = AsyncMock(return_value=task)
     task_repo.save = AsyncMock()
+    # No pre-existing subtasks by default — the decompose branch's idempotency
+    # guard (get_siblings) takes the "create" path unless a test overrides this
+    # to simulate a retry that finds subtasks already committed.
+    task_repo.get_siblings = AsyncMock(return_value=[])
     mocker.patch.object(execute_task_module, "TaskRepository", return_value=task_repo)
 
     agent_repo = MagicMock()
@@ -235,7 +269,11 @@ async def test_cfp_decision_releases_task_to_pool(make_task, make_agent, mocker)
 
     assert task.status == "open"
     assert task.delegation_depth == 1
-    wctx.redis.delete.assert_awaited_once_with(f"reservation:{task.workspace_id}:{task.id}")
+    # Both the task-level reservation and the agent-level busy lock are released
+    # when a task returns to the pool via CFP.
+    assert wctx.redis.delete.await_count == 2
+    wctx.redis.delete.assert_any_await(f"reservation:{task.workspace_id}:{task.id}")
+    wctx.redis.delete.assert_any_await(f"agent_busy:{task.workspace_id}:{agent.id}")
     assert execution.status == "completed"
     assert execution.execution_path == "cfp"
 
@@ -266,11 +304,53 @@ async def test_decompose_decision_creates_subtasks(make_task, make_agent, mocker
     assert execution.execution_path == "decompose"
     assert task.status == "completed"
 
+    # The coordinating agent's busy lock is released once it hands off to
+    # subtasks — it's free to bid on other tasks; the new subtasks run their
+    # own independent bidding rounds.
+    wctx.redis.delete.assert_awaited_once_with(f"agent_busy:{task.workspace_id}:{agent.id}")
+
     # Regression guard: task_logger.created(subtask) must fire from execute_task's
     # post-commit loop (via TaskActivityLogger -> wctx.event_bus.apublish), not from
     # inside decompose_subtasks — decompose_subtasks is mocked above and returns the
     # subtask without ever touching a publish callable, so this call can only have
     # come from the post-commit loop in execute_task.py.
+    from core.eventing.events.task_events import TaskCreatedEvent
+
+    published_types = [call.args[0].__class__ for call in wctx.event_bus.apublish.call_args_list]
+    assert TaskCreatedEvent in published_types
+
+
+async def test_decompose_retry_reuses_existing_subtasks_without_recreating(
+    make_task, make_agent, mocker
+):
+    """Regression test: if a prior attempt already committed subtasks before
+    crashing (e.g. between that commit and the publish loop), a retry must not
+    create a second, duplicate batch — it should reuse the existing siblings
+    and still publish for them, not call decompose_subtasks again."""
+    task = make_task(status="reserved", delegation_depth=0, difficulty=4.5)  # above threshold
+    agent = make_agent()
+    wctx, task_repo, _, _, execution = _patch_infra(mocker, task, agent)
+    _decision(mocker, "decompose")
+
+    existing_subtask = make_task(status="open")
+    task_repo.get_siblings = AsyncMock(return_value=[existing_subtask])
+
+    decompose_resp = MagicMock()
+    decompose_resp.subtasks = []
+    mocker.patch.object(
+        execute_task_module.structured_call,
+        "call_and_parse",
+        AsyncMock(return_value=decompose_resp),
+    )
+    decompose_mock = mocker.patch.object(execute_task_module, "decompose_subtasks", AsyncMock())
+
+    await execute_task_module.execute_task(
+        _ctx(), str(agent.id), str(task.id), str(task.workspace_id)
+    )
+
+    decompose_mock.assert_not_called()
+    assert execution.execution_path == "decompose"
+
     from core.eventing.events.task_events import TaskCreatedEvent
 
     published_types = [call.args[0].__class__ for call in wctx.event_bus.apublish.call_args_list]
@@ -344,6 +424,8 @@ async def test_self_execute_happy_path_writes_results(make_task, make_agent, moc
     assert task.status == "completed"
     # skill decay applied (settings.SKILL_DECAY_RATE < 1) but never below zero
     assert 0.0 <= agent.skills["writing"] < 0.8
+    # Agent is free to bid on other tasks again once its own task completes.
+    wctx.redis.delete.assert_awaited_once_with(f"agent_busy:{task.workspace_id}:{agent.id}")
 
 
 # ── Failure path ──────────────────────────────────────────────────────────────
@@ -370,6 +452,9 @@ async def test_self_execute_exception_marks_execution_and_task_failed(
     assert execution.status == "failed"
     assert execution.error == {"type": "RuntimeError", "message": "graph blew up"}
     assert task.status == "failed"
+    # The agent's busy lock must be released even on failure — otherwise a
+    # crashed execution leaves the agent permanently unable to bid again.
+    wctx.redis.delete.assert_awaited_once_with(f"agent_busy:{task.workspace_id}:{agent.id}")
 
 
 async def test_failure_after_terminal_commit_does_not_retransition_task(

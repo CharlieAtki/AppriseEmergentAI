@@ -124,12 +124,15 @@ export function useWorkspaceStream(workspaceId: string): { connected: boolean } 
     const centrifuge = new Centrifuge(url, {
       getData: async () => ({ clerkToken: await getTokenRef.current() }),
     })
+    let disposed = false
 
     centrifuge.on('connected', () => {
+      if (disposed) return
       setConnected(true)
       setStreamConnected(true)
     })
     centrifuge.on('disconnected', () => {
+      if (disposed) return
       setConnected(false)
       setStreamConnected(false)
     })
@@ -193,6 +196,7 @@ export function useWorkspaceStream(workspaceId: string): { connected: boolean } 
     centrifuge.connect()
 
     return () => {
+      disposed = true
       centrifuge.disconnect()
       // Reset explicitly rather than relying on the 'disconnected' event,
       // which isn't guaranteed to fire synchronously — leaving a stale

@@ -28,12 +28,6 @@ def _skill_match(
     return weighted_sum / total_weight
 
 
-def _capacity_factor(active_tasks: int, max_parallel: int) -> float:
-    if max_parallel <= 0:
-        return 0.0
-    return _clamp01(1.0 - active_tasks / max_parallel)
-
-
 def _influence_factor(influence: float, k: float) -> float:
     # Saturating curve: rewards influence without letting it dominate.
     # influence is treated as already in [0, inf); we clamp to [0, 1] before
@@ -79,7 +73,6 @@ def _seeded_jitter(task_id: str, agent_id: str) -> float:
 def compute_bid_score(
     agent_skills: Mapping[str, float],
     agent_influence: float,
-    agent_active_tasks: int,
     required_skills: Mapping[str, float],
     agent_personality: Mapping[str, Any] | None = None,
     task_domain_tags: Mapping[str, Any] | None = None,
@@ -87,34 +80,29 @@ def compute_bid_score(
     task_id: str | None = None,
     agent_id: str | None = None,
     w_skill: float = settings.BID_W_SKILL,
-    w_capacity: float = settings.BID_W_CAPACITY,
     w_influence: float = settings.BID_W_INFLUENCE,
     w_personality: float = settings.BID_W_PERSONALITY,
-    max_parallel: int = settings.BID_MAX_PARALLEL_TASKS,
     influence_k: float = settings.BID_INFLUENCE_K,
     add_jitter: bool = settings.BID_ADD_JITTER,
 ) -> float:
     """Return a bid score in [0, 1] for an agent competing for a task.
 
     Pure function — no I/O, no async, no DB reads. Caller provides all state.
+    Only ever called against agents already known to be idle (see
+    AgentRepository.get_active_for_bidding and attempt_reservation's agent-level
+    lock) — there is no capacity term because an agent with any active task is
+    never a candidate in the first place.
 
     Components (default weights):
-        skill_match     0.60  — how well agent skills cover required_skills
-        capacity_factor 0.20  — how much headroom the agent has (in-memory)
+        skill_match      0.80 — how well agent skills cover required_skills
         influence_factor 0.15 — soft bias towards high-influence agents
-        personality_fit 0.05  — alignment between agent personality and task domain
+        personality_fit  0.05 — alignment between agent personality and task domain
     """
     skill = _skill_match(agent_skills, required_skills)
-    capacity = _capacity_factor(agent_active_tasks, max_parallel)
     influence = _influence_factor(agent_influence, influence_k)
     personality = _personality_fit(agent_personality, task_domain_tags)
 
-    base = (
-        w_skill * skill
-        + w_capacity * capacity
-        + w_influence * influence
-        + w_personality * personality
-    )
+    base = w_skill * skill + w_influence * influence + w_personality * personality
 
     if add_jitter and task_id is not None and agent_id is not None:
         base += _seeded_jitter(task_id, agent_id)
@@ -129,16 +117,34 @@ async def attempt_reservation(
     agent_id: str,
     ttl_seconds: int = settings.RESERVATION_TTL_SECONDS,
 ) -> bool:
-    """Atomically claim a task reservation via Redis SETNX.
+    """Atomically claim a task reservation and an agent-busy lock via Redis SETNX.
 
-    Exactly one caller receives True even with concurrent attempts.
-    The TTL prevents a crashed worker from holding the reservation indefinitely.
-    Key is workspace-scoped to prevent cross-workspace collisions.
+    Exactly one caller receives True even with concurrent attempts. Also claims
+    an agent-level lock so the same agent can never be reserved for two tasks
+    at once — each agent runs one task at a time by design (see
+    AgentRepository.get_active_for_bidding, which pre-filters busy agents as an
+    optimization; this lock is the actual correctness guarantee). If the agent
+    lock loses its race, the task lock is released so another agent can win it.
+    The TTL prevents a crashed worker from holding either lock indefinitely.
+    Keys are workspace-scoped to prevent cross-workspace collisions.
     """
-    acquired = await redis.set(
+    task_won = await redis.set(
         f"reservation:{workspace_id}:{task_id}",
         agent_id,
         nx=True,
         ex=ttl_seconds,
     )
-    return acquired is not None
+    if task_won is None:
+        return False
+
+    agent_claimed = await redis.set(
+        f"agent_busy:{workspace_id}:{agent_id}",
+        task_id,
+        nx=True,
+        ex=ttl_seconds,
+    )
+    if agent_claimed is None:
+        await redis.delete(f"reservation:{workspace_id}:{task_id}")
+        return False
+
+    return True

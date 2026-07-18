@@ -18,9 +18,11 @@ class TaskRepositoryProtocol(Protocol):
     Follows the BusProtocol pattern: code types against this protocol, never the concrete class.
     Swap in a FakeTaskRepository in unit tests — no SQLAlchemy mocking required.
 
-    Transaction contract: this protocol never calls commit(). flush() is exposed solely
-    for score_and_reserve(), which must flush before enqueue_job(). All other callers
-    let the session context manager commit on exit.
+    Transaction contract: this protocol never calls commit() — score_and_reserve()
+    commits via a separately-injected Committable (see worker.coordination.bidding),
+    not through this repo. flush() is exposed for decompose_subtasks(), which needs
+    server-generated subtask IDs before returning. All other callers let the session
+    context manager commit on exit.
     """
 
     async def create(
@@ -63,8 +65,9 @@ class TaskRepositoryProtocol(Protocol):
 
     async def flush(self) -> None: ...
 
-    # Exposes session.flush() for score_and_reserve(), which must flush before enqueue_job().
-    # Do not call flush() speculatively — callers own the transaction boundary.
+    # Exposes session.flush() for decompose_subtasks(), which needs task.id populated
+    # before returning. Do not call flush() speculatively — callers own the transaction
+    # boundary.
 
 
 class AgentRepositoryProtocol(Protocol):

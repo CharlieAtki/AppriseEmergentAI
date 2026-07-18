@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Literal
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 __all__ = [
     "CoordinationConfigResponse",
@@ -15,8 +15,8 @@ class UpdateCoordinationConfigRequest(BaseModel):
     override untouched; a field present with `null` clears it back to
     inherited. The router distinguishes these via `model_fields_set`."""
 
-    max_delegation_depth: int | None = None
-    decompose_difficulty_threshold: float | None = None
+    max_delegation_depth: int | None = Field(default=None, gt=0)
+    decompose_difficulty_threshold: float | None = Field(default=None, ge=0)
 
 
 class CoordinationConfigResponse(BaseModel):

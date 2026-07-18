@@ -24,7 +24,7 @@ asyncio_mode = "auto"
 testpaths = ["tests"]
 
 [tool.mypy]
-python_version = "3.13"
+python_version = "3.14"
 ignore_missing_imports = true
 check_untyped_defs = false
 warn_return_any = false

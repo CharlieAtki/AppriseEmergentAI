@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import uuid
 from collections.abc import AsyncGenerator, Awaitable, Callable
+from typing import Protocol
 
 from arq import ArqRedis
 from core.config import settings as core_settings
@@ -28,7 +29,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.services.agent_service import AgentService
 from api.services.api_key_service import ApiKeyService
-from api.services.bidding_config_service import BiddingConfigService
 from api.services.centrifugo_proxy_service import CentrifugoProxyService
 from api.services.coordination_config_service import CoordinationConfigService
 from api.services.personal_dashboard_service import PersonalDashboardService
@@ -49,6 +49,19 @@ def get_event_publisher(bus: EventBus = Depends(get_bus)) -> PublishFn:
 
 def get_redis(request: Request) -> Redis:
     return request.app.state.redis  # type: ignore[no-any-return]
+
+
+class CacheInvalidator(Protocol):
+    """Narrow interface for cache-key deletion — the only Redis operation a
+    router needs to invalidate a cached config after a write. Routers that
+    only delete keys (coordination_config) type against this instead of the
+    full Redis client; satisfied by redis.asyncio.Redis without a wrapper."""
+
+    async def delete(self, *keys: str) -> int: ...
+
+
+def get_cache_invalidator(redis: Redis = Depends(get_redis)) -> CacheInvalidator:
+    return redis
 
 
 def get_llm_router(request: Request) -> LLMRouter:
@@ -137,18 +150,16 @@ def get_coordination_config_service(
     return CoordinationConfigService(org_repo, workspace_repo)
 
 
-def get_bidding_config_service(
-    org_repo: OrganisationRepository = Depends(get_org_repo),
-    workspace_repo: WorkspaceRepository = Depends(get_workspace_repo),
-) -> BiddingConfigService:
-    return BiddingConfigService(org_repo, workspace_repo)
+# Roles that may write org-wide config; every member (any role) may read it.
+_ORG_WRITE_ROLES = {"admin"}
 
 
 def require_organisation(permission: str = "write") -> Callable[..., Awaitable[Organisation]]:
-    """Dep factory: loads Organisation from DB, verifies the caller belongs to it.
+    """Dep factory: loads Organisation from DB, verifies the caller is a member,
+    and gates write access to `_ORG_WRITE_ROLES`.
 
     Mirrors require_workspace()'s shape exactly so the route signature never has
-    to change when real role checks land — only this function's body does.
+    to change when write roles evolve — only this function's body does.
     """
 
     async def dep(
@@ -173,7 +184,7 @@ def require_organisation(permission: str = "write") -> Callable[..., Awaitable[O
         # issued for one workspace must not be able to write org-wide config
         # that silently affects every other workspace in that org. This is a
         # hard boundary, not a roles nuance: block it outright rather than
-        # deferring it to the same TODO as member-vs-admin permission checks.
+        # deferring it to the member-vs-admin role check below.
         if getattr(auth, "auth_type", None) == "api_key":
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
@@ -186,11 +197,19 @@ def require_organisation(permission: str = "write") -> Callable[..., Awaitable[O
                 status_code=status.HTTP_404_NOT_FOUND, detail="Organisation not found"
             )
 
-        # TODO(roles): OrganisationMember.role exists on the model but is never
-        # read into request.state.auth today. Once role-based permissions land,
-        # gate `permission` against the caller's role here. Until then this only
-        # checks membership — identical in strength to require_workspace() before
-        # workspace roles existed.
+        user_id = getattr(auth, "user_id", None)
+        member = await org_repo.get_member(auth_org_id, user_id) if user_id is not None else None
+        if member is None:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Not a member of this organisation",
+            )
+
+        if permission == "write" and member.role not in _ORG_WRITE_ROLES:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN, detail="Insufficient permission"
+            )
+
         return org
 
     return dep

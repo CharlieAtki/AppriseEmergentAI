@@ -428,6 +428,7 @@ Default to writing no comments. Add one only when the **why** is non-obvious: a 
 - Auth middleware maps Clerk claims (`clerk_user_id`, `clerk_org_id`) → internal UUIDs. Downstream code trusts `request.state.org_id` and never re-validates Clerk tokens.
 - The `models` table is written only by `sync_models()` at startup. Never write to it at request time.
 - Workspace routing config (`workspace_model_routing`) is the only place per-workspace model preferences live.
+- A root-level `Makefile` verifies backend changes: `make check` runs lint (ruff), format-check, mypy, `import-linter` (enforces the process/layer boundaries in this file — see `make arch`), and the full test suite across `api`/`core`/`worker`. Run `make setup` once (or after adding a dev/test dependency) to sync the shared workspace venv with its dev+test extras. Individual targets (`make lint`, `make typecheck`, `make arch`, `make test`, `make test-api`, etc.) are also available — see `make help`.
 
 ---
 
